@@ -1,0 +1,26 @@
+{
+  "name": "myPiggyBank",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "forwardPorts": [5173, 3001],
+  "portsAttributes": {
+    "5173": { "label": "Web (Vite)", "onAutoForward": "openBrowser" },
+    "3001": { "label": "API", "onAutoForward": "silent" }
+  },
+  // Creates .env, installs dependencies and applies migrations to data/dev.db.
+  "postCreateCommand": "./scripts/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  },
+  "remoteUser": "node"
+}

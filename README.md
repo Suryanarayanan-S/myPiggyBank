@@ -45,6 +45,14 @@ Open **http://localhost:8080**. Your data is stored on your disk in `data/piggyb
 
 Development (`npm run dev`) uses a separate database, `data/dev.db`, so experiments never touch your real data.
 
+## Develop in a Dev Container (no Node install needed)
+
+Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
+
+1. Open the folder in VS Code → **Reopen in Container**.
+2. Wait for setup to finish (it runs `scripts/setup.sh`).
+3. In the container terminal: `npm run dev` → the browser opens http://localhost:5173.
+
 ## Commands
 
 | Command                               | What it does                                         |

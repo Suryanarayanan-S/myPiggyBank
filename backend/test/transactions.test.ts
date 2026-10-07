@@ -238,7 +238,9 @@ describe('transactions', () => {
     it('returns per-currency totals for the whole filtered set, not just the page', async () => {
       const d = await list('?pageSize=1');
       expect(d.items).toHaveLength(1);
-      expect(d.totals).toEqual([{ currency: 'EUR', income: 541_600, expense: 5_240 + 91_200 + 1_299 }]);
+      expect(d.totals).toEqual([
+        { currency: 'EUR', income: 541_600, expense: 5_240 + 91_200 + 1_299 },
+      ]);
       const oct = await list('?from=2026-10-01&to=2026-10-31&type=expense&pageSize=1');
       expect(oct.totals).toEqual([{ currency: 'EUR', income: 0, expense: 5_240 + 1_299 }]);
     });

@@ -141,9 +141,9 @@ export async function createTransaction(prisma: PrismaClient, familyId: string, 
 }
 
 async function assertTransaction(prisma: PrismaClient, familyId: string, id: string) {
-  if (!(await prisma.transaction.findFirst({ where: { id, familyId }, select: { id: true } }))) {
-    throw notFound('Transaction');
-  }
+  const existing = await prisma.transaction.findFirst({ where: { id, familyId } });
+  if (!existing) throw notFound('Transaction');
+  return existing;
 }
 
 export async function updateTransaction(
@@ -152,9 +152,23 @@ export async function updateTransaction(
   id: string,
   input: Input,
 ) {
-  await assertTransaction(prisma, familyId, id);
+  const existing = await assertTransaction(prisma, familyId, id);
   const data = await toData(prisma, familyId, input);
-  return toDto(await prisma.transaction.update({ where: { id }, data, include }));
+  // A monthly total moved to another account, category, type or month is no longer that
+  // grid cell's total: it becomes an ordinary transaction, so the grid never hides a duplicate.
+  const stillSameCell =
+    existing.isMonthlyTotal &&
+    existing.accountId === data.accountId &&
+    existing.categoryId === data.categoryId &&
+    existing.type === data.type &&
+    formatDay(existing.date).slice(0, 7) === formatDay(data.date).slice(0, 7);
+  return toDto(
+    await prisma.transaction.update({
+      where: { id },
+      data: { ...data, isMonthlyTotal: stillSameCell },
+      include,
+    }),
+  );
 }
 
 export async function deleteTransaction(prisma: PrismaClient, familyId: string, id: string) {

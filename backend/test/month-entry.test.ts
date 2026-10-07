@@ -130,4 +130,45 @@ describe('month quick entry', () => {
       (await call('PUT', '/api/month-entry/2026-9', { accountId: eur.id, entries: [] })).statusCode,
     ).toBe(400);
   });
+
+  it('editing a monthly total elsewhere into another category turns it into a normal transaction (no hidden duplicates)', async () => {
+    await save([
+      { categoryId: cat('Rent'), amount: 1_002 },
+      { categoryId: cat('Groceries'), amount: 30_000 },
+    ]);
+    const groceries = await prisma.transaction.findFirstOrThrow({
+      where: { categoryId: cat('Groceries') },
+    });
+    const res = await call('PUT', `/api/transactions/${groceries.id}`, {
+      date: '2026-09-01',
+      amount: 30_000,
+      type: 'expense',
+      accountId: eur.id,
+      categoryId: cat('Rent'),
+    });
+    expect(res.json().data.isMonthlyTotal).toBe(false);
+
+    const g = await grid();
+    expect(amountOf(g, 'Rent')).toBe(1_002);
+    expect(amountOf(g, 'Groceries')).toBe(null);
+    expect(
+      await prisma.transaction.count({ where: { categoryId: cat('Rent'), isMonthlyTotal: true } }),
+    ).toBe(1);
+    const s = (await call('GET', '/api/budget/2026-09')).json().data;
+    expect(s.essentials).toBe(31_002);
+  });
+
+  it('keeps the monthly-total flag when only the amount or notes change', async () => {
+    await save([{ categoryId: cat('Rent'), amount: 1_000 }]);
+    const rent = await prisma.transaction.findFirstOrThrow({ where: { categoryId: cat('Rent') } });
+    await call('PUT', `/api/transactions/${rent.id}`, {
+      date: '2026-09-01',
+      amount: 2_000,
+      type: 'expense',
+      accountId: eur.id,
+      categoryId: cat('Rent'),
+      notes: 'raised',
+    });
+    expect(amountOf(await grid(), 'Rent')).toBe(2_000);
+  });
 });

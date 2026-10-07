@@ -18,8 +18,10 @@ export function SettingsPage() {
         <dl className="grid grid-cols-2 gap-y-2 text-sm">
           <dt className="text-slate-500">Name</dt>
           <dd>{data?.family.name}</dd>
-          <dt className="text-slate-500">Base currency</dt>
-          <dd>{data?.family.baseCurrency}</dd>
+          <dt className="text-slate-500">Spending currency</dt>
+          <dd>{data?.family.spendingCurrency}</dd>
+          <dt className="text-slate-500">Wealth currency</dt>
+          <dd>{data?.family.wealthCurrency}</dd>
           <dt className="text-slate-500">Logged in as</dt>
           <dd className="truncate">{data?.user.email}</dd>
         </dl>

@@ -3,6 +3,7 @@ import { AppError } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
 import { SESSION_COOKIE, createSession, deleteSession } from '../auth/sessions.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
+import { getFamily } from '../services/familyService.js';
 import { LoginInput, RegisterInput, loginUser, registerUser } from '../services/authService.js';
 
 export interface AuthRoutesOptions {
@@ -50,10 +51,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
 
   app.get('/auth/me', { preHandler: requireAuth }, async (req) => {
     const user = currentUser(req);
-    const family = await app.prisma.family.findUniqueOrThrow({
-      where: { id: user.familyId },
-      select: { id: true, name: true, baseCurrency: true },
-    });
+    const family = await getFamily(app.prisma, user.familyId);
     return { data: { user, family } };
   });
 };

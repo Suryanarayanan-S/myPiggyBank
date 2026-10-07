@@ -8,13 +8,18 @@ datasource db {
 }
 
 model Family {
-  id           String         @id @default(uuid())
-  name         String
-  baseCurrency String         @default("EUR")
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  users        User[]
-  members      FamilyMember[]
+  id               String         @id @default(uuid())
+  name             String
+  spendingCurrency String         @default("EUR")
+  wealthCurrency   String         @default("INR")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  users            User[]
+  members          FamilyMember[]
+  accounts         Account[]
+  categories       Category[]
+  transactions     Transaction[]
+  exchangeRates    ExchangeRate[]
 }
 
 model User {
@@ -46,14 +51,102 @@ model Session {
 }
 
 model FamilyMember {
-  id        String   @id @default(uuid())
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name      String
-  userId    String?  @unique
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(uuid())
+  familyId     String
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name         String
+  userId       String?       @unique
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  accounts     Account[]
+  transactions Transaction[]
 
   @@unique([familyId, name])
+}
+
+model ExchangeRate {
+  id         String   @id @default(uuid())
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /// YYYY-MM
+  month      String
+  base       String
+  quote      String
+  /// 1 base = rateMicros / 1e6 quote
+  rateMicros Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([familyId, month, base, quote])
+}
+
+model Account {
+  id             String        @id @default(uuid())
+  familyId       String
+  family         Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name           String
+  /// current | savings | tagesgeld | cash | credit_card | investment | other
+  type           String
+  currency       String
+  openingBalance Int           @default(0)
+  ownerMemberId  String?
+  owner          FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  /// liquid | property | investment | other
+  assetClass     String        @default("liquid")
+  archived       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  transactions   Transaction[] @relation("TransactionAccount")
+  transfersIn    Transaction[] @relation("TransferAccount")
+
+  @@unique([familyId, name])
+  @@index([familyId])
+}
+
+model Category {
+  id           String        @id @default(uuid())
+  familyId     String
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name         String
+  /// income | expense
+  kind         String
+  /// essentials | fun | future (expense only)
+  bucket       String?
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@unique([familyId, kind, name])
+}
+
+model Transaction {
+  id                String        @id @default(uuid())
+  familyId          String
+  family            Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  accountId         String
+  account           Account       @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  date              DateTime
+  /// > 0, minor units of the account currency
+  amount            Int
+  /// income | expense | transfer
+  type              String
+  categoryId        String?
+  category          Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  memberId          String?
+  member            FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  merchant          String?
+  notes             String?
+  /// ",tag1,tag2," lower-case, for LIKE matching
+  tags              String        @default("")
+  transferAccountId String?
+  transferAccount   Account?      @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: Cascade)
+  transferAmount    Int?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([familyId, date])
+  @@index([accountId, date])
+  @@index([familyId, categoryId])
 }

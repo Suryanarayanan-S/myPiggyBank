@@ -27,7 +27,11 @@ describe('auth', () => {
     expect(user).not.toHaveProperty('passwordHash');
 
     const family = await prisma.family.findUniqueOrThrow({ where: { id: user.familyId } });
-    expect(family).toMatchObject({ name: "Surya's family", baseCurrency: 'EUR' });
+    expect(family).toMatchObject({
+      name: "Surya's family",
+      spendingCurrency: 'EUR',
+      wealthCurrency: 'INR',
+    });
     const member = await prisma.familyMember.findUniqueOrThrow({ where: { id: user.memberId } });
     expect(member).toMatchObject({ name: 'Surya', userId: user.id });
 
@@ -94,7 +98,7 @@ describe('auth', () => {
     expect(meRes.statusCode).toBe(200);
     expect(meRes.json().data).toMatchObject({
       user: { email: payload.email },
-      family: { name: 'Soundararajan', baseCurrency: 'EUR' },
+      family: { name: 'Soundararajan', spendingCurrency: 'EUR', wealthCurrency: 'INR' },
     });
   });
 

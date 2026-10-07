@@ -6,6 +6,11 @@ export type AuthUser = {
   familyId: string;
   memberId: string | null;
 };
-export type Family = { id: string; name: string; baseCurrency: string };
+export type Family = {
+  id: string;
+  name: string;
+  spendingCurrency: string;
+  wealthCurrency: string;
+};
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

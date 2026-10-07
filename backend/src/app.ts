@@ -10,6 +10,7 @@ import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { memberRoutes } from './routes/members.js';
+import { familyRoutes } from './routes/family.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -94,6 +95,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         loginRateLimit: opts.loginRateLimit ?? { max: 10, timeWindow: '1 minute' },
       });
       await api.register(memberRoutes);
+      await api.register(familyRoutes);
     },
     { prefix: '/api' },
   );

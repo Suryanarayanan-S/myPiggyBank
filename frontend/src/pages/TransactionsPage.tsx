@@ -67,13 +67,6 @@ export function TransactionsPage() {
     queryFn: () => api.get<Page<Transaction>>(`/transactions?${query}`),
   });
 
-  const totals = new Map<string, { income: number; expense: number }>();
-  for (const t of txns.data?.items ?? []) {
-    if (t.type === 'transfer') continue;
-    const cur = totals.get(t.currency) ?? { income: 0, expense: 0 };
-    cur[t.type] += t.amount;
-    totals.set(t.currency, cur);
-  }
   const pages = Math.max(1, Math.ceil((txns.data?.total ?? 0) / PAGE_SIZE));
 
   return (
@@ -104,7 +97,7 @@ export function TransactionsPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {[...totals].map(([currency, t]) => (
+        {txns.data?.totals.map(({ currency, ...t }) => (
           <Card key={currency} className="!p-4">
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
               {currency}

@@ -3,12 +3,18 @@ import { z } from 'zod';
 import { CurrencySchema, formatRate, parseRate } from '../domain/currency.js';
 import { notFound } from '../lib/errors.js';
 
+// rateMicros is a 32-bit column; 2000 covers every supported pair (e.g. GBP→INR ≈ 110).
+const MAX_RATE_MICROS = 2_000_000_000;
+
 export const RateInput = z
   .object({
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use a month as YYYY-MM'),
     base: CurrencySchema,
     quote: CurrencySchema,
-    rate: z.string().refine((s) => parseRate(s) !== null, 'Enter a positive rate, e.g. 97.85'),
+    rate: z
+      .string()
+      .refine((s) => parseRate(s) !== null, 'Enter a positive rate, e.g. 97.85')
+      .refine((s) => (parseRate(s) ?? 0) <= MAX_RATE_MICROS, 'Rate must be at most 2000'),
   })
   .refine((r) => r.base !== r.quote, {
     message: 'Choose two different currencies',

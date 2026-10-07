@@ -68,12 +68,18 @@ const balanceSelect = {
 } as const;
 
 async function withBalances(prisma: PrismaClient, familyId: string, accounts: Account[]) {
-  const txns = (await prisma.transaction.findMany({
-    where: { familyId },
-    select: balanceSelect,
-  })) as (BalanceTxn & { date: Date })[];
+  // Money columns are 64-bit (BigInt) in the DB; plain numbers are exact up to 2^53 minor units.
+  const txns = (
+    await prisma.transaction.findMany({ where: { familyId }, select: balanceSelect })
+  ).map((t) => ({
+    ...t,
+    type: t.type as BalanceTxn['type'],
+    amount: Number(t.amount),
+    transferAmount: t.transferAmount === null ? null : Number(t.transferAmount),
+  }));
   const { start, end } = monthBounds(new Date());
-  const balances = computeBalances(accounts, txns);
+  const opening = accounts.map((a) => ({ id: a.id, openingBalance: Number(a.openingBalance) }));
+  const balances = computeBalances(opening, txns);
   const changes = computeBalances(
     accounts.map((a) => ({ id: a.id, openingBalance: 0 })),
     txns.filter((t) => t.date >= start && t.date < end),
@@ -83,11 +89,11 @@ async function withBalances(prisma: PrismaClient, familyId: string, accounts: Ac
     name: a.name,
     type: a.type,
     currency: a.currency,
-    openingBalance: a.openingBalance,
+    openingBalance: Number(a.openingBalance),
     ownerMemberId: a.ownerMemberId,
     assetClass: a.assetClass,
     archived: a.archived,
-    balance: balances.get(a.id) ?? a.openingBalance,
+    balance: balances.get(a.id) ?? Number(a.openingBalance),
     monthChange: changes.get(a.id) ?? 0,
   }));
 }

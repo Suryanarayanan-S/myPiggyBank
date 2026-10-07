@@ -34,10 +34,23 @@ export function formatCompact(cents: number, currency = 'EUR'): string {
   return `${sign}${sym}${Math.round(value)}`;
 }
 
+/** 1.234.567 / 1,234,567: first group 1–3 digits, then groups of 3. */
+const isWesternGrouping = (g: string[]) =>
+  g[0]!.length <= 3 && g.slice(1).every((x) => x.length === 3);
+
+/** 1,23,45,678 (lakh/crore): commas only, first group 1–2 digits, then 2s, last group 3. */
+const isIndianGrouping = (g: string[], intPart: string) =>
+  !intPart.includes('.') &&
+  g.length >= 3 &&
+  g[0]!.length <= 2 &&
+  g.slice(1, -1).every((x) => x.length === 2) &&
+  g.at(-1)!.length === 3;
+
 /**
  * Parses user-typed amounts like "52,40", "1.234,56", "1,234.56" or "5416 €" into cents.
  * The last "." or "," followed by 1–2 digits is the decimal separator; any other separators
- * must be a single kind of thousands separator in groups of three. Returns null if invalid.
+ * must be a single kind of thousands separator in groups of three (or Indian lakh/crore grouping
+ * with commas). Returns null if invalid.
  */
 export function parseMoneyInput(input: string): number | null {
   const match = input.replace(/[\s€$£₹]/g, '').match(/^(-?)([\d.,]+)$/);
@@ -55,7 +68,7 @@ export function parseMoneyInput(input: string): number | null {
 
   const groups = intPart.split(/[.,]/);
   if (groups.some((g) => g === '')) return null;
-  if (groups.length > 1 && (groups[0]!.length > 3 || groups.slice(1).some((g) => g.length !== 3))) {
+  if (groups.length > 1 && !isWesternGrouping(groups) && !isIndianGrouping(groups, intPart)) {
     return null;
   }
   const thousandSeps = new Set(intPart.replace(/\d/g, ''));

@@ -6,6 +6,7 @@ import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
+import { selectableAccounts } from '../../lib/accounts';
 import { parseMoneyInput } from '../../lib/money';
 import { useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { BUCKETS, type Transaction, type TransactionType } from '../../lib/types';
@@ -19,7 +20,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const accounts = useAccounts();
   const categories = useCategories();
   const members = useMembers();
-  const active = (accounts.data ?? []).filter((a) => !a.archived || a.id === txn?.accountId);
+  const active = selectableAccounts(accounts.data ?? [], txn);
 
   const [type, setType] = useState<TransactionType>(txn?.type ?? 'expense');
   const [form, setForm] = useState({

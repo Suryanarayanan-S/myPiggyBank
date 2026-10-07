@@ -27,16 +27,27 @@ describe('parseMoneyInput', () => {
     [' 5416 € ', 541600],
     ['-12,50', -1250],
     ['0', 0],
+    ['1,00,000', 10000000],
+    ['80,00,000.00', 800000000],
+    ['₹1,23,45,678.50', 1234567850],
   ])('parses %j as %i cents', (input, cents) => {
     expect(parseMoneyInput(input)).toBe(cents);
   });
 
-  it.each(['', 'abc', '12,345,67', '1.2.3', ',50', '12,', '1,234,5', '1.234,567'])(
-    'rejects %j',
-    (input) => {
-      expect(parseMoneyInput(input)).toBeNull();
-    },
-  );
+  it.each([
+    '',
+    'abc',
+    '12,345,67',
+    '1.2.3',
+    ',50',
+    '12,',
+    '1,234,5',
+    '1.234,567',
+    '1,00,00',
+    '1,0,000',
+  ])('rejects %j', (input) => {
+    expect(parseMoneyInput(input)).toBeNull();
+  });
 });
 
 describe('formatCompact', () => {

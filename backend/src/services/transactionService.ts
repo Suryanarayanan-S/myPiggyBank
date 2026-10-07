@@ -64,7 +64,7 @@ function toDto(t: Row) {
   return {
     id: t.id,
     date: formatDay(t.date),
-    amount: t.amount,
+    amount: Number(t.amount),
     currency: t.account.currency,
     type: t.type,
     accountId: t.accountId,
@@ -79,7 +79,7 @@ function toDto(t: Row) {
     tags: t.tags.split(',').filter(Boolean),
     transferAccountId: t.transferAccountId,
     transferAccountName: t.transferAccount?.name ?? null,
-    transferAmount: t.transferAmount,
+    transferAmount: t.transferAmount === null ? null : Number(t.transferAmount),
     transferCurrency: t.transferAccount?.currency ?? null,
   };
 }
@@ -195,5 +195,27 @@ export async function listTransactions(
       take: q.pageSize,
     }),
   ]);
-  return { items: rows.map(toDto), total, page: q.page, pageSize: q.pageSize };
+  return {
+    items: rows.map(toDto),
+    total,
+    page: q.page,
+    pageSize: q.pageSize,
+    totals: await totalsFor(prisma, where),
+  };
+}
+
+/** Income/expense sums per account currency over the whole filtered set (transfers excluded). */
+async function totalsFor(prisma: PrismaClient, where: Prisma.TransactionWhereInput) {
+  const rows = await prisma.transaction.findMany({
+    where: { AND: [where, { type: { in: ['income', 'expense'] } }] },
+    select: { type: true, amount: true, account: { select: { currency: true } } },
+  });
+  const sums = new Map<string, { currency: string; income: number; expense: number }>();
+  for (const r of rows) {
+    const currency = r.account.currency;
+    const entry = sums.get(currency) ?? { currency, income: 0, expense: 0 };
+    entry[r.type as 'income' | 'expense'] += Number(r.amount);
+    sums.set(currency, entry);
+  }
+  return [...sums.values()].sort((a, b) => a.currency.localeCompare(b.currency));
 }

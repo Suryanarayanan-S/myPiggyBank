@@ -89,7 +89,7 @@ model Account {
   /// current | savings | tagesgeld | cash | credit_card | investment | other
   type           String
   currency       String
-  openingBalance Int           @default(0)
+  openingBalance BigInt        @default(0)
   ownerMemberId  String?
   owner          FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
   /// liquid | property | investment | other
@@ -129,7 +129,7 @@ model Transaction {
   account           Account       @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
   date              DateTime
   /// > 0, minor units of the account currency
-  amount            Int
+  amount            BigInt
   /// income | expense | transfer
   type              String
   categoryId        String?
@@ -142,7 +142,7 @@ model Transaction {
   tags              String        @default("")
   transferAccountId String?
   transferAccount   Account?      @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: Cascade)
-  transferAmount    Int?
+  transferAmount    BigInt?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

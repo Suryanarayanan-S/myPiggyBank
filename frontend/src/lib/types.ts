@@ -81,6 +81,13 @@ export type Transaction = {
   transferAmount: number | null;
   transferCurrency: string | null;
 };
-export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
+export type CurrencyTotals = { currency: string; income: number; expense: number };
+export type Page<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals: CurrencyTotals[];
+};
 
 export type Rate = { id: string; month: string; base: string; quote: string; rate: string };

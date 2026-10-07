@@ -40,6 +40,7 @@ describe('exchange rates', () => {
     [{ ...sep, month: '2026-9' }],
     [{ ...sep, quote: 'EUR' }],
     [{ ...sep, base: 'JPY' }],
+    [{ ...sep, rate: '5000' }],
   ])('rejects invalid input %#', async (body) => {
     expect((await put(body)).statusCode).toBe(400);
   });

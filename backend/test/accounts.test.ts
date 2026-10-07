@@ -91,4 +91,25 @@ describe('accounts', () => {
     expect((await other('DELETE', `/api/accounts/${id}`)).statusCode).toBe(404);
     expect((await call('GET', '/api/accounts')).json().data[0].name).toBe('Sparkasse');
   });
+
+  it('handles crore-sized INR amounts beyond 32-bit integers', async () => {
+    const res = await call('POST', '/api/accounts', {
+      name: 'Property fund',
+      type: 'investment',
+      currency: 'INR',
+      openingBalance: 30_000_000_000, // ₹30 Cr in paise
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.balance).toBe(30_000_000_000);
+    const txn = await call('POST', '/api/transactions', {
+      date: '2026-10-01',
+      amount: 2_500_000_000,
+      type: 'income',
+      accountId: res.json().data.id,
+    });
+    expect(txn.statusCode).toBe(201);
+    expect(txn.json().data.amount).toBe(2_500_000_000);
+    const list = (await call('GET', '/api/accounts')).json().data;
+    expect(list[0].balance).toBe(32_500_000_000);
+  });
 });

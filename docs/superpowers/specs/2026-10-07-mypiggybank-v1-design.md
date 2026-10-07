@@ -1,7 +1,42 @@
 # myPiggyBank v1 — Design Spec
 
 Date: 2026-10-07
-Status: Draft — awaiting review
+Status: Approved (rev 1.1 — see "Revision 1.1" below, which overrides earlier sections where they conflict)
+
+## Revision 1.1 — fit to the user's existing spreadsheets (approved 2026-10-07)
+
+The user previously tracked money in two spreadsheets: monthly spending in **EUR** organised by
+50/30/20 buckets, and family wealth per person in **INR** (lakhs). v1 adapts to that:
+
+1. **Two display currencies.** Family has `spendingCurrency` (default EUR) and `wealthCurrency`
+   (default INR). Every account / transaction / asset / liability keeps its own currency.
+   Transactions use their account's currency. A **monthly exchange rate** table (entered by the
+   user, e.g. 1 EUR = 97.85 INR for 2026-09) drives all conversions; a missing month falls back to
+   the most recent earlier month; with no rate at all the amount is reported as unconvertible.
+   INR is formatted with Indian grouping (₹80,00,000) and a compact lakh form (₹80 L).
+2. **Budget buckets.** Every expense category belongs to one bucket: `essentials` | `fun` |
+   `future` ("Future You"). Bucket targets default to 50/30/20 % of net income, editable.
+   Budget page: per bucket target % vs actual %, plus optional per-category limits with warnings.
+   Money math per month (in spending currency): net income = Σ income; spent = essentials + fun;
+   future = Σ future-bucket; unused = net income − essentials − fun − future;
+   savings rate = (future + unused) / net income.
+3. **Month quick-entry grid.** One amount per category per month (stored as a "monthly total"
+   transaction), alongside normal individual transactions; both count in totals.
+4. **Spreadsheet importer (early — milestone 4).** Upload the monthly-spending .xlsx → preview
+   each month (income rows, category amounts, bucket from column, India-spend section as INR) →
+   map/rename/merge labels to categories → duplicate-month detection → confirm. Nothing is
+   written before confirm; the file is processed locally and not stored.
+5. **Family wealth per member.** Accounts, assets and liabilities have an optional owner member
+   and an asset class `liquid` | `property` | `investment` | `other`. Net-worth page: one column per
+   member + totals by class with %, in wealth currency. Snapshots carry an optional note.
+6. **Account deletion.** A logged-in user can delete their account (password + typed
+   confirmation). If they are the family's only login, the whole family and all its data are
+   deleted; otherwise only their login is removed (members/data stay).
+
+**Revised build order:** M1 foundation ✅ · M2 accounts, categories (buckets), transactions,
+currencies + monthly rates, account deletion · M3 budget (buckets + limits) + month grid ·
+M4 spreadsheet importer · M5 dashboard · M6 wealth (assets, liabilities, per-member net worth,
+snapshots) · M7 bank CSV import, recurring, backup/restore · M8 E2E, docs, polish (retro theme).
 
 ## 1. Purpose
 

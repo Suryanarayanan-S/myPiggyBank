@@ -77,3 +77,28 @@ export async function loginUser(
   if (!(await verify(user.passwordHash, input.password))) throw invalidCredentials();
   return toAuthUser(user, user.member?.id ?? null);
 }
+
+export const DeleteAccountInput = z.object({
+  password: z.string().min(1, 'Password is required').max(200),
+  confirm: z.literal('DELETE', 'Type DELETE to confirm'),
+});
+
+/**
+ * Deletes the user's login. As the family's only login, the whole family and all its data go
+ * with it (cascade); otherwise only the login is removed and the family's data stays.
+ */
+export async function deleteAccount(
+  prisma: PrismaClient,
+  user: AuthUser,
+  input: z.output<typeof DeleteAccountInput>,
+): Promise<{ familyDeleted: boolean }> {
+  const row = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+  if (!(await verify(row.passwordHash, input.password))) throw invalidCredentials();
+  const logins = await prisma.user.count({ where: { familyId: user.familyId } });
+  if (logins === 1) {
+    await prisma.family.delete({ where: { id: user.familyId } });
+    return { familyDeleted: true };
+  }
+  await prisma.user.delete({ where: { id: user.id } });
+  return { familyDeleted: false };
+}

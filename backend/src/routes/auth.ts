@@ -4,7 +4,14 @@ import { parse } from '../lib/validate.js';
 import { SESSION_COOKIE, createSession, deleteSession } from '../auth/sessions.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import { getFamily } from '../services/familyService.js';
-import { LoginInput, RegisterInput, loginUser, registerUser } from '../services/authService.js';
+import {
+  DeleteAccountInput,
+  LoginInput,
+  RegisterInput,
+  deleteAccount,
+  loginUser,
+  registerUser,
+} from '../services/authService.js';
 
 export interface AuthRoutesOptions {
   loginRateLimit: { max: number; timeWindow: string };
@@ -47,6 +54,13 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
     if (token) await deleteSession(app.prisma, token);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return { data: { ok: true } };
+  });
+
+  app.delete('/auth/account', { preHandler: requireAuth }, async (req, reply) => {
+    const input = parse(DeleteAccountInput, req.body);
+    const { familyDeleted } = await deleteAccount(app.prisma, currentUser(req), input);
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return { data: { ok: true, familyDeleted } };
   });
 
   app.get('/auth/me', { preHandler: requireAuth }, async (req) => {

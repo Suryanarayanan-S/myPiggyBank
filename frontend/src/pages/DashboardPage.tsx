@@ -1,17 +1,142 @@
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Link, useSearchParams } from 'react-router';
+import { AlertTriangle } from 'lucide-react';
 import { useMe } from '../auth/auth';
+import { CashFlowChart } from '../components/dashboard/CashFlowChart';
+import { Insights } from '../components/dashboard/Insights';
+import { PeriodFilter } from '../components/dashboard/PeriodFilter';
+import { CategoryBars, MemberBars } from '../components/dashboard/RankBars';
+import { StatTiles } from '../components/dashboard/StatTiles';
+import { SavingsRateChart, ShareChart } from '../components/dashboard/TrendCharts';
 import { Card } from '../components/ui/Card';
+import { FormError } from '../components/ui/Field';
+import { api } from '../lib/api';
+import type { Dashboard } from '../lib/dashboardTypes';
+import { insightsFor } from '../lib/insights';
+import { formatMoney } from '../lib/money';
+import { isMonth, localMonth, monthTitle } from '../lib/months';
+import { PRESETS, periodRange, type Preset } from '../lib/periods';
 
 export function DashboardPage() {
-  const { data } = useMe();
+  const me = useMe();
+  const [params, setParams] = useSearchParams();
+  const today = localMonth();
+  const preset = (
+    PRESETS.some((p) => p.value === params.get('period')) ? params.get('period') : 'last-12'
+  ) as Preset;
+  const custom = {
+    from: isMonth(params.get('from')) ? params.get('from')! : today,
+    to: isMonth(params.get('to')) ? params.get('to')! : today,
+  };
+
+  // "All time" needs the first recorded month, which the API returns with every response.
+  const first = useQuery({
+    queryKey: ['dashboard', 'first'],
+    queryFn: () => api.get<Dashboard>(`/dashboard?from=${today}&to=${today}`),
+    select: (d) => d.firstMonth,
+    enabled: preset === 'all',
+  });
+  const range = periodRange(preset, today, first.data ?? null, custom);
+  const dash = useQuery({
+    queryKey: ['dashboard', range.from, range.to],
+    queryFn: () => api.get<Dashboard>(`/dashboard?from=${range.from}&to=${range.to}`),
+    placeholderData: keepPreviousData,
+    enabled: preset !== 'all' || first.isSuccess,
+  });
+  const d = dash.data;
+
+  const change = (p: Preset, c?: { from: string; to: string }) =>
+    setParams(p === 'custom' && c ? { period: p, from: c.from, to: c.to } : { period: p }, {
+      replace: true,
+    });
+
+  const label =
+    range.from === range.to
+      ? monthTitle(range.from)
+      : `${monthTitle(range.from)} – ${monthTitle(range.to)}`;
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome, {data?.user.name}</h1>
-      <Card title="Getting started">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          Your dashboard will show income, expenses, savings and net worth once accounts and
-          transactions are added. Start by adding your family members under Settings.
-        </p>
-      </Card>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {me.data ? `Hello, ${me.data.user.name}` : 'Dashboard'}
+          </h1>
+          <p className="text-sm text-slate-500">{label}</p>
+        </div>
+      </div>
+      <PeriodFilter preset={preset} custom={custom} onChange={change} />
+      <FormError error={dash.error} />
+
+      {d && (
+        <div
+          className={
+            dash.isPlaceholderData ? 'space-y-5 opacity-60 transition-opacity' : 'space-y-5'
+          }
+        >
+          {d.totals.netIncome === 0 && d.totals.spent === 0 && d.totals.future === 0 ? (
+            <Card>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Nothing recorded for this period yet. Add transactions, use{' '}
+                <Link to="/budget/entry" className="font-medium text-indigo-600 underline">
+                  Quick entry
+                </Link>
+                , or{' '}
+                <Link to="/import" className="font-medium text-indigo-600 underline">
+                  import your spreadsheet
+                </Link>
+                .
+              </p>
+            </Card>
+          ) : null}
+          {d.unconverted.length > 0 && (
+            <Card className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
+              <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />
+                <span>
+                  {d.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(' and ')} in
+                  this period could not be converted to {d.currency} and is left out.{' '}
+                  <Link to="/settings" className="font-medium underline">
+                    Add exchange rates
+                  </Link>
+                  .
+                </span>
+              </p>
+            </Card>
+          )}
+          <StatTiles d={d} />
+          <Insights
+            items={insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories)}
+          />
+          <CashFlowChart d={d} />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <SavingsRateChart d={d} />
+            <ShareChart d={d} />
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <CategoryBars d={d} />
+            <MemberBars d={d} />
+          </div>
+          {d.accounts.length > 0 && (
+            <Card title="Account balances today">
+              <dl className="flex flex-wrap gap-x-8 gap-y-2">
+                {d.accounts.map((a) => (
+                  <div key={a.currency}>
+                    <dt className="text-xs text-slate-500">{a.currency} accounts</dt>
+                    <dd className="text-lg font-semibold">{formatMoney(a.balance, a.currency)}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Link
+                to="/accounts"
+                className="mt-2 inline-block text-sm text-indigo-600 hover:underline"
+              >
+                See accounts
+              </Link>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

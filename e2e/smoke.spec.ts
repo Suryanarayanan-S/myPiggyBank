@@ -22,7 +22,7 @@ test('register → account → income → expense → balances → delete accoun
   await page.getByLabel('Password').fill(password);
   await page.getByLabel('Family name (optional)').fill('Soundararajan');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome, Surya' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
   await shot(page, '02-dashboard');
 
   // Settings: currencies and default bucket categories

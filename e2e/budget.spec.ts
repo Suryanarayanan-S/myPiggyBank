@@ -16,7 +16,7 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await page.getByLabel('Email').fill(`budget-${Date.now()}@example.com`);
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome, Surya' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();

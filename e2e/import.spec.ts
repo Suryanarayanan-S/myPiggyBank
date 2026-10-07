@@ -46,7 +46,7 @@ test('import a workbook: preview, map, import, budget matches, re-import is skip
   await page.getByLabel('Email').fill(`import-${Date.now()}@example.com`);
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome, Surya' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.locator('#import-file').setInputFiles(file);

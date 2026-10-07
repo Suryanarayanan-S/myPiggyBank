@@ -5,3 +5,31 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* Chart tokens (dataviz palette, validated all-pairs in both modes).
+   Bucket colours follow the entity everywhere: Essentials blue, Fun orange, Future You aqua.
+   Violet is only for single-series charts and never shares a chart with blue. */
+:root {
+  --c-essentials: #2a78d6;
+  --c-fun: #eb6834;
+  --c-future: #1baf7a;
+  --c-single: #4a3aa7;
+  --c-ink: #1e293b;
+  --c-muted: #64748b;
+  --c-grid: #e2e8f0;
+  --c-axis: #cbd5e1;
+  --c-surface: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-essentials: #3987e5;
+    --c-fun: #d95926;
+    --c-future: #199e70;
+    --c-single: #9085e9;
+    --c-ink: #f1f5f9;
+    --c-muted: #94a3b8;
+    --c-grid: #1e293b;
+    --c-axis: #334155;
+    --c-surface: #0f172a;
+  }
+}

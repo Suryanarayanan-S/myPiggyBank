@@ -19,6 +19,10 @@
   --c-grid: #e2e8f0;
   --c-axis: #cbd5e1;
   --c-surface: #ffffff;
+  --c-liquid: #4a3aa7;
+  --c-property: #eda100;
+  --c-investment: #e87ba4;
+  --c-other: #94a3b8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -31,5 +35,9 @@
     --c-grid: #1e293b;
     --c-axis: #334155;
     --c-surface: #0f172a;
+    --c-liquid: #9085e9;
+    --c-property: #c98500;
+    --c-investment: #d55181;
+    --c-other: #64748b;
   }
 }

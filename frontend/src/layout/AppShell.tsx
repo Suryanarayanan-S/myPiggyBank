@@ -1,7 +1,8 @@
 import clsx from 'clsx';
-import { LogOut } from 'lucide-react';
+import { LogOut, MoreHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useMe } from '../auth/auth';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
@@ -72,27 +73,79 @@ export function AppShell() {
         </main>
       </div>
 
+      <MobileNav />
+    </div>
+  );
+}
+
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const primary = navItems.filter((i) => i.primary);
+  const more = navItems.filter((i) => !i.primary);
+  const moreActive = more.some((i) => location.pathname.startsWith(i.to));
+  const itemClass = (active: boolean) =>
+    clsx(
+      'flex flex-col items-center gap-1 py-2 text-xs',
+      active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500',
+    );
+  return (
+    <>
+      {open && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setOpen(false)}>
+          <ul
+            className="absolute right-2 bottom-16 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            role="menu"
+          >
+            {more.map((item) => (
+              <li key={item.to} role="none">
+                <NavLink
+                  role="menuitem"
+                  to={item.to}
+                  className={({ isActive }) =>
+                    clsx(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm',
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+                    )
+                  }
+                >
+                  <item.icon size={18} aria-hidden />
+                  {item.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <nav
-        className="fixed inset-x-0 bottom-0 grid border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900"
-        style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900"
       >
-        {navItems.map((item) => (
+        {primary.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) =>
-              clsx(
-                'flex flex-col items-center gap-1 py-2 text-xs',
-                isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500',
-              )
-            }
+            onClick={() => setOpen(false)}
+            className={({ isActive }) => itemClass(isActive)}
           >
             <item.icon size={20} aria-hidden />
             {item.label}
           </NavLink>
         ))}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          onClick={() => setOpen(!open)}
+          className={itemClass(open || moreActive)}
+        >
+          <MoreHorizontal size={20} aria-hidden />
+          More
+        </button>
       </nav>
-    </div>
+    </>
   );
 }

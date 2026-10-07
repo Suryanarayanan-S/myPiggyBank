@@ -54,6 +54,8 @@ describe('formatCompact', () => {
   it('uses lakh and crore for INR', () => {
     expect(formatCompact(800000000, 'INR')).toBe('₹80 L');
     expect(formatCompact(1200000000, 'INR')).toBe('₹1.2 Cr');
+    expect(formatCompact(1350000000, 'INR')).toBe('₹1.35 Cr'); // two decimals for crore
+    expect(formatCompact(1400000000, 'INR')).toBe('₹1.4 Cr');
     expect(formatCompact(250000000, 'INR')).toBe('₹25 L');
     expect(formatCompact(500000, 'INR')).toBe('₹5,000');
   });

@@ -25,7 +25,7 @@ export function formatCompact(cents: number, currency = 'EUR'): string {
   const sign = cents < 0 ? '-' : '';
   const sym = symbol(currency);
   if (currency === 'INR') {
-    if (value >= 1e7) return `${sign}${sym}${oneDecimal(value / 1e7)} Cr`;
+    if (value >= 1e7) return `${sign}${sym}${String(Math.round((value / 1e7) * 100) / 100)} Cr`;
     if (value >= 1e5) return `${sign}${sym}${oneDecimal(value / 1e5)} L`;
     return `${sign}${sym}${Math.round(value).toLocaleString('en-IN')}`;
   }

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A runnable myPiggyBank skeleton: npm-workspace repo, Fastify API with Prisma/SQLite, secure email/password login with server-side sessions, family-member management, and a React app shell (login, register, dashboard placeholder, settings → members).
+**Goal:** A runnable myPiggyBank skeleton (plus a runtime Docker image and a VS Code dev container): npm-workspace repo, Fastify API with Prisma/SQLite, secure email/password login with server-side sessions, family-member management, and a React app shell (login, register, dashboard placeholder, settings → members).
 
 **Architecture:** Root npm workspace with `backend/` (Fastify 5 + TypeScript + Prisma 6 on SQLite) and `frontend/` (React 19 + Vite + Tailwind 4 + TanStack Query). In dev, Vite (5173) proxies `/api` to Fastify (3001). In production mode, Fastify serves the built frontend on one port. Every domain row carries `familyId`; every query filters by the logged-in user's family.
 
@@ -46,6 +46,11 @@ myPiggyBank/
 ├── eslint.config.js
 ├── README.md
 ├── scripts/setup.sh             # node check, .env, npm install, migrate
+├── scripts/docker-smoke.sh      # build image, run, verify health + persistence
+├── Dockerfile, .dockerignore    # multi-stage runtime image
+├── docker-compose.yml           # daily use on :8080, data in ./data
+├── docker/entrypoint.sh         # migrate deploy, then start server
+├── .devcontainer/devcontainer.json  # VS Code dev container (Node 22)
 ├── backend/
 │   ├── package.json, tsconfig.json, tsconfig.build.json, vitest.config.ts
 │   ├── prisma/schema.prisma     # Family, User, Session, FamilyMember
@@ -136,8 +141,9 @@ NODE_ENV=development
 # 127.0.0.1 = only this laptop. Change later for home-network access.
 HOST=127.0.0.1
 PORT=3001
-# SQLite file. Relative paths are resolved from backend/prisma/.
-DATABASE_URL="file:../../data/piggybank.db"
+# SQLite file for local development. Relative paths are resolved from backend/prisma/.
+# (Docker uses data/piggybank.db for your real data — see docker-compose.yml.)
+DATABASE_URL="file:../../data/dev.db"
 # Set to true only when the app is served over HTTPS.
 COOKIE_SECURE=false
 # Set to false after you have created your account.
@@ -253,12 +259,12 @@ backend/test/.tmp/
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.16.0",
     "fastify": "^5.4.0",
+    "prisma": "^6.16.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "dotenv-cli": "^10.0.0",
-    "prisma": "^6.16.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
@@ -367,7 +373,7 @@ mkdir -p data
 npm install
 npm run prisma -w backend -- migrate dev --name init
 ```
-Expected: `backend/prisma/migrations/<timestamp>_init/migration.sql` created, `data/piggybank.db` created, Prisma Client generated.
+Expected: `backend/prisma/migrations/<timestamp>_init/migration.sql` created, `data/dev.db` created, Prisma Client generated.
 
 - [ ] **Step 5: Test infrastructure**
 
@@ -2631,14 +2637,14 @@ Open **http://localhost:5173**, click **Create one**, and register. After creati
 |---|---|---|
 | `HOST` | `127.0.0.1` | Interface to listen on (this laptop only) |
 | `PORT` | `3001` | API / production port |
-| `DATABASE_URL` | `file:../../data/piggybank.db` | SQLite file (relative to `backend/prisma/`) |
+| `DATABASE_URL` | `file:../../data/dev.db` | Development SQLite file (relative to `backend/prisma/`) |
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
 | `ALLOW_REGISTRATION` | `true` | Allow new accounts |
 | `SESSION_DAYS` | `30` | Login session lifetime |
 
 ## Your data
 
-Your data lives in `data/piggybank.db` and is **never committed to Git**. Moving it to another laptop is covered by the backup/restore scripts (coming in a later milestone).
+Your real data (Docker) lives in `data/piggybank.db`; development uses `data/dev.db`. Neither is **ever committed to Git**. Moving it to another laptop is covered by the backup/restore scripts (coming in a later milestone).
 
 ## Project structure
 
@@ -2661,6 +2667,269 @@ git commit -m "chore: production static serving test, setup script and README
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 7: Report to user**
+---
 
-Report what was built, how to open it (`npm run dev` → http://localhost:5173), test results, and ask whether to push to `origin main` (do not push without a yes).
+### Task 8: Runtime Docker image + Compose
+
+**Files:**
+- Create: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docker/entrypoint.sh`, `scripts/docker-smoke.sh`
+- Modify: `README.md` (Docker section), root `package.json` (add `"docker:smoke": "./scripts/docker-smoke.sh"`)
+
+**Interfaces:**
+- Consumes: `npm run build`, `backend/dist/server.js`, `frontend/dist`, `prisma migrate deploy`, `GET /api/health`, `POST /api/auth/register`, `POST /api/auth/login`.
+- Produces: image `mypiggybank:latest`; `docker compose up -d` → app on `http://localhost:8080` (host-only); data in `${DATA_DIR:-./data}/piggybank.db`.
+
+- [ ] **Step 1: Write the smoke test (fails: no Dockerfile yet)**
+
+`scripts/docker-smoke.sh`
+```bash
+#!/usr/bin/env bash
+# Builds the image, starts it against a throw-away data dir, checks health,
+# registers a user, restarts the container and verifies the user survived.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+export DATA_DIR; DATA_DIR=$(mktemp -d)
+export APP_PORT=18080
+PROJECT=pbsmoke
+BASE="http://127.0.0.1:${APP_PORT}"
+cleanup() { docker compose -p "$PROJECT" down -v >/dev/null 2>&1 || true; rm -rf "$DATA_DIR"; }
+trap cleanup EXIT
+
+docker compose -p "$PROJECT" up -d --build --wait
+curl -fsS "$BASE/api/health" | grep -q '"status":"ok"'
+echo "✓ health"
+
+curl -fsS "$BASE/settings" | grep -q '<div id="root">'
+echo "✓ frontend served"
+
+curl -fsS -H 'content-type: application/json' \
+  -d '{"name":"Smoke","email":"smoke@example.com","password":"smoke-test-password"}' \
+  "$BASE/api/auth/register" >/dev/null
+echo "✓ register"
+
+docker compose -p "$PROJECT" restart >/dev/null
+docker compose -p "$PROJECT" up -d --wait >/dev/null
+curl -fsS -H 'content-type: application/json' \
+  -d '{"email":"smoke@example.com","password":"smoke-test-password"}' \
+  "$BASE/api/auth/login" | grep -q '"email":"smoke@example.com"'
+echo "✓ data persisted across restart"
+
+test -f "$DATA_DIR/piggybank.db"
+echo "✓ database file on host: $DATA_DIR/piggybank.db"
+echo "Docker smoke test passed."
+```
+
+Run: `chmod +x scripts/docker-smoke.sh && ./scripts/docker-smoke.sh`
+Expected: FAIL — `no configuration file provided` / missing Dockerfile.
+
+- [ ] **Step 2: Implement**
+
+`.dockerignore`
+```
+**/node_modules
+**/dist
+.git
+.env
+.env.*
+!.env.example
+data
+backups
+coverage
+backend/test/.tmp
+playwright-report
+test-results
+```
+
+`Dockerfile`
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# ---- build: install all deps, compile frontend + backend ----
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+COPY backend/prisma backend/prisma
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# ---- runtime: production deps only, non-root ----
+FROM node:22-bookworm-slim AS runtime
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3001 \
+    DATABASE_URL=file:/app/data/piggybank.db
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/
+COPY backend/prisma backend/prisma
+RUN npm ci --omit=dev --workspace backend && npm cache clean --force
+COPY --from=build /app/backend/dist backend/dist
+COPY --from=build /app/frontend/dist frontend/dist
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh && mkdir -p /app/data && chown node:node /app/data
+USER node
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+```
+
+`docker/entrypoint.sh`
+```bash
+#!/bin/sh
+set -e
+cd /app/backend
+npx prisma migrate deploy
+exec node dist/server.js
+```
+
+`docker-compose.yml`
+```yaml
+# Runs myPiggyBank for daily use.  docker compose up -d  →  http://localhost:8080
+# Your data lives on the host in ./data/piggybank.db (git-ignored).
+services:
+  app:
+    build: .
+    image: mypiggybank:latest
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 = reachable from this laptop only. Change for home-network access later.
+      - '127.0.0.1:${APP_PORT:-8080}:3001'
+    environment:
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+```
+
+Add to root `package.json` scripts: `"docker:smoke": "./scripts/docker-smoke.sh"`.
+
+- [ ] **Step 3: Run the smoke test**
+
+Run: `./scripts/docker-smoke.sh`
+Expected: all ✓ lines and `Docker smoke test passed.`
+If `npm ci --workspace backend` is rejected by the installed npm, replace it with `npm ci --omit=dev --workspaces=false && npm ci --omit=dev -w backend` variants until it installs only backend production deps, and re-run.
+
+- [ ] **Step 4: Start it for real**
+
+Run: `docker compose up -d --build --wait && curl -s http://localhost:8080/api/health`
+Expected: `{"data":{"status":"ok"}}`; `data/piggybank.db` exists on the host. Leave it running for the user.
+
+- [ ] **Step 5: README Docker section**
+
+Insert into `README.md` after "Getting started":
+````markdown
+## Run with Docker (daily use)
+
+```bash
+docker compose up -d --build   # build & start in the background
+```
+
+Open **http://localhost:8080**. Your data is stored on your disk in `data/piggybank.db` — rebuilding or removing the container never deletes it.
+
+| Command | What it does |
+|---|---|
+| `docker compose up -d --build` | Build (after `git pull`) and start |
+| `docker compose logs -f` | Follow logs |
+| `docker compose down` | Stop (data is kept) |
+| `npm run docker:smoke` | Build + automated smoke test against a temporary data dir |
+
+Development (`npm run dev`) uses a separate database, `data/dev.db`, so experiments never touch your real data.
+````
+
+- [ ] **Step 6: Commit**
+
+```bash
+npx prettier --check . && git add -A
+git commit -m "feat(docker): runtime image, compose with host data volume, smoke test
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 9: Dev container
+
+**Files:**
+- Create: `.devcontainer/devcontainer.json`
+- Modify: `README.md` (dev container section)
+
+**Interfaces:**
+- Consumes: `scripts/setup.sh`, `npm run dev`, `npm test`.
+- Produces: VS Code "Reopen in Container" environment with Node 22 and forwarded ports 5173/3001.
+
+- [ ] **Step 1: Create the config**
+
+`.devcontainer/devcontainer.json`
+```jsonc
+{
+  "name": "myPiggyBank",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "forwardPorts": [5173, 3001],
+  "portsAttributes": {
+    "5173": { "label": "Web (Vite)", "onAutoForward": "openBrowser" },
+    "3001": { "label": "API", "onAutoForward": "silent" }
+  },
+  // Creates .env, installs dependencies and applies migrations to data/dev.db.
+  "postCreateCommand": "./scripts/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  },
+  "remoteUser": "node"
+}
+```
+
+- [ ] **Step 2: Verify with the Dev Containers CLI**
+
+```bash
+npx -y @devcontainers/cli up --workspace-folder .
+npx -y @devcontainers/cli exec --workspace-folder . bash -lc 'node -v && npm test'
+```
+Expected: `v22.x` and all tests pass inside the container. Then remove it:
+`docker rm -f $(docker ps -aq --filter label=devcontainer.local_folder=$PWD)`.
+
+Note: the container shares the repo's `node_modules` with the host. Both are linux-x64/glibc with OpenSSL 3, so native modules (Prisma engines, argon2) are compatible. If `npm test` fails with a native-module error inside the container, run `npm rebuild` there.
+
+- [ ] **Step 3: README dev container section**
+
+Insert into `README.md` after the Docker section:
+````markdown
+## Develop in a Dev Container (no Node install needed)
+
+Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
+
+1. Open the folder in VS Code → **Reopen in Container**.
+2. Wait for setup to finish (it runs `scripts/setup.sh`).
+3. In the container terminal: `npm run dev` → the browser opens http://localhost:5173.
+````
+
+- [ ] **Step 4: Full check, commit, report**
+
+```bash
+npm run check
+git add -A
+git commit -m "feat(devcontainer): VS Code dev container with Node 22 and project setup
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+```
+
+Report what was built, how to open it (dev: `npm run dev` → http://localhost:5173; Docker: http://localhost:8080; dev container steps), test results, and ask whether to push to `origin main` (do not push without a yes).

@@ -43,7 +43,7 @@ is under control, and how net worth is changing over time.
 4. Reports + CSV export.
 5. Financial insights (computed from data, no advice).
 6. Multi-currency conversion (schema is ready; v1 assumes one display currency).
-7. Family logins with roles; home-network access; Docker.
+7. Family logins with roles; home-network access.
 
 ### Explicitly out of scope
 2FA, audit log, XIRR, PDF export, AI categorisation, live market data, public internet hosting.
@@ -56,7 +56,7 @@ Browser ── React SPA (Vite) ──HTTP/JSON──> Fastify API ──Prisma�
 
 - **frontend/** — React 18 + TypeScript (strict) + Vite + Tailwind CSS + Recharts + lucide-react. TanStack Query for server state, React Router for routing. Sidebar on desktop, bottom nav on mobile. Light/dark mode.
 - **backend/** — Node 22 + Fastify + TypeScript (strict). zod validation on every request. Layers: `routes/` (HTTP) → `services/` (business logic) → Prisma. Pure calculation functions (`domain/`) for balances, budget, net worth, CSV parsing, categorisation — unit-tested without a DB.
-- **Database** — SQLite via Prisma, file at `data/piggybank.db` (git-ignored). Switching to PostgreSQL later = change Prisma provider + `DATABASE_URL`.
+- **Database** — SQLite via Prisma, file at `data/piggybank.db` for the Docker/real instance and `data/dev.db` for local development (both git-ignored). Switching to PostgreSQL later = change Prisma provider + `DATABASE_URL`.
 - **Dev:** `npm run dev` runs API (port 3001) and Vite (port 5173, proxies `/api`). **Prod-like:** `npm run build && npm start` — Fastify serves built frontend on one port.
 - npm workspaces at the repo root (`frontend`, `backend`).
 
@@ -121,6 +121,20 @@ Response shape: `{ data }` on success, `{ error: { code, message, details? } }` 
 - New laptop: install Node 22 (nvm) → `git clone` → `./scripts/setup.sh` → `npm run dev`.
 - Data moves separately: `npm run backup` writes `backups/piggybank-YYYYMMDD-HHMM.db`; `npm run restore <file>` restores it.
 
+## 8a. Docker
+
+Two separate Docker setups live in the repo:
+
+**Runtime container** (daily use, other laptops, later a home server)
+- Multi-stage `Dockerfile`: build frontend + backend, then a slim Node 22 image that runs the API and serves the built frontend. Runs as non-root `node` user; applies Prisma migrations on start; has a health check.
+- `docker-compose.yml`: one service, port `127.0.0.1:8080 → 3001` (host-only), data bind-mounted from `./data` so the database lives on the host and survives rebuilds. Config via `.env` interpolation.
+- `.dockerignore` keeps `node_modules`, `.env`, `data/`, `backups/` out of the image.
+- Database files are separated: Docker (real data) uses `data/piggybank.db`; local development uses `data/dev.db`, so experiments never touch real data.
+
+**Dev container** (coding on any laptop with only Git + Docker + VS Code)
+- `.devcontainer/devcontainer.json` based on `mcr.microsoft.com/devcontainers/typescript-node` (Node 22), runs `scripts/setup.sh` after creation, forwards ports 5173 and 3001, and installs ESLint, Prettier, Prisma and Tailwind VS Code extensions.
+- Native Node development on the host (via nvm) remains supported; both use the same scripts.
+
 ## 9. Testing
 
 - **Vitest unit tests** for `domain/`: balances, monthly totals, savings rate, budget calc (incl. subcategories, over-budget), net worth, CSV parsing/validation, duplicate detection, categorisation rules.
@@ -130,7 +144,7 @@ Response shape: `{ data }` on success, `{ error: { code, message, details? } }` 
 
 ## 10. Build order (each step = working app + tests + commit)
 
-1. Repo, tooling, frontend + backend skeleton, Prisma + SQLite, health check, setup script.
+1. Repo, tooling, frontend + backend skeleton, Prisma + SQLite, health check, setup script, runtime Docker + dev container.
 2. Auth + family members.
 3. Accounts, categories, transactions (list/search/filter/sort).
 4. Budgets.

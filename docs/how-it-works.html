@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inside myPiggyBank</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap"
+    />
+    <style>
+      /* Layout: one reading column; a left-to-right "journey" diagram of five stations that stacks top-to-bottom on phones. */
+      :root {
+        --bg: #f7f4f6;
+        --surface: #ffffff;
+        --fg: #2a2230;
+        --muted: #6d6474;
+        --line: #e4dce3;
+        --pig: #e2557a; /* piggy-bank pink: the one accent */
+        --pig-soft: #fde7ee;
+        --coin: #c98a12; /* coin gold for the money path */
+        --coin-soft: #fbf0d6;
+        --code-bg: #f1ecf0;
+        --ok: #1f8a5b;
+        --font-display: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif;
+        --font-body: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        --radius: 14px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: #17131a;
+          --surface: #211b25;
+          --fg: #f1ebf2;
+          --muted: #b0a6b6;
+          --line: #3a3140;
+          --pig: #ff7aa0;
+          --pig-soft: #3b1f2b;
+          --coin: #f0b941;
+          --coin-soft: #3a2e14;
+          --code-bg: #2c2431;
+          --ok: #4cc58f;
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #17131a;
+        --surface: #211b25;
+        --fg: #f1ebf2;
+        --muted: #b0a6b6;
+        --line: #3a3140;
+        --pig: #ff7aa0;
+        --pig-soft: #3b1f2b;
+        --coin: #f0b941;
+        --coin-soft: #3a2e14;
+        --code-bg: #2c2431;
+        --ok: #4cc58f;
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 17px/1.6 var(--font-body);
+        padding-inline: 16px;
+        padding-block: 32px 64px;
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        display: grid;
+        gap: 56px;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-display);
+        line-height: 1.15;
+        text-wrap: balance;
+        margin: 0;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5vw, 3.2rem);
+        font-weight: 700;
+      }
+      h2 {
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        font-weight: 600;
+      }
+      h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+        max-width: 65ch;
+      }
+      .lead {
+        font-size: 1.15rem;
+        color: var(--muted);
+      }
+      .eyebrow {
+        font: 600 0.78rem/1 var(--font-body);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--pig);
+      }
+      code,
+      .tech {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+      }
+      .tech {
+        display: inline-block;
+        background: var(--code-bg);
+        border-radius: 6px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      section {
+        display: grid;
+        gap: 20px;
+      }
+      .section-head {
+        display: grid;
+        gap: 8px;
+      }
+
+      /* Hero */
+      header {
+        display: grid;
+        gap: 14px;
+      }
+      .hero-pig {
+        width: 64px;
+        height: 64px;
+      }
+
+      /* Journey diagram */
+      .journey {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 24px 12px;
+      }
+      .station {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        text-align: center;
+        gap: 8px;
+        padding: 0 10px;
+        min-width: 0;
+      }
+      .station + .station::before {
+        content: '';
+        position: absolute;
+        left: -9px;
+        top: 34px;
+        width: 18px;
+        height: 18px;
+        border-top: 3px solid var(--coin);
+        border-right: 3px solid var(--coin);
+        transform: rotate(45deg);
+      }
+      .bubble {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--pig-soft);
+        color: var(--pig);
+      }
+      .bubble svg {
+        width: 36px;
+        height: 36px;
+      }
+      .station h3 {
+        font-size: 1.05rem;
+      }
+      .station .kid {
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      .journey-caption {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      @media (max-width: 760px) {
+        .journey {
+          grid-template-columns: 1fr;
+          gap: 26px;
+          padding: 20px 16px;
+        }
+        .station {
+          grid-template-columns: 72px 1fr;
+          justify-items: start;
+          text-align: left;
+          column-gap: 14px;
+        }
+        .station .bubble {
+          grid-row: span 3;
+        }
+        .station + .station::before {
+          left: 26px;
+          top: -22px;
+          transform: rotate(135deg);
+        }
+      }
+
+      /* Coin story */
+      .story {
+        display: grid;
+        gap: 0;
+        counter-reset: step;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 14px;
+        padding: 14px 0;
+        border-top: 1px dashed var(--line);
+      }
+      .step:first-child {
+        border-top: 0;
+      }
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--coin-soft);
+        color: var(--coin);
+        font: 700 1rem/1 var(--font-display);
+        border: 2px solid var(--coin);
+      }
+      .step p {
+        max-width: none;
+      }
+      .step .who {
+        font-weight: 700;
+      }
+
+      /* Two ways to run */
+      .modes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .mode {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 20px;
+        display: grid;
+        gap: 12px;
+        align-content: start;
+        min-width: 0;
+      }
+      .mode .addr {
+        font: 600 1.05rem/1.3 var(--font-mono);
+        color: var(--pig);
+        word-break: break-all;
+      }
+      .mode ul {
+        margin: 0;
+        padding-left: 1.1em;
+        display: grid;
+        gap: 6px;
+      }
+      .mode.daily {
+        border-color: var(--pig);
+        box-shadow: 0 0 0 3px var(--pig-soft);
+      }
+      .cmd {
+        display: block;
+        background: var(--code-bg);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font: 500 0.85rem/1.5 var(--font-mono);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      @media (max-width: 760px) {
+        .modes {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Helper table */
+      .helpers {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      .helpers th,
+      .helpers td {
+        text-align: left;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .helpers tr:last-child td {
+        border-bottom: 0;
+      }
+      .helpers th {
+        font: 600 0.78rem/1.2 var(--font-body);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        background: var(--code-bg);
+      }
+      .helpers td:first-child {
+        white-space: nowrap;
+        font-weight: 700;
+      }
+
+      /* Folder map */
+      .tree {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        font: 500 0.9rem/1.85 var(--font-mono);
+        overflow-x: auto;
+        white-space: pre;
+        margin: 0;
+      }
+      .tree .c {
+        color: var(--muted);
+      }
+      .tree .p {
+        color: var(--pig);
+      }
+
+      /* Safety cards */
+      .guards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .guard {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        display: grid;
+        gap: 6px;
+        align-content: start;
+      }
+      .guard h3 {
+        color: var(--ok);
+        font-size: 1.05rem;
+      }
+      .guard p {
+        font-size: 0.95rem;
+      }
+
+      footer {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .station .bubble {
+          transition: transform 0.2s ease;
+        }
+        .station:hover .bubble {
+          transform: translateY(-3px) rotate(-4deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <svg class="hero-pig" viewBox="0 0 64 64" aria-hidden="true">
+          <ellipse cx="32" cy="36" rx="22" ry="17" fill="var(--pig)" />
+          <circle cx="48" cy="33" r="7" fill="var(--pig-soft)" />
+          <circle cx="46.5" cy="33" r="1.4" fill="var(--pig)" />
+          <circle cx="50" cy="33" r="1.4" fill="var(--pig)" />
+          <circle cx="40" cy="27" r="2" fill="var(--fg)" />
+          <path d="M22 21 l4 -8 l5 8 z" fill="var(--pig)" />
+          <rect x="24" y="17" width="12" height="3" rx="1.5" fill="var(--coin)" />
+          <rect x="17" y="49" width="6" height="8" rx="2" fill="var(--pig)" />
+          <rect x="38" y="49" width="6" height="8" rx="2" fill="var(--pig)" />
+        </svg>
+        <span class="eyebrow">A picture guide</span>
+        <h1>Inside myPiggyBank</h1>
+        <p class="lead">
+          What happens when you type “52,40 € at REWE” and press Save, and which tools make each
+          part work. Every part has a simple comparison first and its real technical name in grey.
+        </p>
+      </header>
+
+      <section aria-labelledby="big-picture">
+        <div class="section-head">
+          <span class="eyebrow">The big picture</span>
+          <h2 id="big-picture">Five stations from your finger to the notebook</h2>
+        </div>
+        <div class="journey" role="list">
+          <div class="station" role="listitem">
+            <div class="bubble">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="12" rx="2" />
+                <path d="M8 20h8M12 16v4" />
+              </svg>
+            </div>
+            <h3>You</h3>
+            <p class="kid">Look at a window and press buttons.</p>
+            <span class="tech">Chrome / Firefox</span>
+          </div>
+          <div class="station" role="listitem">
+            <div class="bubble">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+              </svg>
+            </div>
+            <h3>The shop window</h3>
+            <p class="kid">The pages, buttons and forms you see.</p>
+            <span class="tech">React + Tailwind</span>
+          </div>
+          <div class="station" role="listitem">
+            <div class="bubble">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="7" r="4" />
+                <path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2" />
+              </svg>
+            </div>
+            <h3>The shopkeeper</h3>
+            <p class="kid">Checks every request and does the money maths.</p>
+            <span class="tech">Fastify API (Node.js)</span>
+          </div>
+          <div class="station" role="listitem">
+            <div class="bubble">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 7h16M4 12h10M4 17h7" />
+                <path d="M17 14l3 3-3 3" />
+              </svg>
+            </div>
+            <h3>The translator</h3>
+            <p class="kid">Turns the shopkeeper’s words into notebook language.</p>
+            <span class="tech">Prisma</span>
+          </div>
+          <div class="station" role="listitem">
+            <div class="bubble">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" />
+                <path d="M5 17a3 3 0 0 1 3-3h11" />
+              </svg>
+            </div>
+            <h3>The notebook</h3>
+            <p class="kid">One file on your laptop that remembers everything.</p>
+            <span class="tech">SQLite · data/piggybank.db</span>
+          </div>
+        </div>
+        <p class="journey-caption">
+          The answer travels back the same way: notebook → translator → shopkeeper → shop window →
+          you.
+        </p>
+      </section>
+
+      <section aria-labelledby="coin">
+        <div class="section-head">
+          <span class="eyebrow">Follow one coin</span>
+          <h2 id="coin">What happens when you save “52,40 € at REWE”</h2>
+        </div>
+        <div class="story">
+          <div class="step">
+            <p>
+              <span class="who">You</span> type <code>52,40</code>, pick <em>Groceries</em> and
+              press <strong>Save</strong>.
+            </p>
+          </div>
+          <div class="step">
+            <p>
+              <span class="who">The shop window</span> turns “52,40” into <code>5240</code> cents.
+              Whole cents never get rounding errors, so 0,10 + 0,20 is always exactly 0,30. It puts
+              the amount in a parcel <span class="tech">JSON</span> and sends it to
+              <code>/api/transactions</code> along with your wristband
+              <span class="tech">session cookie</span>.
+            </p>
+          </div>
+          <div class="step">
+            <p>
+              <span class="who">The shopkeeper</span> checks the wristband: is this really you? Then
+              it checks the parcel <span class="tech">zod</span>: is the amount above zero, is the
+              date real, and do the account and category belong to <em>your</em> family? If anything
+              is wrong, it sends back a clear message instead of saving.
+            </p>
+          </div>
+          <div class="step">
+            <p>
+              <span class="who">The translator</span> <span class="tech">Prisma</span> writes the
+              line into the notebook <span class="tech">SQLite</span>.
+            </p>
+          </div>
+          <div class="step">
+            <p>
+              <span class="who">The shopkeeper</span> answers “saved”. For the Budget page, it does
+              the 50/30/20 maths: income, Essentials, Fun, Future You, unused amount and savings
+              rate. INR becomes EUR using your monthly rate.
+            </p>
+          </div>
+          <div class="step">
+            <p>
+              <span class="who">The shop window</span>
+              <span class="tech">TanStack Query</span> refreshes the list, your account balance and
+              the budget bars, so you see the new numbers straight away.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="modes">
+        <div class="section-head">
+          <span class="eyebrow">Two ways to run it</span>
+          <h2 id="modes">The lunchbox and the workshop</h2>
+          <p>
+            The same code runs in two ways. One is for using the app every day, the other is for
+            building it.
+          </p>
+        </div>
+        <div class="modes">
+          <div class="mode daily">
+            <h3>The lunchbox: daily use</h3>
+            <p class="addr">http://localhost:8080</p>
+            <p>
+              <span class="tech">Docker</span> packs the finished app and everything it needs into
+              one sealed box called a container. Your notebook stays <em>outside</em> the box, in
+              your <code>data/</code> folder, so a new box never loses your money data.
+            </p>
+            <ul>
+              <li>
+                One box runs the shopkeeper, and the shopkeeper also hands out the shop window.
+              </li>
+              <li>It starts by itself when Docker starts.</li>
+            </ul>
+            <code class="cmd">docker compose up -d --build</code>
+          </div>
+          <div class="mode">
+            <h3>The workshop: building new features</h3>
+            <p class="addr">http://localhost:5173 → :3001</p>
+            <p>
+              Two helpers run side by side. <span class="tech">Vite</span> shows the shop window and
+              updates it the moment code changes. The shopkeeper runs on port 3001 with its own
+              practice notebook, <code>data/dev.db</code>.
+            </p>
+            <ul>
+              <li>Your real data is never touched while building.</li>
+              <li>
+                The <span class="tech">Dev Container</span> is a ready-made workshop box for VS Code
+                on any laptop.
+              </li>
+            </ul>
+            <code class="cmd">npm run dev</code>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="helpers">
+        <div class="section-head">
+          <span class="eyebrow">The helpers</span>
+          <h2 id="helpers">Tools that build, check and protect the app</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="helpers">
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Like a…</th>
+                <th>What it does here</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Node.js 22</td>
+                <td>engine</td>
+                <td>
+                  Runs the shopkeeper and all the tools. Installed with
+                  <span class="tech">nvm</span>.
+                </td>
+              </tr>
+              <tr>
+                <td>TypeScript</td>
+                <td>spell-checker for code</td>
+                <td>
+                  Catches mistakes like a typo in a name, or a number used where text belongs,
+                  before the app runs.
+                </td>
+              </tr>
+              <tr>
+                <td>React</td>
+                <td>LEGO bricks</td>
+                <td>Builds the screens from small reusable pieces: buttons, cards, forms.</td>
+              </tr>
+              <tr>
+                <td>Tailwind CSS</td>
+                <td>paint box</td>
+                <td>Colours, spacing and dark mode, written right next to each brick.</td>
+              </tr>
+              <tr>
+                <td>Vite</td>
+                <td>fast oven</td>
+                <td>
+                  Bakes the shop window into small files, and reloads instantly while building.
+                </td>
+              </tr>
+              <tr>
+                <td>Fastify</td>
+                <td>shopkeeper’s counter</td>
+                <td>Receives every request at <code>/api/…</code> and sends the answers back.</td>
+              </tr>
+              <tr>
+                <td>zod</td>
+                <td>bouncer</td>
+                <td>Checks every parcel before anything is saved.</td>
+              </tr>
+              <tr>
+                <td>Prisma</td>
+                <td>translator + architect</td>
+                <td>Talks to the notebook, and keeps its layout up to date with “migrations”.</td>
+              </tr>
+              <tr>
+                <td>SQLite</td>
+                <td>notebook</td>
+                <td>The database: one file. Back it up by copying the file.</td>
+              </tr>
+              <tr>
+                <td>Vitest</td>
+                <td>quiz</td>
+                <td>
+                  187 small tests that check the maths, the rules and the safety guards in seconds.
+                </td>
+              </tr>
+              <tr>
+                <td>Playwright</td>
+                <td>robot user</td>
+                <td>
+                  Opens a real browser, clicks through the app like you would and takes screenshots.
+                </td>
+              </tr>
+              <tr>
+                <td>ESLint + Prettier</td>
+                <td>tidy-up crew</td>
+                <td>Keep the code neat and catch common slips.</td>
+              </tr>
+              <tr>
+                <td>Docker</td>
+                <td>lunchbox</td>
+                <td>Packs the app so it runs the same on any machine.</td>
+              </tr>
+              <tr>
+                <td>Git + GitHub</td>
+                <td>photo album</td>
+                <td>
+                  Saves every version of the code, so nothing is lost and anything can be undone.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="folders">
+        <div class="section-head">
+          <span class="eyebrow">Where things live</span>
+          <h2 id="folders">The project folder</h2>
+        </div>
+        <pre class="tree"><span class="p">myPiggyBank/</span>
+├── <span class="p">frontend/</span>      <span class="c">the shop window: React pages and buttons</span>
+├── <span class="p">backend/</span>       <span class="c">the shopkeeper: API, money maths, notebook layout</span>
+│   └── prisma/    <span class="c">the notebook’s layout and its change history (migrations)</span>
+├── <span class="p">e2e/</span>           <span class="c">the robot user’s scripts (Playwright)</span>
+├── <span class="p">scripts/</span>       <span class="c">setup and the Docker smoke test</span>
+├── <span class="p">docs/</span>          <span class="c">the design and the plan for every milestone</span>
+├── <span class="p">data/</span>          <span class="c">YOUR notebooks: piggybank.db (real), dev.db (practice) · never in Git</span>
+├── <span class="p">backups/</span>       <span class="c">safety copies taken before each upgrade · never in Git</span>
+├── Dockerfile, docker-compose.yml   <span class="c">how to pack and run the lunchbox</span>
+└── .devcontainer/                   <span class="c">the ready-made workshop for VS Code</span></pre>
+      </section>
+
+      <section aria-labelledby="safety">
+        <div class="section-head">
+          <span class="eyebrow">Safety guards</span>
+          <h2 id="safety">How your money data is kept safe</h2>
+        </div>
+        <div class="guards">
+          <div class="guard">
+            <h3>A lock on the door</h3>
+            <p>
+              Your password is never stored, only a scrambled fingerprint of it
+              <span class="tech">argon2id</span>.
+            </p>
+          </div>
+          <div class="guard">
+            <h3>A wristband</h3>
+            <p>
+              After you log in, the browser wears a secret wristband
+              <span class="tech">httpOnly cookie</span>. The page’s own scripts can’t read it, and
+              other websites can’t use it.
+            </p>
+          </div>
+          <div class="guard">
+            <h3>Only your family</h3>
+            <p>
+              Every question to the notebook says “only this family’s pages”. Other families get
+              “not found”.
+            </p>
+          </div>
+          <div class="guard">
+            <h3>Only this laptop</h3>
+            <p>
+              The app listens on <code>127.0.0.1</code>, so other devices can’t reach it until we
+              open it up for your family.
+            </p>
+          </div>
+          <div class="guard">
+            <h3>Too many wrong guesses</h3>
+            <p>
+              After 10 wrong logins in a minute, the door stays shut for a while
+              <span class="tech">rate limit</span>.
+            </p>
+          </div>
+          <div class="guard">
+            <h3>Copies before changes</h3>
+            <p>Before every upgrade, the notebook is copied into <code>backups/</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          myPiggyBank · milestones 1–3: login, accounts, transactions, 50/30/20 budget and quick
+          entry. Next: importing your spending spreadsheet.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

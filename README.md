@@ -2,7 +2,9 @@
 
 A simple, private family-finance app: income, expenses, budgets, accounts and net worth — running on your own machine.
 
-> Status: Milestone 1 (foundation, login, family members). See `docs/superpowers/specs/` for the v1 design.
+> Status: Milestones 1–3 (login, family, accounts, transactions, EUR/INR, 50/30/20 budget, quick entry). See `docs/superpowers/specs/` for the v1 design.
+
+New here? Open [docs/how-it-works.html](docs/how-it-works.html) in your browser for a picture guide to how the app works, from the screen to the database, and the tools behind each part.
 
 ## Tech stack
 

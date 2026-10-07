@@ -47,7 +47,12 @@ test('register → account → income → expense → balances → delete accoun
 
   // Income + expense
   await page.getByRole('link', { name: 'Transactions' }).first().click();
-  const add = async (type: 'Income' | 'Expense', amount: string, category: string, merchant: string) => {
+  const add = async (
+    type: 'Income' | 'Expense',
+    amount: string,
+    category: string,
+    merchant: string,
+  ) => {
     await page.getByRole('button', { name: 'Add transaction' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('tab', { name: type.toLowerCase() }).click();
@@ -64,7 +69,9 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('−52,40 €')).toBeVisible();
   for (const label of ['Type', 'Account', 'Category', 'Member']) {
     const select = page.getByRole('combobox', { name: label, exact: true });
-    const fits = await select.evaluate((el: HTMLSelectElement) => el.scrollWidth <= el.clientWidth + 1);
+    const fits = await select.evaluate(
+      (el: HTMLSelectElement) => el.scrollWidth <= el.clientWidth + 1,
+    );
     expect(fits, `filter "${label}" text is cut off`).toBe(true);
     expect((await select.boundingBox())!.width).toBeGreaterThan(110);
   }

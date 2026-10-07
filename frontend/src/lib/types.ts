@@ -141,3 +141,36 @@ export type MonthEntry = {
     otherTransactions: number;
   }[];
 };
+
+export type ImportSuggestion = { categoryId: string } | { newName: string };
+export type ImportMonth = {
+  sheet: string;
+  month: string;
+  income: { label: string; amount: number }[];
+  items: { bucket: Bucket; label: string; amount: number }[];
+  sheetTotals: { netIncome: number | null; spend: number | null };
+  parsedTotals: { netIncome: number; spend: number };
+  matches: boolean;
+  warnings: string[];
+  existing: { imported: number; manual: number };
+};
+export type ImportLabel = {
+  key: string;
+  kind: 'income' | 'expense';
+  bucket: Bucket | null;
+  label: string;
+  occurrences: number;
+  total: number;
+  suggestion: ImportSuggestion;
+};
+export type ImportPreview = {
+  months: ImportMonth[];
+  labels: ImportLabel[];
+  skippedSheets: string[];
+};
+export type ImportResult = {
+  created: number;
+  months: string[];
+  newCategories: string[];
+  accountId: string;
+};

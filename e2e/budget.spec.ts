@@ -8,7 +8,9 @@ const shot = async (page: Page, name: string) => {
   await page.emulateMedia({ colorScheme: 'light' });
 };
 
-test('quick entry fills a month and the budget shows 50/30/20, unused and savings rate', async ({ page }) => {
+test('quick entry fills a month and the budget shows 50/30/20, unused and savings rate', async ({
+  page,
+}) => {
   await page.goto('/register');
   await page.getByLabel('Your name').fill('Surya');
   await page.getByLabel('Email').fill(`budget-${Date.now()}@example.com`);
@@ -43,7 +45,8 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await expect(page.getByText('Saved')).toBeVisible();
 
   await page.getByRole('link', { name: 'Back to budget' }).click();
-  const card = (label: string) => page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
+  const card = (label: string) =>
+    page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
   await expect(card('Net income')).toContainText('5.750,00 €');
   await expect(card('Unused')).toContainText('3.790,00 €');
   await expect(card('Savings rate')).toContainText('76.0 %');

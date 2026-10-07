@@ -28,6 +28,23 @@ npm run dev
 
 Open **http://localhost:5173**, click **Create one**, and register. After creating your account you can set `ALLOW_REGISTRATION=false` in `.env`.
 
+## Run with Docker (daily use)
+
+```bash
+docker compose up -d --build   # build & start in the background
+```
+
+Open **http://localhost:8080**. Your data is stored on your disk in `data/piggybank.db` — rebuilding or removing the container never deletes it.
+
+| Command                        | What it does                                              |
+| ------------------------------ | --------------------------------------------------------- |
+| `docker compose up -d --build` | Build (after `git pull`) and start                        |
+| `docker compose logs -f`       | Follow logs                                               |
+| `docker compose down`          | Stop (data is kept)                                       |
+| `npm run docker:smoke`         | Build + automated smoke test against a temporary data dir |
+
+Development (`npm run dev`) uses a separate database, `data/dev.db`, so experiments never touch your real data.
+
 ## Commands
 
 | Command                               | What it does                                         |

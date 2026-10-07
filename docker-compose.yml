@@ -1,0 +1,16 @@
+# Runs myPiggyBank for daily use.  docker compose up -d  →  http://localhost:8080
+# Your data lives on the host in ./data/piggybank.db (git-ignored).
+services:
+  app:
+    build: .
+    image: mypiggybank:latest
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 = reachable from this laptop only. Change for home-network access later.
+      - '127.0.0.1:${APP_PORT:-8080}:3001'
+    environment:
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data

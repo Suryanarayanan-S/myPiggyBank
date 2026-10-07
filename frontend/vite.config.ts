@@ -7,7 +7,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: { '/api': 'http://127.0.0.1:3001' },
+    // changeOrigin: false keeps the browser's Host header so the API's same-origin
+    // (CSRF) check sees localhost:5173 on both Host and Origin.
+    proxy: { '/api': { target: 'http://127.0.0.1:3001', changeOrigin: false } },
   },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

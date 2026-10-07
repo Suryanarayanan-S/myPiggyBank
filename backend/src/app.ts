@@ -22,6 +22,14 @@ export interface AppOptions {
   loginRateLimit?: { max: number; timeWindow: string };
 }
 
+function safeHost(origin: string): string | null {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false });
 
@@ -60,6 +68,18 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return reply
       .status(500)
       .send({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
+  });
+
+  // CSRF: SameSite=Strict does not stop other origins on the same site (e.g. another
+  // app on localhost:9999), so unsafe methods must come from this exact origin.
+  app.addHook('onRequest', async (req) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+    const site = req.headers['sec-fetch-site'];
+    const origin = req.headers.origin;
+    const foreignOrigin = origin !== undefined && safeHost(origin) !== req.headers.host;
+    if (site === 'cross-site' || site === 'same-site' || foreignOrigin) {
+      throw new AppError(403, 'CROSS_ORIGIN_REQUEST', 'Cross-origin requests are not allowed');
+    }
   });
 
   app.addHook('onRequest', async (req) => {

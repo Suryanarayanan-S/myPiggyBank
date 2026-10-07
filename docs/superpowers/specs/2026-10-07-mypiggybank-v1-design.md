@@ -13,6 +13,7 @@ is under control, and how net worth is changing over time.
 **Later:** family members on the home network, same codebase.
 
 **Success criteria for v1**
+
 - Can record a month of real income/expenses in a few minutes (manually or via CSV).
 - Dashboard answers "income / expenses / savings / savings rate / net worth" at a glance.
 - Budget shows budget vs actual per category with a clear over-budget warning.
@@ -22,21 +23,23 @@ is under control, and how net worth is changing over time.
 ## 2. Scope
 
 ### In v1
-| Area | Features |
-|---|---|
-| Auth | Register (first user creates the family), login, logout. |
-| Family members | Add/edit members (e.g. Me, Spouse, Child) + implicit "Shared". Members are labels for transactions, not logins (yet). |
-| Accounts | Types: current, savings, tagesgeld, cash, credit card, investment, other. Opening balance; current balance = opening + sum of transactions. |
-| Categories | Default seeded set (Housing, Groceries, Transport, Baby, Dining, Entertainment, Utilities, Insurance, Subscriptions, Salary, Bonus, Interest, Other…), type income/expense, editable, optional parent for subcategories. |
-| Transactions | Add / edit / delete. Fields: date, amount, type (income/expense/transfer), category, account, member, merchant, notes, tags. List with search, filter (month, type, category, account, member), sort. |
-| Budget | Monthly amount per expense category. Shows budget, actual, remaining, % used, progress bar, warning when > 100%. "Copy previous month". |
-| Dashboard | Period selector (this month, last month, last 3 months, this year). Cards: net worth, cash & bank, total assets, total liabilities, income, expenses, savings, savings rate. Charts: income vs expenses (12 months), expenses by category, net worth over time. Budget summary. Spending by member. |
-| Net worth | Manual assets (property, vehicle, gold, pension, other) with valuation history; liabilities (mortgage, car loan, personal loan, other) with original/outstanding amount, rate, monthly payment, lender, and balance history. Net worth = account balances + assets − liabilities. Monthly snapshot (taken on demand and automatically when the dashboard is opened in a new month). |
-| CSV import | Upload → preview → column mapping (date, description, amount, category optional) → validation errors shown per row → duplicate detection (same account + date + amount + description) → confirm. Nothing written before confirm. Rule-based category suggestion (merchant keyword → category, e.g. REWE → Groceries, NETFLIX → Subscriptions). |
-| Demo data | Optional `npm run seed:demo` with clearly labelled demo family. |
-| Ops | `scripts/setup.sh`, `npm run backup`, `npm run restore <file>`. |
+
+| Area           | Features                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth           | Register (first user creates the family), login, logout.                                                                                                                                                                                                                                                                                                                            |
+| Family members | Add/edit members (e.g. Me, Spouse, Child) + implicit "Shared". Members are labels for transactions, not logins (yet).                                                                                                                                                                                                                                                               |
+| Accounts       | Types: current, savings, tagesgeld, cash, credit card, investment, other. Opening balance; current balance = opening + sum of transactions.                                                                                                                                                                                                                                         |
+| Categories     | Default seeded set (Housing, Groceries, Transport, Baby, Dining, Entertainment, Utilities, Insurance, Subscriptions, Salary, Bonus, Interest, Other…), type income/expense, editable, optional parent for subcategories.                                                                                                                                                            |
+| Transactions   | Add / edit / delete. Fields: date, amount, type (income/expense/transfer), category, account, member, merchant, notes, tags. List with search, filter (month, type, category, account, member), sort.                                                                                                                                                                               |
+| Budget         | Monthly amount per expense category. Shows budget, actual, remaining, % used, progress bar, warning when > 100%. "Copy previous month".                                                                                                                                                                                                                                             |
+| Dashboard      | Period selector (this month, last month, last 3 months, this year). Cards: net worth, cash & bank, total assets, total liabilities, income, expenses, savings, savings rate. Charts: income vs expenses (12 months), expenses by category, net worth over time. Budget summary. Spending by member.                                                                                 |
+| Net worth      | Manual assets (property, vehicle, gold, pension, other) with valuation history; liabilities (mortgage, car loan, personal loan, other) with original/outstanding amount, rate, monthly payment, lender, and balance history. Net worth = account balances + assets − liabilities. Monthly snapshot (taken on demand and automatically when the dashboard is opened in a new month). |
+| CSV import     | Upload → preview → column mapping (date, description, amount, category optional) → validation errors shown per row → duplicate detection (same account + date + amount + description) → confirm. Nothing written before confirm. Rule-based category suggestion (merchant keyword → category, e.g. REWE → Groceries, NETFLIX → Subscriptions).                                      |
+| Demo data      | Optional `npm run seed:demo` with clearly labelled demo family.                                                                                                                                                                                                                                                                                                                     |
+| Ops            | `scripts/setup.sh`, `npm run backup`, `npm run restore <file>`.                                                                                                                                                                                                                                                                                                                     |
 
 ### Later (not v1), in planned order
+
 1. Recurring transactions (auto-create due transactions).
 2. Investments: securities, holdings, buy/sell/dividend, manual prices, P/L, allocation.
 3. Goals with progress.
@@ -46,6 +49,7 @@ is under control, and how net worth is changing over time.
 7. Family logins with roles; home-network access.
 
 ### Explicitly out of scope
+
 2FA, audit log, XIRR, PDF export, AI categorisation, live market data, public internet hosting.
 
 ## 3. Architecture
@@ -126,12 +130,14 @@ Response shape: `{ data }` on success, `{ error: { code, message, details? } }` 
 Two separate Docker setups live in the repo:
 
 **Runtime container** (daily use, other laptops, later a home server)
+
 - Multi-stage `Dockerfile`: build frontend + backend, then a slim Node 22 image that runs the API and serves the built frontend. Runs as non-root `node` user; applies Prisma migrations on start; has a health check.
 - `docker-compose.yml`: one service, port `127.0.0.1:8080 → 3001` (host-only), data bind-mounted from `./data` so the database lives on the host and survives rebuilds. Config via `.env` interpolation.
 - `.dockerignore` keeps `node_modules`, `.env`, `data/`, `backups/` out of the image.
 - Database files are separated: Docker (real data) uses `data/piggybank.db`; local development uses `data/dev.db`, so experiments never touch real data.
 
 **Dev container** (coding on any laptop with only Git + Docker + VS Code)
+
 - `.devcontainer/devcontainer.json` based on `mcr.microsoft.com/devcontainers/typescript-node` (Node 22), runs `scripts/setup.sh` after creation, forwards ports 5173 and 3001, and installs ESLint, Prettier, Prisma and Tailwind VS Code extensions.
 - Native Node development on the host (via nvm) remains supported; both use the same scripts.
 

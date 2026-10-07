@@ -32,7 +32,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   // Only JSON bodies are accepted; text/plain is a CORS-"simple" type usable for CSRF.
   app.removeContentTypeParser('text/plain');
 
-  await app.register(helmet);
+  // Forcing HTTPS upgrades would break plain-HTTP use (localhost / home network).
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: { upgradeInsecureRequests: opts.config.COOKIE_SECURE ? [] : null },
+    },
+  });
   await app.register(cookie);
   await app.register(rateLimit, {
     global: false,

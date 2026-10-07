@@ -10,8 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-07-mypiggybank-v1-design.md`
 
-This is plan 1 of the v1 build. Later plans (written when this one is done):
-2. Accounts, categories, transactions · 3. Budgets · 4. Assets, liabilities, net worth · 5. Dashboard · 6. CSV import, demo seed, backup/restore · 7. Playwright E2E + docs.
+This is plan 1 of the v1 build. Later plans (written when this one is done): 2. Accounts, categories, transactions · 3. Budgets · 4. Assets, liabilities, net worth · 5. Dashboard · 6. CSV import, demo seed, backup/restore · 7. Playwright E2E + docs.
 
 ## Global Constraints
 
@@ -113,6 +112,7 @@ Note for every later shell command: run `export NVM_DIR="$HOME/.nvm"; . "$NVM_DI
 ### Task 2: Workspace tooling + backend skeleton with health check
 
 **Files:**
+
 - Create: `.nvmrc`, `.env.example`, `.prettierrc`, `.prettierignore`, `package.json`, `eslint.config.js`
 - Create: `backend/package.json`, `backend/tsconfig.json`, `backend/tsconfig.build.json`, `backend/vitest.config.ts`
 - Create: `backend/prisma/schema.prisma`
@@ -121,6 +121,7 @@ Note for every later shell command: run `export NVM_DIR="$HOME/.nvm"; . "$NVM_DI
 - Modify: `.gitignore` (add `backend/test/.tmp/`)
 
 **Interfaces:**
+
 - Produces: `buildApp(opts: AppOptions): Promise<FastifyInstance>`; `AppOptions = { prisma: PrismaClient; config: AppConfig; logger?: boolean; frontendDist?: string; loginRateLimit?: { max: number; timeWindow: string } }`; `AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>`.
 - Produces: `class AppError(statusCode: number, code: string, message: string, details?: unknown)`, `notFound(what?: string): AppError`, `parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T>`.
 - Produces: `app.prisma`, `app.appConfig`, `request.user: AuthUser | null` (set by an `onRequest` hook from the `pb_session` cookie).
@@ -130,11 +131,13 @@ Note for every later shell command: run `export NVM_DIR="$HOME/.nvm"; . "$NVM_DI
 - [ ] **Step 1: Root files**
 
 `.nvmrc`
+
 ```
 22
 ```
 
 `.env.example`
+
 ```bash
 # Copy to .env (scripts/setup.sh does this for you). Never commit .env.
 NODE_ENV=development
@@ -152,11 +155,13 @@ SESSION_DAYS=30
 ```
 
 `.prettierrc`
+
 ```json
 { "singleQuote": true, "printWidth": 100 }
 ```
 
 `.prettierignore`
+
 ```
 node_modules
 dist
@@ -169,6 +174,7 @@ backups
 ```
 
 `package.json`
+
 ```json
 {
   "name": "mypiggybank",
@@ -201,6 +207,7 @@ backups
 ```
 
 `eslint.config.js`
+
 ```js
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
@@ -228,6 +235,7 @@ export default tseslint.config(
 ```
 
 Append to `.gitignore`:
+
 ```
 backend/test/.tmp/
 ```
@@ -235,6 +243,7 @@ backend/test/.tmp/
 - [ ] **Step 2: Backend package + TS config**
 
 `backend/package.json`
+
 ```json
 {
   "name": "@mypiggybank/backend",
@@ -273,6 +282,7 @@ backend/test/.tmp/
 ```
 
 `backend/tsconfig.json`
+
 ```json
 {
   "compilerOptions": {
@@ -292,6 +302,7 @@ backend/test/.tmp/
 ```
 
 `backend/tsconfig.build.json`
+
 ```json
 {
   "extends": "./tsconfig.json",
@@ -303,6 +314,7 @@ backend/test/.tmp/
 - [ ] **Step 3: Prisma schema**
 
 `backend/prisma/schema.prisma`
+
 ```prisma
 generator client {
   provider = "prisma-client-js"
@@ -373,11 +385,13 @@ mkdir -p data
 npm install
 npm run prisma -w backend -- migrate dev --name init
 ```
+
 Expected: `backend/prisma/migrations/<timestamp>_init/migration.sql` created, `data/dev.db` created, Prisma Client generated.
 
 - [ ] **Step 5: Test infrastructure**
 
 `backend/vitest.config.ts`
+
 ```ts
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -396,6 +410,7 @@ export default defineConfig({
 ```
 
 `backend/test/globalSetup.ts`
+
 ```ts
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -407,7 +422,8 @@ const dbFile = path.join(dir, '.tmp/test.db');
 
 export default function setup() {
   fs.mkdirSync(path.dirname(dbFile), { recursive: true });
-  for (const suffix of ['', '-journal', '-wal', '-shm']) fs.rmSync(dbFile + suffix, { force: true });
+  for (const suffix of ['', '-journal', '-wal', '-shm'])
+    fs.rmSync(dbFile + suffix, { force: true });
   execSync('npx prisma migrate deploy', {
     cwd: path.join(dir, '..'),
     stdio: 'ignore',
@@ -417,6 +433,7 @@ export default function setup() {
 ```
 
 `backend/test/helpers.ts`
+
 ```ts
 import { PrismaClient } from '@prisma/client';
 import { buildApp, type AppOptions } from '../src/app.js';
@@ -438,6 +455,7 @@ export async function resetDb() {
 - [ ] **Step 6: Write the failing health test**
 
 `backend/test/health.test.ts`
+
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -472,6 +490,7 @@ Expected: FAIL — `Cannot find module '../src/app.js'`.
 - [ ] **Step 8: Implement the backend skeleton**
 
 `backend/src/config.ts`
+
 ```ts
 import { z } from 'zod';
 
@@ -497,6 +516,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 ```
 
 `backend/src/lib/errors.ts`
+
 ```ts
 export class AppError extends Error {
   constructor(
@@ -515,6 +535,7 @@ export function notFound(what = 'Resource'): AppError {
 ```
 
 `backend/src/lib/validate.ts`
+
 ```ts
 import type { z } from 'zod';
 import { AppError } from './errors.js';
@@ -534,6 +555,7 @@ export function parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T
 ```
 
 `backend/src/auth/sessions.ts`
+
 ```ts
 import { createHash, randomBytes } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -565,7 +587,10 @@ export async function createSession(prisma: PrismaClient, userId: string, days: 
   return { token, expiresAt };
 }
 
-export async function findSessionUser(prisma: PrismaClient, token: string): Promise<AuthUser | null> {
+export async function findSessionUser(
+  prisma: PrismaClient,
+  token: string,
+): Promise<AuthUser | null> {
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: { include: { member: true } } },
@@ -584,6 +609,7 @@ export async function deleteSession(prisma: PrismaClient, token: string): Promis
 ```
 
 `backend/src/fastify.d.ts`
+
 ```ts
 import type { PrismaClient } from '@prisma/client';
 import type { AppConfig } from './app.js';
@@ -601,6 +627,7 @@ declare module 'fastify' {
 ```
 
 `backend/src/routes/health.ts`
+
 ```ts
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -613,6 +640,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
 ```
 
 `backend/src/app.ts`
+
 ```ts
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
@@ -661,10 +689,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       });
     }
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
-      return reply.status(err.statusCode).send({ error: { code: 'BAD_REQUEST', message: err.message } });
+      return reply
+        .status(err.statusCode)
+        .send({ error: { code: 'BAD_REQUEST', message: err.message } });
     }
     req.log.error(err);
-    return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
+    return reply
+      .status(500)
+      .send({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
   });
 
   app.addHook('onRequest', async (req) => {
@@ -695,6 +727,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 ```
 
 `backend/src/server.ts`
+
 ```ts
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -749,12 +782,14 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 3: Authentication (register, login, logout, me)
 
 **Files:**
+
 - Create: `backend/src/services/authService.ts`, `backend/src/auth/requireAuth.ts`, `backend/src/routes/auth.ts`
 - Modify: `backend/src/app.ts` (register `authRoutes`)
 - Modify: `backend/test/helpers.ts` (add `signUp`)
 - Test: `backend/test/auth.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AppError`, `parse`, `createSession`, `findSessionUser`, `deleteSession`, `toAuthUser`, `SESSION_COOKIE`, `makeApp`, `resetDb`, `prisma`.
 - Produces: `requireAuth(req: FastifyRequest): Promise<void>` (preHandler; 401 `UNAUTHENTICATED`), `currentUser(req: FastifyRequest): AuthUser`.
 - Produces: `RegisterInput`, `LoginInput` zod schemas; `registerUser(prisma, input) → Promise<AuthUser>`; `loginUser(prisma, input) → Promise<AuthUser>`.
@@ -764,6 +799,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Add the `signUp` helper**
 
 Append to `backend/test/helpers.ts`:
+
 ```ts
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
@@ -785,11 +821,13 @@ export async function signUp(
   return { user: res.json().data.user, cookie: `pb_session=${session.value}`, payload };
 }
 ```
+
 (Move the two new imports to the top of the file.)
 
 - [ ] **Step 2: Write the failing auth tests**
 
 `backend/test/auth.test.ts`
+
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -971,6 +1009,7 @@ Expected: FAIL — register returns 404 (route missing).
 - [ ] **Step 4: Implement**
 
 `backend/src/auth/requireAuth.ts`
+
 ```ts
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../lib/errors.js';
@@ -989,6 +1028,7 @@ export function currentUser(req: FastifyRequest): AuthUser {
 ```
 
 `backend/src/services/authService.ts`
+
 ```ts
 import { hash, verify } from '@node-rs/argon2';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -1032,7 +1072,13 @@ export async function registerUser(
         data: { name: input.familyName ?? `${input.name}'s family` },
       });
       const user = await tx.user.create({
-        data: { familyId: family.id, email: input.email, passwordHash, name: input.name, role: 'owner' },
+        data: {
+          familyId: family.id,
+          email: input.email,
+          passwordHash,
+          name: input.name,
+          role: 'owner',
+        },
       });
       const member = await tx.familyMember.create({
         data: { familyId: family.id, name: input.name, userId: user.id },
@@ -1064,6 +1110,7 @@ export async function loginUser(
 ```
 
 `backend/src/routes/auth.ts`
+
 ```ts
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { AppError } from '../lib/errors.js';
@@ -1078,7 +1125,11 @@ export interface AuthRoutesOptions {
 
 export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opts) => {
   const startSession = async (reply: FastifyReply, userId: string) => {
-    const { token, expiresAt } = await createSession(app.prisma, userId, app.appConfig.SESSION_DAYS);
+    const { token, expiresAt } = await createSession(
+      app.prisma,
+      userId,
+      app.appConfig.SESSION_DAYS,
+    );
     reply.setCookie(SESSION_COOKIE, token, {
       path: '/',
       httpOnly: true,
@@ -1123,13 +1174,14 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
 ```
 
 Modify `backend/src/app.ts`: add import and register inside the `/api` block:
+
 ```ts
 import { authRoutes } from './routes/auth.js';
 // …
-      await api.register(healthRoutes);
-      await api.register(authRoutes, {
-        loginRateLimit: opts.loginRateLimit ?? { max: 10, timeWindow: '1 minute' },
-      });
+await api.register(healthRoutes);
+await api.register(authRoutes, {
+  loginRateLimit: opts.loginRateLimit ?? { max: 10, timeWindow: '1 minute' },
+});
 ```
 
 - [ ] **Step 5: Run tests to verify they pass**
@@ -1152,11 +1204,13 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 4: Family members API
 
 **Files:**
+
 - Create: `backend/src/services/memberService.ts`, `backend/src/routes/members.ts`
 - Modify: `backend/src/app.ts` (register `memberRoutes`)
 - Test: `backend/test/members.test.ts`
 
 **Interfaces:**
+
 - Consumes: `requireAuth`, `currentUser`, `parse`, `AppError`, `notFound`, `signUp`, `makeApp`, `resetDb`.
 - Produces: `MemberDto = { id: string; name: string; isUser: boolean }`; `MemberInput` zod schema; `listMembers(prisma, familyId)`, `createMember(prisma, familyId, name)`, `updateMember(prisma, familyId, id, name)`, `deleteMember(prisma, familyId, id)`; `IdParams` zod schema (`{ id: uuid }`) exported from `lib/validate.ts` for reuse by later route files.
 - Produces HTTP: `GET /api/members` → `{data: MemberDto[]}` (oldest first); `POST /api/members` → 201; `PUT /api/members/:id`; `DELETE /api/members/:id` → `{data:{ok:true}}`.
@@ -1164,6 +1218,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing tests**
 
 `backend/test/members.test.ts`
+
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -1179,8 +1234,12 @@ describe('family members', () => {
   });
   afterEach(() => app.close());
 
-  const call = (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: object, c = cookie) =>
-    app.inject({ method, url, headers: { cookie: c }, ...(payload ? { payload } : {}) });
+  const call = (
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    url: string,
+    payload?: object,
+    c = cookie,
+  ) => app.inject({ method, url, headers: { cookie: c }, ...(payload ? { payload } : {}) });
 
   it('lists the registering user as a member', async () => {
     const res = await call('GET', '/api/members');
@@ -1198,7 +1257,9 @@ describe('family members', () => {
     expect(renamed.json().data.name).toBe('Priya');
 
     expect((await call('DELETE', `/api/members/${id}`)).statusCode).toBe(200);
-    const names = (await call('GET', '/api/members')).json().data.map((m: { name: string }) => m.name);
+    const names = (await call('GET', '/api/members'))
+      .json()
+      .data.map((m: { name: string }) => m.name);
     expect(names).toEqual(['Surya']);
   });
 
@@ -1233,8 +1294,12 @@ describe('family members', () => {
     const list = await call('GET', '/api/members', undefined, other.cookie);
     expect(list.json().data.map((m: { name: string }) => m.name)).toEqual(['Mallory']);
 
-    expect((await call('PUT', `/api/members/${id}`, { name: 'Hacked' }, other.cookie)).statusCode).toBe(404);
-    expect((await call('DELETE', `/api/members/${id}`, undefined, other.cookie)).statusCode).toBe(404);
+    expect(
+      (await call('PUT', `/api/members/${id}`, { name: 'Hacked' }, other.cookie)).statusCode,
+    ).toBe(404);
+    expect((await call('DELETE', `/api/members/${id}`, undefined, other.cookie)).statusCode).toBe(
+      404,
+    );
     expect((await prisma.familyMember.findUniqueOrThrow({ where: { id } })).name).toBe('Spouse');
   });
 
@@ -1258,6 +1323,7 @@ Expected: FAIL — 404 Route not found.
 - [ ] **Step 3: Implement**
 
 Replace `backend/src/lib/validate.ts` with:
+
 ```ts
 import { z } from 'zod';
 import { AppError } from './errors.js';
@@ -1279,6 +1345,7 @@ export function parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T
 ```
 
 `backend/src/services/memberService.ts`
+
 ```ts
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -1290,7 +1357,10 @@ export const MemberInput = z.object({
     .trim()
     .min(1, 'Name is required')
     .max(50)
-    .refine((n) => n.toLowerCase() !== 'shared', '"Shared" is reserved for family-wide transactions'),
+    .refine(
+      (n) => n.toLowerCase() !== 'shared',
+      '"Shared" is reserved for family-wide transactions',
+    ),
 });
 
 export type MemberDto = { id: string; name: string; isUser: boolean };
@@ -1301,8 +1371,16 @@ const toDto = (m: { id: string; name: string; userId: string | null }): MemberDt
   isUser: m.userId !== null,
 });
 
-async function assertNameFree(prisma: PrismaClient, familyId: string, name: string, exceptId?: string) {
-  const members = await prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } });
+async function assertNameFree(
+  prisma: PrismaClient,
+  familyId: string,
+  name: string,
+  exceptId?: string,
+) {
+  const members = await prisma.familyMember.findMany({
+    where: { familyId },
+    select: { id: true, name: true },
+  });
   if (members.some((m) => m.id !== exceptId && m.name.toLowerCase() === name.toLowerCase())) {
     throw new AppError(409, 'MEMBER_EXISTS', 'A family member with this name already exists');
   }
@@ -1315,7 +1393,10 @@ async function getOwned(prisma: PrismaClient, familyId: string, id: string) {
 }
 
 export async function listMembers(prisma: PrismaClient, familyId: string): Promise<MemberDto[]> {
-  const members = await prisma.familyMember.findMany({ where: { familyId }, orderBy: { createdAt: 'asc' } });
+  const members = await prisma.familyMember.findMany({
+    where: { familyId },
+    orderBy: { createdAt: 'asc' },
+  });
   return members.map(toDto);
 }
 
@@ -1324,7 +1405,12 @@ export async function createMember(prisma: PrismaClient, familyId: string, name:
   return toDto(await prisma.familyMember.create({ data: { familyId, name } }));
 }
 
-export async function updateMember(prisma: PrismaClient, familyId: string, id: string, name: string) {
+export async function updateMember(
+  prisma: PrismaClient,
+  familyId: string,
+  id: string,
+  name: string,
+) {
   await getOwned(prisma, familyId, id);
   await assertNameFree(prisma, familyId, name, id);
   return toDto(await prisma.familyMember.update({ where: { id }, data: { name } }));
@@ -1333,13 +1419,18 @@ export async function updateMember(prisma: PrismaClient, familyId: string, id: s
 export async function deleteMember(prisma: PrismaClient, familyId: string, id: string) {
   const member = await getOwned(prisma, familyId, id);
   if (member.userId) {
-    throw new AppError(400, 'MEMBER_IS_USER', 'This member is linked to a login and cannot be deleted');
+    throw new AppError(
+      400,
+      'MEMBER_IS_USER',
+      'This member is linked to a login and cannot be deleted',
+    );
   }
   await prisma.familyMember.delete({ where: { id } });
 }
 ```
 
 `backend/src/routes/members.ts`
+
 ```ts
 import type { FastifyPluginAsync } from 'fastify';
 import { IdParams, parse } from '../lib/validate.js';
@@ -1401,12 +1492,14 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 5: Frontend skeleton, API client and money utilities
 
 **Files:**
+
 - Create: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`, `frontend/index.html`
 - Create: `frontend/src/main.tsx`, `frontend/src/App.tsx` (temporary health page), `frontend/src/index.css`
 - Create: `frontend/src/lib/api.ts`, `frontend/src/lib/money.ts`, `frontend/src/lib/types.ts`
 - Test: `frontend/src/lib/api.test.ts`, `frontend/src/lib/money.test.ts`
 
 **Interfaces:**
+
 - Produces: `class ApiError(status: number, code: string, message: string, details?: unknown)`; `api.get<T>(path)`, `api.post<T>(path, body?)`, `api.put<T>(path, body)`, `api.del<T>(path)` — paths are relative to `/api`, resolve to the unwrapped `data`; `errorMessage(err: unknown): string`.
 - Produces: `formatMoney(cents: number, currency?: string, locale?: string): string`; `parseMoneyInput(input: string): number | null` (returns cents).
 - Produces types: `AuthUser`, `Family`, `Me = { user: AuthUser; family: Family }`, `Member = { id: string; name: string; isUser: boolean }`.
@@ -1414,6 +1507,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Package + config files**
 
 `frontend/package.json`
+
 ```json
 {
   "name": "@mypiggybank/frontend",
@@ -1448,6 +1542,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 `frontend/tsconfig.json`
+
 ```json
 {
   "compilerOptions": {
@@ -1467,6 +1562,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 `frontend/vite.config.ts`
+
 ```ts
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
@@ -1484,6 +1580,7 @@ export default defineConfig({
 ```
 
 `frontend/index.html`
+
 ```html
 <!doctype html>
 <html lang="en">
@@ -1501,6 +1598,7 @@ export default defineConfig({
 ```
 
 `frontend/src/index.css`
+
 ```css
 @import 'tailwindcss';
 
@@ -1516,6 +1614,7 @@ Run: `npm install` (from repo root).
 - [ ] **Step 2: Write failing tests for money and api**
 
 `frontend/src/lib/money.test.ts`
+
 ```ts
 import { describe, expect, it } from 'vitest';
 import { formatMoney, parseMoneyInput } from './money';
@@ -1557,12 +1656,16 @@ describe('parseMoneyInput', () => {
 ```
 
 `frontend/src/lib/api.test.ts`
+
 ```ts
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api, errorMessage } from './api';
 
 const respond = (status: number, body: string) =>
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(body, { status })),
+  );
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -1606,6 +1709,7 @@ Expected: FAIL — modules `./money` and `./api` not found.
 - [ ] **Step 4: Implement**
 
 `frontend/src/lib/money.ts`
+
 ```ts
 export function formatMoney(cents: number, currency = 'EUR', locale = 'de-DE'): string {
   return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100);
@@ -1646,6 +1750,7 @@ export function parseMoneyInput(input: string): number | null {
 ```
 
 `frontend/src/lib/api.ts`
+
 ```ts
 export class ApiError extends Error {
   constructor(
@@ -1666,7 +1771,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  let json: { data?: T; error?: { code: string; message: string; details?: unknown } } | null = null;
+  let json: { data?: T; error?: { code: string; message: string; details?: unknown } } | null =
+    null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -1701,6 +1807,7 @@ export function errorMessage(err: unknown): string {
 ```
 
 `frontend/src/lib/types.ts`
+
 ```ts
 export type AuthUser = {
   id: string;
@@ -1716,6 +1823,7 @@ export type Member = { id: string; name: string; isUser: boolean };
 ```
 
 `frontend/src/main.tsx`
+
 ```tsx
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -1730,6 +1838,7 @@ createRoot(document.getElementById('root')!).render(
 ```
 
 `frontend/src/App.tsx` (temporary — replaced in Task 6)
+
 ```tsx
 import { useEffect, useState } from 'react';
 import { api } from './lib/api';
@@ -1771,6 +1880,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 6: Frontend auth flow, app shell and members settings
 
 **Files:**
+
 - Create: `frontend/src/components/ui/{Button,Input,Card,Field}.tsx`
 - Create: `frontend/src/auth/auth.tsx`
 - Create: `frontend/src/layout/{Brand,AuthLayout,AppShell}.tsx`, `frontend/src/layout/nav.ts`
@@ -1778,12 +1888,14 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - Modify: `frontend/src/main.tsx` (QueryClient), `frontend/src/App.tsx` (router)
 
 **Interfaces:**
+
 - Consumes: `api`, `ApiError`, `errorMessage`, types `Me`, `AuthUser`, `Member`.
 - Produces: `useMe(): UseQueryResult<Me | null>` (query key `['me']`; 401 ⇒ `null`); `<RequireAuth>`; `navItems: NavItem[]` where `NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }` — later plans append items here; UI primitives `Button` (`variant?: 'primary'|'secondary'|'danger'|'ghost'`), `Input`, `Card` (`title?`, `actions?`), `Field` (`label`, `htmlFor`, `hint?`), `FormError` (`error: unknown`).
 
 - [ ] **Step 1: UI primitives**
 
 `frontend/src/components/ui/Button.tsx`
+
 ```tsx
 import clsx from 'clsx';
 import type { ButtonHTMLAttributes } from 'react';
@@ -1819,6 +1931,7 @@ export function Button({
 ```
 
 `frontend/src/components/ui/Input.tsx`
+
 ```tsx
 import clsx from 'clsx';
 import type { InputHTMLAttributes } from 'react';
@@ -1837,6 +1950,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 ```
 
 `frontend/src/components/ui/Card.tsx`
+
 ```tsx
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
@@ -1872,6 +1986,7 @@ export function Card({
 ```
 
 `frontend/src/components/ui/Field.tsx`
+
 ```tsx
 import type { ReactNode } from 'react';
 import { errorMessage } from '../../lib/api';
@@ -1889,7 +2004,10 @@ export function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+      <label
+        htmlFor={htmlFor}
+        className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+      >
         {label}
       </label>
       {children}
@@ -1901,7 +2019,10 @@ export function Field({
 export function FormError({ error }: { error: unknown }) {
   if (!error) return null;
   return (
-    <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+    <p
+      role="alert"
+      className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+    >
       {errorMessage(error)}
     </p>
   );
@@ -1911,6 +2032,7 @@ export function FormError({ error }: { error: unknown }) {
 - [ ] **Step 2: Auth hooks, query client, router**
 
 `frontend/src/auth/auth.tsx`
+
 ```tsx
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -1943,6 +2065,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 ```
 
 `frontend/src/main.tsx`
+
 ```tsx
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -1976,6 +2099,7 @@ createRoot(document.getElementById('root')!).render(
 ```
 
 `frontend/src/App.tsx`
+
 ```tsx
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { RequireAuth } from './auth/auth';
@@ -2011,6 +2135,7 @@ export function App() {
 - [ ] **Step 3: Layout**
 
 `frontend/src/layout/nav.ts`
+
 ```ts
 import { LayoutDashboard, Settings, type LucideIcon } from 'lucide-react';
 
@@ -2024,6 +2149,7 @@ export const navItems: NavItem[] = [
 ```
 
 `frontend/src/layout/Brand.tsx`
+
 ```tsx
 import { PiggyBank } from 'lucide-react';
 
@@ -2038,6 +2164,7 @@ export function Brand() {
 ```
 
 `frontend/src/layout/AuthLayout.tsx`
+
 ```tsx
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
@@ -2060,6 +2187,7 @@ export function AuthLayout({ title, children }: { title: string; children: React
 ```
 
 `frontend/src/layout/AppShell.tsx`
+
 ```tsx
 import clsx from 'clsx';
 import { LogOut } from 'lucide-react';
@@ -2113,7 +2241,11 @@ export function AppShell() {
         <div className="border-t border-slate-200 p-3 dark:border-slate-800">
           <p className="truncate px-2 text-sm font-medium">{data?.user.name}</p>
           <p className="truncate px-2 text-xs text-slate-500">{data?.family.name}</p>
-          <Button variant="ghost" className="mt-2 w-full justify-start" onClick={() => logout.mutate()}>
+          <Button
+            variant="ghost"
+            className="mt-2 w-full justify-start"
+            onClick={() => logout.mutate()}
+          >
             <LogOut size={16} aria-hidden /> Log out
           </Button>
         </div>
@@ -2160,6 +2292,7 @@ export function AppShell() {
 - [ ] **Step 4: Pages**
 
 `frontend/src/pages/LoginPage.tsx`
+
 ```tsx
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -2197,10 +2330,24 @@ export function LoginPage() {
         }}
       >
         <Field label="Email" htmlFor="email">
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </Field>
         <Field label="Password" htmlFor="password">
-          <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </Field>
         <FormError error={login.error} />
         <Button type="submit" className="w-full" disabled={login.isPending}>
@@ -2219,6 +2366,7 @@ export function LoginPage() {
 ```
 
 `frontend/src/pages/RegisterPage.tsx`
+
 ```tsx
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -2267,13 +2415,33 @@ export function RegisterPage() {
           <Input id="name" autoComplete="name" required value={form.name} onChange={set('name')} />
         </Field>
         <Field label="Email" htmlFor="email">
-          <Input id="email" type="email" autoComplete="email" required value={form.email} onChange={set('email')} />
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={form.email}
+            onChange={set('email')}
+          />
         </Field>
         <Field label="Password" htmlFor="password" hint="At least 10 characters.">
-          <Input id="password" type="password" autoComplete="new-password" required minLength={10} value={form.password} onChange={set('password')} />
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={10}
+            value={form.password}
+            onChange={set('password')}
+          />
         </Field>
         <Field label="Family name (optional)" htmlFor="familyName">
-          <Input id="familyName" placeholder="e.g. Soundararajan" value={form.familyName} onChange={set('familyName')} />
+          <Input
+            id="familyName"
+            placeholder="e.g. Soundararajan"
+            value={form.familyName}
+            onChange={set('familyName')}
+          />
         </Field>
         <FormError error={register.error} />
         <Button type="submit" className="w-full" disabled={register.isPending}>
@@ -2292,6 +2460,7 @@ export function RegisterPage() {
 ```
 
 `frontend/src/pages/DashboardPage.tsx`
+
 ```tsx
 import { useMe } from '../auth/auth';
 import { Card } from '../components/ui/Card';
@@ -2313,6 +2482,7 @@ export function DashboardPage() {
 ```
 
 `frontend/src/pages/SettingsPage.tsx`
+
 ```tsx
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -2367,7 +2537,9 @@ function MembersCard() {
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
         <ul className="divide-y divide-slate-200 dark:divide-slate-800">
-          {members.data?.map((m) => <MemberRow key={m.id} member={m} onChanged={refresh} />)}
+          {members.data?.map((m) => (
+            <MemberRow key={m.id} member={m} onChanged={refresh} />
+          ))}
         </ul>
       )}
       <form
@@ -2377,7 +2549,12 @@ function MembersCard() {
           add.mutate();
         }}
       >
-        <Input aria-label="New member name" placeholder="e.g. Spouse" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input
+          aria-label="New member name"
+          placeholder="e.g. Spouse"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <Button type="submit" disabled={!name.trim() || add.isPending}>
           <Plus size={16} aria-hidden /> Add
         </Button>
@@ -2414,9 +2591,22 @@ function MemberRow({ member, onChanged }: { member: Member; onChanged: () => Pro
             rename.mutate();
           }}
         >
-          <Input aria-label="Member name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <Button type="submit" disabled={!name.trim() || rename.isPending}>Save</Button>
-          <Button variant="secondary" onClick={() => { setEditing(false); setName(member.name); }}>
+          <Input
+            aria-label="Member name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+          <Button type="submit" disabled={!name.trim() || rename.isPending}>
+            Save
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setEditing(false);
+              setName(member.name);
+            }}
+          >
             Cancel
           </Button>
         </form>
@@ -2425,10 +2615,18 @@ function MemberRow({ member, onChanged }: { member: Member; onChanged: () => Pro
           <span className="flex items-center gap-2 text-sm">
             <UserRound size={16} className="text-slate-400" aria-hidden />
             {member.name}
-            {member.isUser && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500 dark:bg-slate-800">you</span>}
+            {member.isUser && (
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500 dark:bg-slate-800">
+                you
+              </span>
+            )}
           </span>
           <span className="flex gap-1">
-            <Button variant="ghost" aria-label={`Rename ${member.name}`} onClick={() => setEditing(true)}>
+            <Button
+              variant="ghost"
+              aria-label={`Rename ${member.name}`}
+              onClick={() => setEditing(true)}
+            >
               <Pencil size={16} aria-hidden />
             </Button>
             {!member.isUser && (
@@ -2437,7 +2635,12 @@ function MemberRow({ member, onChanged }: { member: Member; onChanged: () => Pro
                 aria-label={`Remove ${member.name}`}
                 disabled={remove.isPending}
                 onClick={() => {
-                  if (window.confirm(`Remove ${member.name}? Their transactions will become “Shared”.`)) remove.mutate();
+                  if (
+                    window.confirm(
+                      `Remove ${member.name}? Their transactions will become “Shared”.`,
+                    )
+                  )
+                    remove.mutate();
                 }}
               >
                 <Trash2 size={16} className="text-rose-600" aria-hidden />
@@ -2459,6 +2662,7 @@ function MemberRow({ member, onChanged }: { member: Member; onChanged: () => Pro
 Run: `npm run typecheck && npm run lint && npm test` → all pass.
 Run: `npx prettier --write frontend/src` (normalise the long JSX lines above).
 Run `npm run dev` and in a browser at `http://localhost:5173`:
+
 1. `/` redirects to `/login`.
 2. "Create one" → register (name, email, 10+ char password) → lands on Dashboard "Welcome, <name>".
 3. Settings → member list shows you with "you" badge; add "Spouse", rename to another name, add duplicate (error shown), delete.
@@ -2482,16 +2686,19 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 7: Production mode, setup script and README
 
 **Files:**
+
 - Create: `scripts/setup.sh`, `README.md`
 - Test: `backend/test/static.test.ts`
 
 **Interfaces:**
+
 - Consumes: `buildApp({ frontendDist })`.
 - Produces: `./scripts/setup.sh` (idempotent first-time setup), documented commands.
 
 - [ ] **Step 1: Write the failing static-serving test**
 
 `backend/test/static.test.ts`
+
 ```ts
 import fs from 'node:fs';
 import os from 'node:os';
@@ -2545,6 +2752,7 @@ Expected: PASS already (behaviour was built in Task 2). If any case fails, fix `
 - [ ] **Step 3: Setup script**
 
 `scripts/setup.sh`
+
 ```bash
 #!/usr/bin/env bash
 # First-time setup for myPiggyBank. Safe to run again.
@@ -2588,6 +2796,7 @@ Expected: `{"data":{"status":"ok"}}` and HTML containing `<div id="root">`. Stop
 - [ ] **Step 5: README**
 
 `README.md`
+
 ````markdown
 # myPiggyBank
 
@@ -2621,26 +2830,26 @@ Open **http://localhost:5173**, click **Create one**, and register. After creati
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | API on :3001 + web on :5173 with hot reload |
-| `npm run build && npm start` | Production mode: one server on http://localhost:3001 |
-| `npm test` | Backend + frontend tests |
-| `npm run check` | Lint + typecheck + tests |
-| `npm run format` | Prettier |
-| `npm run db:migrate` | Apply database migrations |
-| `npm run prisma -w backend -- studio` | Browse the database |
+| Command                               | What it does                                         |
+| ------------------------------------- | ---------------------------------------------------- |
+| `npm run dev`                         | API on :3001 + web on :5173 with hot reload          |
+| `npm run build && npm start`          | Production mode: one server on http://localhost:3001 |
+| `npm test`                            | Backend + frontend tests                             |
+| `npm run check`                       | Lint + typecheck + tests                             |
+| `npm run format`                      | Prettier                                             |
+| `npm run db:migrate`                  | Apply database migrations                            |
+| `npm run prisma -w backend -- studio` | Browse the database                                  |
 
 ## Environment variables (`.env`)
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `HOST` | `127.0.0.1` | Interface to listen on (this laptop only) |
-| `PORT` | `3001` | API / production port |
-| `DATABASE_URL` | `file:../../data/dev.db` | Development SQLite file (relative to `backend/prisma/`) |
-| `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
-| `ALLOW_REGISTRATION` | `true` | Allow new accounts |
-| `SESSION_DAYS` | `30` | Login session lifetime |
+| Variable             | Default                  | Meaning                                                 |
+| -------------------- | ------------------------ | ------------------------------------------------------- |
+| `HOST`               | `127.0.0.1`              | Interface to listen on (this laptop only)               |
+| `PORT`               | `3001`                   | API / production port                                   |
+| `DATABASE_URL`       | `file:../../data/dev.db` | Development SQLite file (relative to `backend/prisma/`) |
+| `COOKIE_SECURE`      | `false`                  | `true` when served over HTTPS                           |
+| `ALLOW_REGISTRATION` | `true`                   | Allow new accounts                                      |
+| `SESSION_DAYS`       | `30`                     | Login session lifetime                                  |
 
 ## Your data
 
@@ -2672,16 +2881,19 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 8: Runtime Docker image + Compose
 
 **Files:**
+
 - Create: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docker/entrypoint.sh`, `scripts/docker-smoke.sh`
 - Modify: `README.md` (Docker section), root `package.json` (add `"docker:smoke": "./scripts/docker-smoke.sh"`)
 
 **Interfaces:**
+
 - Consumes: `npm run build`, `backend/dist/server.js`, `frontend/dist`, `prisma migrate deploy`, `GET /api/health`, `POST /api/auth/register`, `POST /api/auth/login`.
 - Produces: image `mypiggybank:latest`; `docker compose up -d` → app on `http://localhost:8080` (host-only); data in `${DATA_DIR:-./data}/piggybank.db`.
 
 - [ ] **Step 1: Write the smoke test (fails: no Dockerfile yet)**
 
 `scripts/docker-smoke.sh`
+
 ```bash
 #!/usr/bin/env bash
 # Builds the image, starts it against a throw-away data dir, checks health,
@@ -2726,6 +2938,7 @@ Expected: FAIL — `no configuration file provided` / missing Dockerfile.
 - [ ] **Step 2: Implement**
 
 `.dockerignore`
+
 ```
 **/node_modules
 **/dist
@@ -2742,6 +2955,7 @@ test-results
 ```
 
 `Dockerfile`
+
 ```dockerfile
 # syntax=docker/dockerfile:1
 
@@ -2782,6 +2996,7 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 ```
 
 `docker/entrypoint.sh`
+
 ```bash
 #!/bin/sh
 set -e
@@ -2791,6 +3006,7 @@ exec node dist/server.js
 ```
 
 `docker-compose.yml`
+
 ```yaml
 # Runs myPiggyBank for daily use.  docker compose up -d  →  http://localhost:8080
 # Your data lives on the host in ./data/piggybank.db (git-ignored).
@@ -2826,6 +3042,7 @@ Expected: `{"data":{"status":"ok"}}`; `data/piggybank.db` exists on the host. Le
 - [ ] **Step 5: README Docker section**
 
 Insert into `README.md` after "Getting started":
+
 ````markdown
 ## Run with Docker (daily use)
 
@@ -2835,12 +3052,12 @@ docker compose up -d --build   # build & start in the background
 
 Open **http://localhost:8080**. Your data is stored on your disk in `data/piggybank.db` — rebuilding or removing the container never deletes it.
 
-| Command | What it does |
-|---|---|
-| `docker compose up -d --build` | Build (after `git pull`) and start |
-| `docker compose logs -f` | Follow logs |
-| `docker compose down` | Stop (data is kept) |
-| `npm run docker:smoke` | Build + automated smoke test against a temporary data dir |
+| Command                        | What it does                                              |
+| ------------------------------ | --------------------------------------------------------- |
+| `docker compose up -d --build` | Build (after `git pull`) and start                        |
+| `docker compose logs -f`       | Follow logs                                               |
+| `docker compose down`          | Stop (data is kept)                                       |
+| `npm run docker:smoke`         | Build + automated smoke test against a temporary data dir |
 
 Development (`npm run dev`) uses a separate database, `data/dev.db`, so experiments never touch your real data.
 ````
@@ -2859,16 +3076,19 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ### Task 9: Dev container
 
 **Files:**
+
 - Create: `.devcontainer/devcontainer.json`
 - Modify: `README.md` (dev container section)
 
 **Interfaces:**
+
 - Consumes: `scripts/setup.sh`, `npm run dev`, `npm test`.
 - Produces: VS Code "Reopen in Container" environment with Node 22 and forwarded ports 5173/3001.
 
 - [ ] **Step 1: Create the config**
 
 `.devcontainer/devcontainer.json`
+
 ```jsonc
 {
   "name": "myPiggyBank",
@@ -2876,7 +3096,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
   "forwardPorts": [5173, 3001],
   "portsAttributes": {
     "5173": { "label": "Web (Vite)", "onAutoForward": "openBrowser" },
-    "3001": { "label": "API", "onAutoForward": "silent" }
+    "3001": { "label": "API", "onAutoForward": "silent" },
   },
   // Creates .env, installs dependencies and applies migrations to data/dev.db.
   "postCreateCommand": "./scripts/setup.sh",
@@ -2886,15 +3106,15 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "Prisma.prisma",
-        "bradlc.vscode-tailwindcss"
+        "bradlc.vscode-tailwindcss",
       ],
       "settings": {
         "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-      }
-    }
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+      },
+    },
   },
-  "remoteUser": "node"
+  "remoteUser": "node",
 }
 ```
 
@@ -2904,6 +3124,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 npx -y @devcontainers/cli up --workspace-folder .
 npx -y @devcontainers/cli exec --workspace-folder . bash -lc 'node -v && npm test'
 ```
+
 Expected: `v22.x` and all tests pass inside the container. Then remove it:
 `docker rm -f $(docker ps -aq --filter label=devcontainer.local_folder=$PWD)`.
 
@@ -2912,7 +3133,8 @@ Note: the container shares the repo's `node_modules` with the host. Both are lin
 - [ ] **Step 3: README dev container section**
 
 Insert into `README.md` after the Docker section:
-````markdown
+
+```markdown
 ## Develop in a Dev Container (no Node install needed)
 
 Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
@@ -2920,7 +3142,7 @@ Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
 1. Open the folder in VS Code → **Reopen in Container**.
 2. Wait for setup to finish (it runs `scripts/setup.sh`).
 3. In the container terminal: `npm run dev` → the browser opens http://localhost:5173.
-````
+```
 
 - [ ] **Step 4: Full check, commit, report**
 

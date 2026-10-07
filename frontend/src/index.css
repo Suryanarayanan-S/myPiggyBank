@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+
+/* Colour usage: slate = neutral, indigo = primary action,
+   emerald = positive, amber = warning, rose = negative. */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}

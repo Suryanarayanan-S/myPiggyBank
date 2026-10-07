@@ -146,7 +146,7 @@ describe('spreadsheet import', () => {
     expect(await prisma.transaction.count({ where: { importBatch: 'xlsx:2026-08' } })).toBe(5);
     expect(await prisma.transaction.count({ where: { merchant: 'manual' } })).toBe(1);
     const s = (await call('GET', '/api/budget/2026-08')).json().data;
-    expect(s.fun).toBe(2_000 + 999);
+    expect(s).toMatchObject({ fun: 2_000, uncategorised: 999 }); // manual row kept, counted once
   });
 
   it('reuses categories created by an earlier import', async () => {

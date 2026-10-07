@@ -1,33 +1,23 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { TransactionForm } from '../components/transactions/TransactionForm';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { FormError } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import { useAccounts, useCategories, useMembers } from '../lib/queries';
 import { BUCKETS, type Page, type Transaction } from '../lib/types';
+import { isMonth, localMonth, monthEnd } from '../lib/months';
+import { MonthNav } from '../components/ui/MonthNav';
 
 const PAGE_SIZE = 100;
-const currentMonth = () => new Date().toISOString().slice(0, 7);
-const shiftMonth = (m: string, delta: number) => {
-  const d = new Date(`${m}-01T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + delta);
-  return d.toISOString().slice(0, 7);
-};
-const lastDay = (m: string) => shiftMonth(m, 1) + '-01';
-const monthTitle = (m: string) =>
-  new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -37,7 +27,7 @@ const dayLabel = (d: string) =>
 
 export function TransactionsPage() {
   const [params, setParams] = useSearchParams();
-  const month = params.get('month') ?? currentMonth();
+  const month = isMonth(params.get('month')) ? params.get('month')! : localMonth();
   const filter = (k: string) => params.get(k) ?? '';
   const page = Number(params.get('page') ?? 1);
   const update = (patch: Record<string, string>) => {
@@ -56,7 +46,7 @@ export function TransactionsPage() {
 
   const query = new URLSearchParams({
     from: `${month}-01`,
-    to: new Date(Date.parse(lastDay(month)) - 86_400_000).toISOString().slice(0, 10),
+    to: monthEnd(month),
     page: String(page),
     pageSize: String(PAGE_SIZE),
   });
@@ -72,25 +62,7 @@ export function TransactionsPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            aria-label="Previous month"
-            onClick={() => update({ month: shiftMonth(month, -1) })}
-          >
-            <ChevronLeft size={18} aria-hidden />
-          </Button>
-          <h1 className="min-w-44 text-center text-2xl font-semibold tracking-tight">
-            {monthTitle(month)}
-          </h1>
-          <Button
-            variant="ghost"
-            aria-label="Next month"
-            onClick={() => update({ month: shiftMonth(month, 1) })}
-          >
-            <ChevronRight size={18} aria-hidden />
-          </Button>
-        </div>
+        <MonthNav month={month} onChange={(m) => update({ month: m })} />
         <Button onClick={() => setEditing('new')}>
           <Plus size={16} aria-hidden /> Add transaction
         </Button>
@@ -185,6 +157,7 @@ export function TransactionsPage() {
         </Select>
       </div>
 
+      <FormError error={txns.error} />
       <Card className="!p-0">
         {txns.isPending ? (
           <p className="p-5 text-sm text-slate-500">Loading…</p>
@@ -211,7 +184,8 @@ export function TransactionsPage() {
                       {t.bucket && ` · ${BUCKETS[t.bucket]}`}
                       {t.type !== 'transfer' && ` · ${t.accountName}`}
                       {` · ${t.memberName ?? 'Shared'}`}
-                      {t.notes && ` · ${t.notes}`}
+                      {t.notes && !t.isMonthlyTotal && ` · ${t.notes}`}
+                      {t.isMonthlyTotal && ' · monthly total'}
                     </span>
                   </span>
                   <span

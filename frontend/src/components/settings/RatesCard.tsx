@@ -8,6 +8,7 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
 import { useRates } from '../../lib/queries';
+import { localMonth } from '../../lib/months';
 import { CURRENCIES, type Family } from '../../lib/types';
 
 const monthLabel = (m: string) =>
@@ -21,7 +22,7 @@ export function RatesCard({ family }: { family: Family }) {
   const rates = useRates();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
-    month: new Date().toISOString().slice(0, 7),
+    month: localMonth(),
     base: family.spendingCurrency,
     quote: family.wealthCurrency === family.spendingCurrency ? 'INR' : family.wealthCurrency,
     rate: '',

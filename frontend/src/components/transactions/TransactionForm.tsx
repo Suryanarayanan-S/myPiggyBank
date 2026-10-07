@@ -7,11 +7,11 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
 import { selectableAccounts } from '../../lib/accounts';
+import { localDay } from '../../lib/months';
 import { parseMoneyInput } from '../../lib/money';
 import { useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { BUCKETS, type Transaction, type TransactionType } from '../../lib/types';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const asInput = (cents: number | null | undefined) =>
   cents == null ? '' : (cents / 100).toFixed(2).replace('.', ',');
 
@@ -24,7 +24,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
 
   const [type, setType] = useState<TransactionType>(txn?.type ?? 'expense');
   const [form, setForm] = useState({
-    date: txn?.date ?? today(),
+    date: txn?.date ?? localDay(),
     amount: asInput(txn?.amount),
     accountId: txn?.accountId ?? active[0]?.id ?? '',
     categoryId: txn?.categoryId ?? '',

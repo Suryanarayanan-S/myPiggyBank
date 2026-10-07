@@ -7,6 +7,8 @@ import { RegisterPage } from './pages/RegisterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { BudgetPage } from './pages/BudgetPage';
+import { MonthEntryPage } from './pages/MonthEntryPage';
 
 export function App() {
   return (
@@ -22,6 +24,8 @@ export function App() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="budget" element={<BudgetPage />} />
+          <Route path="budget/entry" element={<MonthEntryPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="settings" element={<SettingsPage />} />

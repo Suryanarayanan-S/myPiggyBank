@@ -81,6 +81,7 @@ export type Transaction = {
   transferAccountName: string | null;
   transferAmount: number | null;
   transferCurrency: string | null;
+  isMonthlyTotal: boolean;
 };
 export type CurrencyTotals = { currency: string; income: number; expense: number };
 export type Page<T> = {
@@ -92,3 +93,51 @@ export type Page<T> = {
 };
 
 export type Rate = { id: string; month: string; base: string; quote: string; rate: string };
+
+export type BucketSummary = {
+  bucket: Bucket;
+  targetPct: number;
+  target: number;
+  actual: number;
+  actualBp: number | null;
+  status: 'ok' | 'over' | 'under';
+};
+export type CategorySummary = {
+  categoryId: string | null;
+  name: string;
+  kind: 'income' | 'expense';
+  bucket: Bucket | null;
+  actual: number;
+  limit: number | null;
+  remaining: number | null;
+  usedBp: number | null;
+  over: boolean;
+};
+export type MonthSummary = {
+  month: string;
+  currency: string;
+  netIncome: number;
+  essentials: number;
+  fun: number;
+  future: number;
+  uncategorised: number;
+  spent: number;
+  unused: number;
+  savingsRateBp: number | null;
+  buckets: BucketSummary[];
+  categories: CategorySummary[];
+  unconverted: { currency: string; amount: number }[];
+};
+export type MonthEntry = {
+  month: string;
+  accountId: string;
+  currency: string;
+  rows: {
+    categoryId: string;
+    name: string;
+    kind: 'income' | 'expense';
+    bucket: Bucket | null;
+    amount: number | null;
+    otherTransactions: number;
+  }[];
+};

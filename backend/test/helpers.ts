@@ -32,3 +32,11 @@ export async function signUp(
   if (!session) throw new Error('signUp: no session cookie');
   return { user: res.json().data.user, cookie: `pb_session=${session.value}`, payload };
 }
+
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+/** Authenticated request helper: `const call = client(app, cookie); await call('GET', '/api/x')`. */
+export function client(app: FastifyInstance, cookie: string) {
+  return (method: Method, url: string, payload?: object) =>
+    app.inject({ method, url, headers: { cookie }, ...(payload ? { payload } : {}) });
+}

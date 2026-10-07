@@ -11,6 +11,8 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { memberRoutes } from './routes/members.js';
 import { familyRoutes } from './routes/family.js';
+import { accountRoutes } from './routes/accounts.js';
+import { categoryRoutes } from './routes/categories.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -96,6 +98,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       });
       await api.register(memberRoutes);
       await api.register(familyRoutes);
+      await api.register(accountRoutes);
+      await api.register(categoryRoutes);
     },
     { prefix: '/api' },
   );

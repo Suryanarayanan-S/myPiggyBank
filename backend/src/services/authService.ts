@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../lib/errors.js';
 import { toAuthUser, type AuthUser } from '../auth/sessions.js';
+import { seedDefaultCategories } from './categoryService.js';
 
 const email = z.string().trim().toLowerCase().max(254).pipe(z.email('Enter a valid email address'));
 
@@ -51,6 +52,7 @@ export async function registerUser(
       const member = await tx.familyMember.create({
         data: { familyId: family.id, name: input.name, userId: user.id },
       });
+      await seedDefaultCategories(tx, family.id);
       return toAuthUser(user, member.id);
     });
   } catch (e) {

@@ -1,5 +1,37 @@
-export function formatMoney(cents: number, currency = 'EUR', locale = 'de-DE'): string {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100);
+const LOCALES: Record<string, string> = {
+  EUR: 'de-DE',
+  INR: 'en-IN',
+  USD: 'en-US',
+  GBP: 'en-GB',
+};
+
+export function formatMoney(cents: number, currency = 'EUR', locale?: string): string {
+  return new Intl.NumberFormat(locale ?? LOCALES[currency] ?? 'en-US', {
+    style: 'currency',
+    currency,
+  }).format(cents / 100);
+}
+
+const symbol = (currency: string) =>
+  new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
+    .formatToParts(0)
+    .find((p) => p.type === 'currency')?.value ?? currency;
+
+const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
+
+/** Short form for cards and charts: ₹80 L, ₹1.2 Cr, €128.5k, $2.5M. */
+export function formatCompact(cents: number, currency = 'EUR'): string {
+  const value = Math.abs(cents) / 100;
+  const sign = cents < 0 ? '-' : '';
+  const sym = symbol(currency);
+  if (currency === 'INR') {
+    if (value >= 1e7) return `${sign}${sym}${oneDecimal(value / 1e7)} Cr`;
+    if (value >= 1e5) return `${sign}${sym}${oneDecimal(value / 1e5)} L`;
+    return `${sign}${sym}${Math.round(value).toLocaleString('en-IN')}`;
+  }
+  if (value >= 1e6) return `${sign}${sym}${oneDecimal(value / 1e6)}M`;
+  if (value >= 1e3) return `${sign}${sym}${oneDecimal(value / 1e3)}k`;
+  return `${sign}${sym}${Math.round(value)}`;
 }
 
 /**

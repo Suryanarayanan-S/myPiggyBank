@@ -20,7 +20,9 @@
     "check": "npm run lint && npm run typecheck && npm test",
     "db:migrate": "npm run db:migrate -w backend",
     "docker:smoke": "./scripts/docker-smoke.sh",
-    "e2e": "playwright test -c e2e"
+    "e2e": "playwright test -c e2e",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",

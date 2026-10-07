@@ -123,8 +123,8 @@ export function TransactionsPage() {
         ))}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="relative lg:col-span-2">
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-64 flex-1 basis-full sm:basis-64">
           <Search
             size={16}
             className="pointer-events-none absolute top-2.5 left-3 text-slate-400"
@@ -141,6 +141,7 @@ export function TransactionsPage() {
         </div>
         <Select
           aria-label="Type"
+          className="!w-auto min-w-36 flex-1 sm:flex-none"
           value={filter('type')}
           onChange={(e) => update({ type: e.target.value })}
         >
@@ -151,6 +152,7 @@ export function TransactionsPage() {
         </Select>
         <Select
           aria-label="Account"
+          className="!w-auto min-w-36 flex-1 sm:flex-none"
           value={filter('accountId')}
           onChange={(e) => update({ accountId: e.target.value })}
         >
@@ -161,33 +163,33 @@ export function TransactionsPage() {
             </option>
           ))}
         </Select>
-        <div className="grid grid-cols-2 gap-2">
-          <Select
-            aria-label="Category"
-            value={filter('categoryId')}
-            onChange={(e) => update({ categoryId: e.target.value })}
-          >
-            <option value="">All categories</option>
-            {categories.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            aria-label="Member"
-            value={filter('memberId')}
-            onChange={(e) => update({ memberId: e.target.value })}
-          >
-            <option value="">Everyone</option>
-            <option value="shared">Shared</option>
-            {members.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <Select
+          aria-label="Category"
+          className="!w-auto min-w-36 flex-1 sm:flex-none"
+          value={filter('categoryId')}
+          onChange={(e) => update({ categoryId: e.target.value })}
+        >
+          <option value="">All categories</option>
+          {categories.data?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Member"
+          className="!w-auto min-w-36 flex-1 sm:flex-none"
+          value={filter('memberId')}
+          onChange={(e) => update({ memberId: e.target.value })}
+        >
+          <option value="">Everyone</option>
+          <option value="shared">Shared</option>
+          {members.data?.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <Card className="!p-0">

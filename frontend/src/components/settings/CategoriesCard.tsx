@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
 import { useCategories } from '../../lib/queries';
 import { BUCKETS, type Bucket, type Category } from '../../lib/types';
@@ -95,20 +94,24 @@ function CategoryColumn({
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
             />
             {c.kind === 'expense' && (
-              <Select
-                aria-label={`Bucket for ${c.name}`}
-                className="w-auto !px-1 !py-0.5 text-xs"
-                value={c.bucket ?? ''}
-                onChange={(e) =>
-                  run(() => api.put(`/categories/${c.id}`, { bucket: e.target.value }))
-                }
-              >
-                {Object.entries(BUCKETS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </Select>
+              <span className="relative rounded p-1 text-slate-400 hover:text-slate-700 focus-within:ring-1 focus-within:ring-indigo-500 dark:hover:text-slate-200">
+                <ArrowLeftRight size={14} aria-hidden />
+                <select
+                  aria-label={`Move ${c.name} to bucket`}
+                  title="Move to another bucket"
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  value={c.bucket ?? ''}
+                  onChange={(e) =>
+                    run(() => api.put(`/categories/${c.id}`, { bucket: e.target.value }))
+                  }
+                >
+                  {Object.entries(BUCKETS).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </span>
             )}
             <button
               type="button"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guessDateFormat, guessDecimal, rulePattern } from './bankImportTypes';
+import { guessDateFormat, guessDecimal, rememberPatternFor, rulePattern } from './bankImportTypes';
 
 describe('bank import helpers', () => {
   it('guesses the date format from samples', () => {
@@ -13,5 +13,16 @@ describe('bank import helpers', () => {
   });
   it('remembers the payee part', () => {
     expect(rulePattern('REWE · REWE Markt; Filiale 123')).toBe('REWE');
+  });
+
+  it('only remembers a short payee name, never a whole long description', () => {
+    expect(rememberPatternFor('REWE · REWE Markt; Filiale 123')).toBe('REWE');
+    expect(
+      rememberPatternFor(
+        'SEPA Lastschrift Stadtwerke München GmbH Abschlag Strom und Gas Vertragskonto 1234567890',
+      ),
+    ).toBeNull();
+    expect(rememberPatternFor('DB · Fahrkarte')).toBeNull(); // too short: would match "feedback"
+    expect(rememberPatternFor(`${'x'.repeat(61)} · purpose`)).toBeNull();
   });
 });

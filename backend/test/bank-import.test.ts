@@ -10,7 +10,7 @@ type Analysed = {
   type: 'income' | 'expense';
   description: string;
   error: string | null;
-  duplicate: 'file' | 'existing' | null;
+  duplicate: 'file' | 'existing' | 'possible' | null;
   suggestion: string | null;
 };
 
@@ -167,5 +167,59 @@ describe('bank CSV import', () => {
       data: Buffer.from('').toString('base64'),
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('keeps imported merchants editable (≤ 100 characters) and stores the full text in the notes', async () => {
+    const long =
+      'SEPA Lastschrift Stadtwerke München GmbH Abschlag Strom und Gas Vertragskonto 1234567890 Mandat XYZ';
+    const res = await call('POST', '/api/import/csv/commit', {
+      accountId: account.id,
+      rows: [
+        {
+          date: '2026-10-02',
+          amount: 9_900,
+          type: 'expense',
+          description: `Stadtwerke · ${long}`,
+          categoryId: null,
+        },
+      ],
+    });
+    expect(res.statusCode).toBe(200);
+    const t = await prisma.transaction.findFirstOrThrow({});
+    expect(t.merchant!.length).toBeLessThanOrEqual(100);
+    expect(t.notes).toContain(long);
+    const edit = await call('PUT', `/api/transactions/${t.id}`, {
+      date: '2026-10-02',
+      amount: 9_900,
+      type: 'expense',
+      accountId: account.id,
+      merchant: t.merchant,
+      notes: t.notes,
+      categoryId: cat('Electricity'),
+    });
+    expect(edit.statusCode).toBe(200);
+    const again = await analyse([['x', '02.10.26', '', '', long, 'Stadtwerke', '', '', '-99,00']]);
+    expect(again.rows[0]!.duplicate).toBe('existing');
+  });
+
+  it('flags a possible duplicate: same account, amount and type within 5 days, whatever the text', async () => {
+    await call('POST', '/api/transactions', {
+      date: '2026-10-07',
+      amount: 91_200,
+      type: 'expense',
+      accountId: account.id,
+      merchant: 'Rent',
+    });
+    await call('POST', '/api/transactions', {
+      date: '2026-10-02',
+      amount: 5_240,
+      type: 'expense',
+      accountId: account.id,
+      merchant: 'Rewe',
+    });
+    const p = await preview();
+    const a = await analyse(p.rows);
+    expect(a.rows.map((r) => r.duplicate)).toEqual([null, 'possible', 'possible', null, null]);
+    expect(a.summary.duplicates).toBe(2);
   });
 });

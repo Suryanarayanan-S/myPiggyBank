@@ -19,7 +19,7 @@ export type AnalysedRow = {
   type: 'income' | 'expense';
   description: string;
   error: string | null;
-  duplicate: 'file' | 'existing' | null;
+  duplicate: 'file' | 'existing' | 'possible' | null;
   suggestion: string | null;
 };
 export type Analysis = {
@@ -52,3 +52,14 @@ export function guessDecimal(samples: string[]): ',' | '.' {
 
 /** The part of a description used to remember a category: the payee before " · ". */
 export const rulePattern = (description: string) => description.split(' · ')[0]!.trim();
+
+/**
+ * The pattern to remember for a row, or null when there is nothing safe to remember: no payee
+ * (the text would be the whole description), or a payee too short (would match inside other words)
+ * or too long to ever match again.
+ */
+export function rememberPatternFor(description: string): string | null {
+  if (!description.includes(' · ')) return null;
+  const p = rulePattern(description);
+  return p.length >= 3 && p.length <= 60 ? p : null;
+}

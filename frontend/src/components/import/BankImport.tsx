@@ -10,7 +10,7 @@ import { api } from '../../lib/api';
 import {
   guessDateFormat,
   guessDecimal,
-  rulePattern,
+  rememberPatternFor,
   type Analysis,
   type CsvPreview,
   type DateFormat,
@@ -41,6 +41,11 @@ export function BankImport() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [result, setResult] = useState<number | null>(null);
+  // Any change to the columns or account makes an earlier check out of date.
+  const changeMap = (next: typeof map) => {
+    setMap(next);
+    setAnalysis(null);
+  };
   const account = active.find((a) => a.id === (accountId || active[0]?.id));
 
   const upload = useMutation({
@@ -97,13 +102,9 @@ export function BankImport() {
       const remember = new Map<string, string>();
       for (const r of chosen) {
         const c = choices[r.index]!;
-        if (
-          c.categoryId &&
-          c.categoryId !== r.suggestion &&
-          c.remember &&
-          rulePattern(r.description).length >= 2
-        ) {
-          remember.set(rulePattern(r.description), c.categoryId);
+        const pattern = rememberPatternFor(r.description);
+        if (c.categoryId && c.categoryId !== r.suggestion && c.remember && pattern) {
+          remember.set(pattern, c.categoryId);
         }
       }
       return api.post<{ created: number }>('/import/csv/commit', {
@@ -140,7 +141,7 @@ export function BankImport() {
       <Select
         id={id}
         value={map[key]}
-        onChange={(e) => setMap({ ...map, [key]: Number(e.target.value) })}
+        onChange={(e) => changeMap({ ...map, [key]: Number(e.target.value) })}
       >
         {optional && <option value={-1}>— none —</option>}
         {headerOptions.map((h) => (
@@ -208,7 +209,7 @@ export function BankImport() {
               <Select
                 id="map-dateformat"
                 value={map.dateFormat}
-                onChange={(e) => setMap({ ...map, dateFormat: e.target.value as DateFormat })}
+                onChange={(e) => changeMap({ ...map, dateFormat: e.target.value as DateFormat })}
               >
                 {(['dd.mm.yyyy', 'dd/mm/yyyy', 'mm/dd/yyyy', 'yyyy-mm-dd'] as const).map((f) => (
                   <option key={f}>{f}</option>
@@ -219,7 +220,7 @@ export function BankImport() {
               <Select
                 id="map-decimal"
                 value={map.decimal}
-                onChange={(e) => setMap({ ...map, decimal: e.target.value as ',' | '.' })}
+                onChange={(e) => changeMap({ ...map, decimal: e.target.value as ',' | '.' })}
               >
                 <option value=",">Comma (52,40)</option>
                 <option value=".">Point (52.40)</option>
@@ -229,7 +230,7 @@ export function BankImport() {
               <Select
                 id="map-account"
                 value={account?.id ?? ''}
-                onChange={(e) => setAccountId(e.target.value)}
+                onChange={(e) => (setAccountId(e.target.value), setAnalysis(null))}
               >
                 {active.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -242,7 +243,7 @@ export function BankImport() {
               <input
                 type="checkbox"
                 checked={map.invert}
-                onChange={(e) => setMap({ ...map, invert: e.target.checked })}
+                onChange={(e) => changeMap({ ...map, invert: e.target.checked })}
               />
               Spending is shown as positive numbers
             </label>
@@ -266,8 +267,8 @@ export function BankImport() {
           title="3 · Review"
           actions={
             <span className="text-sm text-slate-500">
-              {analysis.summary.valid} readable · {analysis.summary.duplicates} already there ·{' '}
-              {analysis.summary.invalid} unreadable
+              {analysis.summary.valid} readable · {analysis.summary.duplicates} already there or
+              possibly entered · {analysis.summary.invalid} unreadable
             </span>
           }
         >
@@ -322,6 +323,11 @@ export function BankImport() {
                         {r.duplicate === 'file' && (
                           <span className="text-xs text-amber-600">Appears twice in the file</span>
                         )}
+                        {r.duplicate === 'possible' && (
+                          <span className="text-xs text-amber-600">
+                            Possibly already entered: same amount within 5 days
+                          </span>
+                        )}
                       </td>
                       <td
                         className={clsx(
@@ -368,24 +374,26 @@ export function BankImport() {
                                     </option>
                                   ))}
                             </Select>
-                            {c?.categoryId && c.categoryId !== r.suggestion && (
-                              <label
-                                className="flex items-center gap-1 text-xs whitespace-nowrap text-slate-500"
-                                title={`Next time, use this category for “${rulePattern(r.description)}”`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={c.remember}
-                                  onChange={(e) =>
-                                    setChoices({
-                                      ...choices,
-                                      [r.index]: { ...c, remember: e.target.checked },
-                                    })
-                                  }
-                                />
-                                Remember
-                              </label>
-                            )}
+                            {c?.categoryId &&
+                              c.categoryId !== r.suggestion &&
+                              rememberPatternFor(r.description) && (
+                                <label
+                                  className="flex items-center gap-1 text-xs whitespace-nowrap text-slate-500"
+                                  title={`Next time, use this category for “${rememberPatternFor(r.description)}”`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={c.remember}
+                                    onChange={(e) =>
+                                      setChoices({
+                                        ...choices,
+                                        [r.index]: { ...c, remember: e.target.checked },
+                                      })
+                                    }
+                                  />
+                                  Remember
+                                </label>
+                              )}
                           </div>
                         )}
                       </td>

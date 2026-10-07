@@ -64,7 +64,7 @@ describe('recurring transactions', () => {
     const rule = (await call('POST', '/api/recurring', rent())).json().data;
     await prisma.recurringRule.update({
       where: { id: rule.id },
-      data: { generateFrom: new Date('2026-03-15T00:00:00Z') },
+      data: { generateFrom: new Date('2026-03-15T00:00:00Z'), generatedThrough: null },
     });
     await generateDue(prisma, '2026-05-01', familyId);
     expect(await dates()).toEqual(['2026-03-31', '2026-04-30']);
@@ -140,5 +140,51 @@ describe('recurring transactions', () => {
       nextOccurrence({ frequency: 'monthly', startDate: today, endDate: null }, today),
     );
     expect(rule.nextDate > today).toBe(true);
+  });
+
+  it('does not bring back a generated transaction the user deleted or moved', async () => {
+    const rule = (
+      await call('POST', '/api/recurring', rent({ backfill: true, startDate: '2027-01-31' }))
+    ).json().data;
+    await generateDue(prisma, '2027-03-31', familyId);
+    const [jan, feb] = await generated();
+    await prisma.transaction.delete({ where: { id: jan!.id } });
+    await call('PUT', `/api/transactions/${feb!.id}`, {
+      date: '2027-03-01',
+      amount: 91_200,
+      type: 'expense',
+      accountId: acc.id,
+      categoryId: cat('Rent'),
+    });
+    await generateDue(prisma, '2027-03-31', familyId);
+    await generateDue(prisma, '2027-04-30', familyId);
+    expect(await prisma.transaction.count({ where: { recurringRuleId: rule.id } })).toBe(3); // moved Feb, Mar, Apr
+  });
+
+  it('resuming a paused rule does not create the months it was paused for', async () => {
+    const rule = (
+      await call('POST', '/api/recurring', rent({ backfill: true, startDate: '2027-01-31' }))
+    ).json().data;
+    await generateDue(prisma, '2027-01-31', familyId);
+    await call('PUT', `/api/recurring/${rule.id}`, { active: false });
+    await prisma.recurringRule.update({ where: { id: rule.id }, data: { updatedAt: new Date() } });
+    // Resume "today" (real today is before 2027, so pretend resume happens in May 2027).
+    await call('PUT', `/api/recurring/${rule.id}`, { active: true });
+    await prisma.recurringRule.update({
+      where: { id: rule.id },
+      data: { generateFrom: new Date('2027-05-15T00:00:00Z') },
+    });
+    await generateDue(prisma, '2027-06-30', familyId);
+    expect(await dates()).toEqual(['2027-01-31', '2027-05-31', '2027-06-30']);
+  });
+
+  it('on resume, moves generateFrom to today so the paused period is skipped', async () => {
+    const rule = (await call('POST', '/api/recurring', rent({ backfill: true }))).json().data; // back-filled up to today
+    const before = await prisma.transaction.count();
+    await call('PUT', `/api/recurring/${rule.id}`, { active: false });
+    await call('PUT', `/api/recurring/${rule.id}`, { active: true });
+    const r = await prisma.recurringRule.findUniqueOrThrow({ where: { id: rule.id } });
+    expect(r.generateFrom.toISOString().slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
+    expect(await prisma.transaction.count()).toBe(before);
   });
 });

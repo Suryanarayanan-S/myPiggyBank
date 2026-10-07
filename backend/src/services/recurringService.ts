@@ -135,11 +135,16 @@ export async function updateRecurring(
   const existing = await owned(prisma, familyId, id);
   await checkRefs(prisma, familyId, existing.type, input);
   const { endDate, ...rest } = input;
+  // Resuming skips the paused period: nothing before today is generated afterwards.
+  const resuming = input.active === true && !existing.active;
   await prisma.recurringRule.update({
     where: { id },
     data: {
       ...rest,
       ...(endDate !== undefined && { endDate: endDate ? parseDay(endDate) : null }),
+      ...(resuming && {
+        generateFrom: parseDay(maxDay(today(), formatDay(existing.generateFrom)))!,
+      }),
     },
   });
   return toDto(await prisma.recurringRule.findUniqueOrThrow({ where: { id }, include }));
@@ -160,7 +165,21 @@ export async function generateDue(prisma: PrismaClient, asOf: string, familyId?:
   let created = 0;
   for (const r of rules) {
     if (r.account.archived) continue;
-    const due = occurrences(asRule(r), formatDay(r.generateFrom), asOf);
+    // Start after the watermark: dates already generated are never re-created, even if the user
+    // deleted or moved that transaction.
+    const from = r.generatedThrough
+      ? maxDay(
+          formatDay(r.generateFrom),
+          formatDay(new Date(r.generatedThrough.getTime() + 86_400_000)),
+        )
+      : formatDay(r.generateFrom);
+    const due = occurrences(asRule(r), from, asOf);
+    if (!r.generatedThrough || formatDay(r.generatedThrough) < asOf) {
+      await prisma.recurringRule.update({
+        where: { id: r.id },
+        data: { generatedThrough: parseDay(asOf)! },
+      });
+    }
     if (!due.length) continue;
     const have = new Set(
       (

@@ -291,29 +291,31 @@ model CategoryRule {
 }
 
 model RecurringRule {
-  id           String        @id @default(uuid())
-  familyId     String
-  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name         String
+  id               String        @id @default(uuid())
+  familyId         String
+  family           Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name             String
   /// income | expense
-  type         String
-  amount       BigInt
-  accountId    String
-  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  categoryId   String?
-  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  memberId     String?
-  member       FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  type             String
+  amount           BigInt
+  accountId        String
+  account          Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId       String?
+  category         Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  memberId         String?
+  member           FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
   /// weekly | monthly | quarterly | yearly
-  frequency    String
-  startDate    DateTime
-  endDate      DateTime?
+  frequency        String
+  startDate        DateTime
+  endDate          DateTime?
   /// occurrences before this date are not generated (the day the rule was created, unless back-filled)
-  generateFrom DateTime
-  active       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  transactions Transaction[]
+  generateFrom     DateTime
+  /// last date already generated; later runs never re-create earlier dates (even if deleted)
+  generatedThrough DateTime?
+  active           Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  transactions     Transaction[]
 
   @@index([familyId])
 }

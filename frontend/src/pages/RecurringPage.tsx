@@ -50,7 +50,7 @@ export function RecurringPage() {
   const rules = useQuery({ queryKey: ['recurring'], queryFn: () => api.get<Rule[]>('/recurring') });
   const upcoming = useQuery({
     queryKey: ['recurring', 'upcoming'],
-    queryFn: () => api.get<Upcoming[]>('/recurring/upcoming?days=30'),
+    queryFn: () => api.get<Upcoming[]>('/recurring/upcoming?days=31'),
   });
   const [editing, setEditing] = useState<Rule | 'new' | null>(null);
   const toggle = useMutation({
@@ -119,7 +119,7 @@ export function RecurringPage() {
           )}
         </ul>
       </Card>
-      <Card title="Coming up in the next 30 days">
+      <Card title="Coming up in the next month">
         <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
           {upcoming.data?.map((u) => (
             <li key={`${u.ruleId}-${u.date}`} className="flex justify-between py-2">
@@ -134,7 +134,7 @@ export function RecurringPage() {
             </li>
           ))}
           {upcoming.data?.length === 0 && (
-            <li className="py-2 text-slate-500">Nothing due in the next 30 days.</li>
+            <li className="py-2 text-slate-500">Nothing due in the next month.</li>
           )}
         </ul>
       </Card>

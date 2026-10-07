@@ -58,8 +58,12 @@ export const AnalyzeInput = z.object({
   }),
 });
 
+/** Merchant as stored (transactions allow 100 characters); the full text goes into the notes. */
+const merchantOf = (description: string) => description.slice(0, 100);
 const keyOf = (date: string, amount: number, type: string, text: string) =>
-  `${date}|${amount}|${type}|${norm(text)}`;
+  `${date}|${amount}|${type}|${norm(merchantOf(text))}`;
+const POSSIBLE_DAYS = 5;
+const DAY_MS = 86_400_000;
 
 export async function analyzeCsv(
   prisma: PrismaClient,
@@ -99,18 +103,25 @@ export async function analyzeCsv(
   const valid = parsed.filter((r) => !r.error);
   const dates = valid.map((r) => r.date!).sort();
   const existing = new Set<string>();
+  // Same amount and type within a few days, whatever the text (hand-entered or recurring rows).
+  const nearby: { day: number; amount: number; type: string }[] = [];
   if (dates.length) {
     const rows = await prisma.transaction.findMany({
       where: {
         familyId,
         accountId: input.accountId,
-        date: { gte: parseDay(dates[0]!)!, lte: parseDay(dates.at(-1)!)! },
+        date: {
+          gte: new Date(parseDay(dates[0]!)!.getTime() - POSSIBLE_DAYS * DAY_MS),
+          lte: new Date(parseDay(dates.at(-1)!)!.getTime() + POSSIBLE_DAYS * DAY_MS),
+        },
         type: { in: ['income', 'expense'] },
       },
       select: { date: true, amount: true, type: true, merchant: true },
     });
-    for (const t of rows)
+    for (const t of rows) {
       existing.add(keyOf(formatDay(t.date), Number(t.amount), t.type, t.merchant ?? ''));
+      nearby.push({ day: t.date.getTime(), amount: Number(t.amount), type: t.type });
+    }
   }
   const seen = new Set<string>();
   const [categories, rules] = await Promise.all([
@@ -123,11 +134,20 @@ export async function analyzeCsv(
   const rows = parsed.map((r) => {
     if (r.error) return { ...r, duplicate: null, suggestion: null };
     const key = keyOf(r.date!, r.amount!, r.type, r.description);
+    const day = parseDay(r.date!)!.getTime();
+    const possible = nearby.some(
+      (t) =>
+        t.amount === r.amount &&
+        t.type === r.type &&
+        Math.abs(t.day - day) <= POSSIBLE_DAYS * DAY_MS,
+    );
     const duplicate = existing.has(key)
       ? ('existing' as const)
       : seen.has(key)
         ? ('file' as const)
-        : null;
+        : possible
+          ? ('possible' as const)
+          : null;
     seen.add(key);
     return {
       ...r,
@@ -210,8 +230,11 @@ export async function commitCsv(
         amount: r.amount,
         type: r.type,
         categoryId: r.categoryId,
-        merchant: r.description,
-        notes: 'Imported from bank statement',
+        merchant: merchantOf(r.description),
+        notes:
+          r.description.length > 100
+            ? `Imported from bank statement: ${r.description}`
+            : 'Imported from bank statement',
         importBatch: batch,
       })),
     });

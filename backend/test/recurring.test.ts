@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { generateDue } from '../src/services/recurringService.js';
+import { nextOccurrence } from '../src/domain/recurring.js';
 import { client, makeApp, prisma, resetDb, signUp } from './helpers.js';
 
 describe('recurring transactions', () => {
@@ -129,5 +130,15 @@ describe('recurring transactions', () => {
     expect(
       (await call('POST', '/api/recurring', rent({ accountId: otherAcc.id }))).statusCode,
     ).toBe(404);
+  });
+
+  it("shows the next date after today's already-created transaction", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const rule = (await call('POST', '/api/recurring', rent({ startDate: today }))).json().data;
+    expect(await dates()).toEqual([today]);
+    expect(rule.nextDate).toBe(
+      nextOccurrence({ frequency: 'monthly', startDate: today, endDate: null }, today),
+    );
+    expect(rule.nextDate > today).toBe(true);
   });
 });

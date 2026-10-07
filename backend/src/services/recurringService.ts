@@ -61,16 +61,14 @@ const toDto = (r: Row) => ({
   startDate: formatDay(r.startDate),
   endDate: r.endDate ? formatDay(r.endDate) : null,
   active: r.active,
+  // Everything up to today is generated already, so "next" is after today — or, for a rule that
+  // starts generating later, its first date itself.
   nextDate: r.active
-    ? nextOccurrence(asRule(r), maxDay(today(), formatDay(r.generateFrom), 'before'))
+    ? nextOccurrence(asRule(r), maxDay(today(), dayBefore(formatDay(r.generateFrom))))
     : null,
 });
-/** The later of two days; with 'before', the day before the later one (so it is itself "next"). */
-function maxDay(a: string, b: string, mode?: 'before') {
-  const later = a > b ? a : b;
-  if (mode !== 'before') return later;
-  return formatDay(new Date(parseDay(later)!.getTime() - 86_400_000));
-}
+const maxDay = (a: string, b: string) => (a > b ? a : b);
+const dayBefore = (d: string) => formatDay(new Date(parseDay(d)!.getTime() - 86_400_000));
 
 async function checkRefs(
   prisma: PrismaClient,

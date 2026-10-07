@@ -14,11 +14,9 @@ export const recurringRoutes: FastifyPluginAsync = async (app) => {
     return { data: await r.upcoming(app.prisma, fam(req), days) };
   });
   app.post('/recurring', async (req, reply) =>
-    reply
-      .status(201)
-      .send({
-        data: await r.createRecurring(app.prisma, fam(req), parse(r.RecurringCreate, req.body)),
-      }),
+    reply.status(201).send({
+      data: await r.createRecurring(app.prisma, fam(req), parse(r.RecurringCreate, req.body)),
+    }),
   );
   app.put('/recurring/:id', async (req) => ({
     data: await r.updateRecurring(

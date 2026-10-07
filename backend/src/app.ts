@@ -18,6 +18,7 @@ import { rateRoutes } from './routes/rates.js';
 import { budgetRoutes } from './routes/budget.js';
 import { importRoutes } from './routes/import.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { wealthRoutes } from './routes/wealth.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -110,6 +111,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(budgetRoutes);
       await api.register(importRoutes);
       await api.register(dashboardRoutes);
+      await api.register(wealthRoutes);
     },
     { prefix: '/api' },
   );

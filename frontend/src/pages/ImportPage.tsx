@@ -10,6 +10,7 @@ import { Field, FormError } from '../components/ui/Field';
 import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { fileToBase64 } from '../lib/files';
+import { defaultImportMode, type ImportMode } from '../lib/importDefaults';
 import { formatMoney } from '../lib/money';
 import { monthTitle } from '../lib/months';
 import { useAccounts, useCategories } from '../lib/queries';
@@ -22,7 +23,7 @@ import {
   type ImportSuggestion,
 } from '../lib/types';
 
-type Mode = 'import' | 'replace' | 'skip';
+type Mode = ImportMode;
 const encode = (s: ImportSuggestion) =>
   'categoryId' in s ? `c:${s.categoryId}` : `n:${s.newName}`;
 const decode = (v: string): ImportSuggestion =>
@@ -54,9 +55,7 @@ export function ImportPage() {
       setPreview(p);
       setResult(null);
       setMapping(Object.fromEntries(p.labels.map((l) => [l.key, encode(l.suggestion)])));
-      setModes(
-        Object.fromEntries(p.months.map((m) => [m.month, m.existing.imported ? 'skip' : 'import'])),
-      );
+      setModes(Object.fromEntries(p.months.map((m) => [m.month, defaultImportMode(m.existing)])));
     },
   });
 
@@ -175,7 +174,8 @@ export function ImportPage() {
                       {m.existing.manual > 0 && (
                         <p className="text-xs text-slate-500">
                           {m.existing.manual} transaction{m.existing.manual > 1 ? 's' : ''} already
-                          entered in the app this month. They are kept and count on top.
+                          entered in the app this month, so this month is skipped by default.
+                          Importing it would count both.
                         </p>
                       )}
                     </div>

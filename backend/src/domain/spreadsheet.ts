@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { AppError } from '../lib/errors.js';
 
 export type ImportBucket = 'essentials' | 'fun' | 'future';
@@ -30,6 +31,7 @@ export function parseSheetMonth(name: string): string | null {
   const index = MONTHS.indexOf(word.slice(0, 3));
   if (index === -1 || (word.length > 3 && !FULL.test(word))) return null;
   const year = yy.length === 2 ? 2000 + Number(yy) : Number(yy);
+  if (year < 2000 || year > 2099) return null;
   return `${year}-${String(index + 1).padStart(2, '0')}`;
 }
 
@@ -139,12 +141,45 @@ function parseSheet(ws: ExcelJS.Worksheet, month: string): ParsedMonth | null {
 }
 
 /** Reads a monthly-spending workbook (one sheet per month) without storing it anywhere. */
+const invalid = () =>
+  new AppError(400, 'INVALID_WORKBOOK', 'This file is not a readable .xlsx workbook');
+
+// The real workbook unpacks to ~8 MB in ~180 parts; these limits stop zip bombs early.
+const MAX_UNCOMPRESSED = 50_000_000;
+const MAX_ENTRIES = 2_000;
+
+/** Checks the zip directory (sizes only, nothing decompressed) before exceljs inflates it. */
+async function assertSafeXlsx(buf: Buffer) {
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(buf);
+  } catch {
+    throw invalid();
+  }
+  let total = 0;
+  let entries = 0;
+  zip.forEach((_, file) => {
+    entries += 1;
+    total +=
+      (file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0;
+  });
+  if (entries > MAX_ENTRIES || total > MAX_UNCOMPRESSED) {
+    throw new AppError(
+      400,
+      'WORKBOOK_TOO_LARGE',
+      'This workbook is too large to import (over 50 MB unpacked)',
+    );
+  }
+  if (!zip.file('xl/workbook.xml')) throw invalid();
+}
+
 export async function parseSpendingWorkbook(buf: Buffer) {
+  await assertSafeXlsx(buf);
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buf as unknown as ArrayBuffer);
   } catch {
-    throw new AppError(400, 'INVALID_WORKBOOK', 'This file is not a readable .xlsx workbook');
+    throw invalid();
   }
   const months: ParsedMonth[] = [];
   const skippedSheets: string[] = [];
@@ -166,6 +201,15 @@ export async function parseSpendingWorkbook(buf: Buffer) {
     }
     seen.add(month);
     months.push(parsed);
+  }
+  if (months.length === 0) {
+    throw new AppError(
+      400,
+      'NO_MONTHS',
+      `No month sheets found (sheets should be named like "Nov 23"). Sheets in this file: ${
+        skippedSheets.join(', ') || 'none'
+      }`,
+    );
   }
   months.sort((a, b) => a.month.localeCompare(b.month));
   return { months, skippedSheets };

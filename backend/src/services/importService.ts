@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { suggestCategory, type Suggestion } from '../domain/categorize.js';
 import { parseSpendingWorkbook, type ImportBucket } from '../domain/spreadsheet.js';
 import { MONTH_RE, monthRange } from '../lib/dates.js';
+import type { Db } from '../lib/db.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { listCategories } from './categoryService.js';
 import { getFamily } from './familyService.js';
@@ -46,7 +47,7 @@ export const CommitInput = z.object({
   mapping: z.record(z.string().max(300), target),
 });
 
-async function existingCounts(prisma: PrismaClient, familyId: string, month: string) {
+async function existingCounts(prisma: Db, familyId: string, month: string) {
   const { start, end } = monthRange(month);
   const [imported, manual] = await Promise.all([
     prisma.transaction.count({ where: { familyId, importBatch: batchOf(month) } }),
@@ -119,146 +120,168 @@ export async function commitImport(
   familyId: string,
   input: z.output<typeof CommitInput>,
 ) {
-  const family = await getFamily(prisma, familyId);
-  const currency = family.spendingCurrency;
+  // Everything — checks and writes — happens in one transaction that first takes SQLite's write
+  // lock, so concurrent commits (two tabs, a retry) run one after another instead of racing.
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.family.update({ where: { id: familyId }, data: { updatedAt: new Date() } });
+      const family = await getFamily(tx, familyId);
+      const currency = family.spendingCurrency;
 
-  // 1. Account: existing (must be in the spending currency) or a new/reused one by name.
-  let accountId: string | null = null;
-  let newAccountName: string | null = null;
-  if ('id' in input.account) {
-    const acc = await assertAccount(prisma, familyId, input.account.id);
-    if (acc.currency !== currency) {
-      throw new AppError(
-        400,
-        'ACCOUNT_CURRENCY',
-        `Choose an account in ${currency}: the spreadsheet amounts are in ${currency}`,
-      );
-    }
-    accountId = acc.id;
-  } else {
-    const name = input.account.newName;
-    const accounts = await prisma.account.findMany({ where: { familyId } });
-    const same = accounts.find((a) => norm(a.name) === norm(name));
-    if (same && same.currency !== currency) {
-      throw new AppError(
-        409,
-        'ACCOUNT_EXISTS',
-        `An account named "${same.name}" exists in ${same.currency}`,
-      );
-    }
-    if (same) accountId = same.id;
-    else newAccountName = name;
-  }
+      // 1. Account: existing (in the spending currency) or a new/reused history account.
+      let accountId: string | null = null;
+      let newAccountName: string | null = null;
+      if ('id' in input.account) {
+        const acc = await assertAccount(tx, familyId, input.account.id);
+        if (acc.currency !== currency) {
+          throw new AppError(
+            400,
+            'ACCOUNT_CURRENCY',
+            `Choose an account in ${currency}: the spreadsheet amounts are in ${currency}`,
+          );
+        }
+        accountId = acc.id;
+      } else {
+        const name = input.account.newName;
+        const same = (await tx.account.findMany({ where: { familyId } })).find(
+          (a) => norm(a.name) === norm(name),
+        );
+        if (same && same.currency !== currency) {
+          throw new AppError(
+            409,
+            'ACCOUNT_EXISTS',
+            `An account named "${same.name}" exists in ${same.currency}`,
+          );
+        }
+        if (same) accountId = same.id;
+        else newAccountName = name;
+      }
 
-  // 2. Every row needs a mapping consistent with its kind and bucket.
-  const rows = input.months.flatMap((m) => [
-    ...m.income.map((r) => ({ m, kind: 'income' as const, bucket: null, ...r })),
-    ...m.items.map((r) => ({ m, kind: 'expense' as const, ...r })),
-  ]);
-  const categories = await prisma.category.findMany({ where: { familyId } });
-  const resolved = new Map<
-    string,
-    { categoryId: string } | { newName: string; kind: string; bucket: string | null }
-  >();
-  for (const r of rows) {
-    const key = labelKey(r.kind, r.bucket, r.label);
-    if (resolved.has(key)) continue;
-    const t = input.mapping[key];
-    if (!t) {
-      throw new AppError(400, 'MAPPING_MISSING', `Choose a category for "${r.label}"`, [
-        { path: 'mapping', message: key },
+      // 2. Every row needs a mapping consistent with its kind and bucket.
+      const rows = input.months.flatMap((m) => [
+        ...m.income.map((r) => ({ m, kind: 'income' as const, bucket: null, ...r })),
+        ...m.items.map((r) => ({ m, kind: 'expense' as const, ...r })),
       ]);
-    }
-    if ('categoryId' in t) {
-      const cat = categories.find((c) => c.id === t.categoryId);
-      if (!cat) throw notFound('Category');
-      if (cat.kind !== r.kind || (r.kind === 'expense' && cat.bucket !== r.bucket)) {
-        throw new AppError(
-          400,
-          'MAPPING_MISMATCH',
-          `"${cat.name}" does not fit "${r.label}" (different bucket)`,
-        );
+      const categories = await tx.category.findMany({ where: { familyId } });
+      const pendingBucket = new Map<string, string | null>(); // kind|name → bucket of a new category
+      const resolved = new Map<
+        string,
+        { categoryId: string } | { newName: string; kind: string; bucket: string | null }
+      >();
+      for (const r of rows) {
+        const key = labelKey(r.kind, r.bucket, r.label);
+        if (resolved.has(key)) continue;
+        const t = input.mapping[key];
+        if (!t) {
+          throw new AppError(400, 'MAPPING_MISSING', `Choose a category for "${r.label}"`, [
+            { path: 'mapping', message: key },
+          ]);
+        }
+        if ('categoryId' in t) {
+          const cat = categories.find((c) => c.id === t.categoryId);
+          if (!cat) throw notFound('Category');
+          if (cat.kind !== r.kind || (r.kind === 'expense' && cat.bucket !== r.bucket)) {
+            throw new AppError(
+              400,
+              'MAPPING_MISMATCH',
+              `"${cat.name}" does not fit "${r.label}" (different bucket)`,
+            );
+          }
+          resolved.set(key, { categoryId: cat.id });
+          continue;
+        }
+        const nameKey = `${r.kind}|${norm(t.newName)}`;
+        const same = categories.find((c) => c.kind === r.kind && norm(c.name) === norm(t.newName));
+        const otherBucket = same
+          ? same.bucket !== r.bucket
+          : pendingBucket.has(nameKey) && pendingBucket.get(nameKey) !== r.bucket;
+        if (otherBucket) {
+          throw new AppError(
+            409,
+            'CATEGORY_EXISTS',
+            `"${t.newName}" can only belong to one bucket. Pick a different name for one of them.`,
+          );
+        }
+        if (same) resolved.set(key, { categoryId: same.id });
+        else {
+          pendingBucket.set(nameKey, r.bucket);
+          resolved.set(key, { newName: t.newName, kind: r.kind, bucket: r.bucket });
+        }
       }
-      resolved.set(key, { categoryId: cat.id });
-    } else {
-      const same = categories.find((c) => c.kind === r.kind && norm(c.name) === norm(t.newName));
-      if (same && same.bucket !== r.bucket) {
-        throw new AppError(
-          409,
-          'CATEGORY_EXISTS',
-          `A category "${same.name}" already exists in another bucket`,
-        );
-      }
-      resolved.set(
-        key,
-        same ? { categoryId: same.id } : { newName: t.newName, kind: r.kind, bucket: r.bucket },
-      );
-    }
-  }
 
-  // 3. Months already imported need an explicit replace.
-  for (const m of input.months) {
-    if (m.mode === 'import' && (await existingCounts(prisma, familyId, m.month)).imported > 0) {
-      throw new AppError(
-        409,
-        'MONTH_ALREADY_IMPORTED',
-        `${m.sheet} was already imported. Choose "Replace" or skip it.`,
-      );
-    }
-  }
+      // 3. Months already imported need an explicit replace.
+      for (const m of input.months) {
+        if (m.mode === 'import' && (await existingCounts(tx, familyId, m.month)).imported > 0) {
+          throw new AppError(
+            409,
+            'MONTH_ALREADY_IMPORTED',
+            `${m.sheet} was already imported. Choose "Replace" or skip it.`,
+          );
+        }
+      }
 
-  // 4. Write everything at once.
-  return prisma.$transaction(async (tx) => {
-    if (newAccountName) {
-      accountId = (
-        await tx.account.create({
-          data: { familyId, name: newAccountName, type: 'other', currency, assetClass: 'other' },
-        })
-      ).id;
-    }
-    const newCategories: string[] = [];
-    const idFor = new Map<string, string>();
-    for (const [key, t] of resolved) {
-      if ('categoryId' in t) {
-        idFor.set(key, t.categoryId);
-        continue;
+      // 4. Writes.
+      if (newAccountName) {
+        // Archived: its balance (three years of unused money) is not a real bank balance, so it
+        // stays out of account totals; the budget still counts its transactions.
+        accountId = (
+          await tx.account.create({
+            data: {
+              familyId,
+              name: newAccountName,
+              type: 'other',
+              currency,
+              assetClass: 'other',
+              archived: true,
+            },
+          })
+        ).id;
       }
-      const nameKey = `${t.kind}|${norm(t.newName)}`;
-      if (!idFor.has(nameKey)) {
-        const created = await tx.category.create({
-          data: { familyId, name: t.newName, kind: t.kind, bucket: t.bucket },
-        });
-        newCategories.push(created.name);
-        idFor.set(nameKey, created.id);
+      const newCategories: string[] = [];
+      const idFor = new Map<string, string>();
+      for (const [key, t] of resolved) {
+        if ('categoryId' in t) {
+          idFor.set(key, t.categoryId);
+          continue;
+        }
+        const nameKey = `${t.kind}|${norm(t.newName)}`;
+        if (!idFor.has(nameKey)) {
+          const created = await tx.category.create({
+            data: { familyId, name: t.newName, kind: t.kind, bucket: t.bucket },
+          });
+          newCategories.push(created.name);
+          idFor.set(nameKey, created.id);
+        }
+        idFor.set(key, idFor.get(nameKey)!);
       }
-      idFor.set(key, idFor.get(nameKey)!);
-    }
-    await tx.transaction.deleteMany({
-      where: {
-        familyId,
-        importBatch: {
-          in: input.months.filter((m) => m.mode === 'replace').map((m) => batchOf(m.month)),
+      await tx.transaction.deleteMany({
+        where: {
+          familyId,
+          importBatch: {
+            in: input.months.filter((m) => m.mode === 'replace').map((m) => batchOf(m.month)),
+          },
         },
-      },
-    });
-    const { count } = await tx.transaction.createMany({
-      data: rows.map((r) => ({
-        familyId,
+      });
+      const { count } = await tx.transaction.createMany({
+        data: rows.map((r) => ({
+          familyId,
+          accountId: accountId!,
+          date: monthRange(r.m.month).start,
+          amount: r.amount,
+          type: r.kind,
+          categoryId: idFor.get(labelKey(r.kind, r.bucket, r.label))!,
+          merchant: r.label,
+          notes: `Imported from "${r.m.sheet}"`,
+          importBatch: batchOf(r.m.month),
+        })),
+      });
+      return {
+        created: count,
+        months: input.months.map((m) => m.month).sort(),
+        newCategories,
         accountId: accountId!,
-        date: monthRange(r.m.month).start,
-        amount: r.amount,
-        type: r.kind,
-        categoryId: idFor.get(labelKey(r.kind, r.bucket, r.label))!,
-        merchant: r.label,
-        notes: `Imported from "${r.m.sheet}"`,
-        importBatch: batchOf(r.m.month),
-      })),
-    });
-    return {
-      created: count,
-      months: input.months.map((m) => m.month).sort(),
-      newCategories,
-      accountId: accountId!,
-    };
-  });
+      };
+    },
+    { maxWait: 30_000, timeout: 60_000 },
+  );
 }

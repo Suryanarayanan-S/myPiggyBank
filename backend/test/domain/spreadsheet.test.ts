@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSheetMonth, parseSpendingWorkbook } from '../../src/domain/spreadsheet.js';
+import JSZip from 'jszip';
 import { buildWorkbook } from '../fixtures/workbook.js';
 
 const september = {
@@ -157,5 +158,35 @@ describe('parseSpendingWorkbook', () => {
     await expect(parseSpendingWorkbook(Buffer.from('hello'))).rejects.toMatchObject({
       code: 'INVALID_WORKBOOK',
     });
+  });
+
+  it('rejects a workbook with no month sheets (e.g. only a Template) with NO_MONTHS', async () => {
+    await expect(
+      parseSpendingWorkbook(await buildWorkbook([{ name: 'Template' }])),
+    ).rejects.toMatchObject({
+      code: 'NO_MONTHS',
+      message: expect.stringContaining('Template'),
+    });
+  });
+
+  it('rejects a zip file that is not a workbook', async () => {
+    const zip = new JSZip();
+    zip.file('word/document.xml', '<doc/>');
+    const buf = await zip.generateAsync({ type: 'nodebuffer' });
+    await expect(parseSpendingWorkbook(buf)).rejects.toMatchObject({ code: 'INVALID_WORKBOOK' });
+  });
+
+  it('rejects zip bombs before decompressing them', async () => {
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', '<Types/>');
+    zip.file('xl/huge.xml', 'a'.repeat(60_000_000));
+    const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    expect(buf.length).toBeLessThan(1_000_000);
+    await expect(parseSpendingWorkbook(buf)).rejects.toMatchObject({ code: 'WORKBOOK_TOO_LARGE' });
+  });
+
+  it('ignores impossible years in sheet names', () => {
+    expect(parseSheetMonth('Nov 0000')).toBeNull();
+    expect(parseSheetMonth('Nov 2199')).toBeNull();
   });
 });

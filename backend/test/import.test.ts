@@ -252,4 +252,46 @@ describe('spreadsheet import', () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  it('serialises concurrent commits of the same month: one wins, the rest get 409, nothing doubles', async () => {
+    const p = await preview([aug]);
+    const results = await Promise.all([commit(p), commit(p), commit(p)]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409, 409]);
+    expect(await prisma.transaction.count()).toBe(6);
+    expect(await prisma.account.count({ where: { name: 'Spreadsheet history' } })).toBe(1);
+  });
+
+  it('refuses the same new category name in two buckets (409), writing nothing', async () => {
+    const p = await preview([
+      {
+        name: 'Aug 26',
+        income: [['Salary', 100]],
+        essentials: [['Amazon', 10]],
+        fun: [['Amazon', 20]],
+      },
+    ]);
+    const mapping = {
+      ...mappingFrom(p),
+      'expense|essentials|amazon': { newName: 'Amazon' },
+      'expense|fun|amazon': { newName: 'Amazon' },
+    };
+    const res = await commit(p, { mapping });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('CATEGORY_EXISTS');
+    expect(await prisma.transaction.count()).toBe(0);
+  });
+
+  it('keeps the history account out of balance totals (archived) while the budget still counts it', async () => {
+    await commit(await preview([aug]));
+    const acc = await prisma.account.findFirstOrThrow({ where: { name: 'Spreadsheet history' } });
+    expect(acc.archived).toBe(true);
+    const s = (await call('GET', '/api/budget/2026-08')).json().data;
+    expect(s.netIncome).toBe(375_000);
+  });
+
+  it('a workbook without month sheets is a clear 400', async () => {
+    const res = await upload([{ name: 'Template' }]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('NO_MONTHS');
+  });
 });

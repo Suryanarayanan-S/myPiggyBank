@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import type { Db } from '../lib/db.js';
 import { z } from 'zod';
 import { CurrencySchema } from '../domain/currency.js';
 
@@ -38,7 +39,7 @@ const toDto = (f: Row) => ({
 });
 export type FamilyDto = ReturnType<typeof toDto>;
 
-export async function getFamily(prisma: PrismaClient, familyId: string) {
+export async function getFamily(prisma: Db, familyId: string) {
   return toDto(await prisma.family.findUniqueOrThrow({ where: { id: familyId }, select }));
 }
 

@@ -151,6 +151,8 @@ model Transaction {
   transferAmount    BigInt?
   /// one-per-category monthly total entered in the month grid
   isMonthlyTotal    Boolean       @default(false)
+  /// "xlsx:YYYY-MM" for rows brought in by the spreadsheet importer
+  importBatch       String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -158,6 +160,7 @@ model Transaction {
   @@index([accountId, date])
   @@index([familyId, categoryId])
   @@index([familyId, isMonthlyTotal, date])
+  @@index([familyId, importBatch])
 }
 
 model CategoryLimit {

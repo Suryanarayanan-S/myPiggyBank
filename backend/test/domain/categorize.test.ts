@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { suggestCategory } from '../../src/domain/categorize.js';
 
 type B = 'essentials' | 'fun' | 'future' | null;
-const c = (id: string, name: string, kind: 'income' | 'expense', bucket: B) => ({ id, name, kind, bucket });
+const c = (id: string, name: string, kind: 'income' | 'expense', bucket: B) => ({
+  id,
+  name,
+  kind,
+  bucket,
+});
 const cats = [
   c('salary', 'Salary', 'income', null),
   c('other-inc', 'Other income', 'income', null),
@@ -21,7 +26,8 @@ const cats = [
   c('etf', 'ETF & Gold', 'expense', 'future'),
   c('scheme', 'Savings scheme', 'expense', 'future'),
 ];
-const s = (label: string, kind: 'income' | 'expense', bucket: B) => suggestCategory(label, kind, bucket, cats);
+const s = (label: string, kind: 'income' | 'expense', bucket: B) =>
+  suggestCategory(label, kind, bucket, cats);
 
 describe('suggestCategory', () => {
   it('matches an existing category name exactly, ignoring case and spaces', () => {
@@ -63,7 +69,9 @@ describe('suggestCategory', () => {
 
   it('uses an existing catch-all category when the family already has one', () => {
     const withOther = [...cats, c('other-fun', 'Other fun', 'expense', 'fun')];
-    expect(suggestCategory('Perima', 'expense', 'fun', withOther)).toEqual({ categoryId: 'other-fun' });
+    expect(suggestCategory('Perima', 'expense', 'fun', withOther)).toEqual({
+      categoryId: 'other-fun',
+    });
   });
 
   it('suggests a new category when the keyword target does not exist in the family', () => {

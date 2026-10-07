@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+package-lock.json
+backend/prisma/migrations
+backend/test/.tmp
+data
+backups
+.superpowers

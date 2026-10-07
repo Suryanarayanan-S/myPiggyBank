@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-sm space-y-6">
         <div className="flex justify-center">
           <Brand />

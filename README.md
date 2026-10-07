@@ -97,6 +97,10 @@ docker compose start
 
 To move to another laptop: copy the backup file over, run `./scripts/setup.sh` there, then `npm run restore -- <file>`.
 
+## Looks: modern and retro
+
+Click the controller icon (top of the sidebar, the phone header, or the login page) to switch between the **modern** look (follows your system light/dark setting) and the **retro 8-bit** look (PICO-8 colours, pixel fonts, "PRESS START" screen). Click again to switch back; the choice is remembered on this device. The start screen is skipped for people who prefer reduced motion.
+
 ## Importing
 
 - **Monthly spreadsheet** (Import → Monthly spreadsheet): one sheet per month (e.g. "Sep 26"), checked against each sheet's own totals.

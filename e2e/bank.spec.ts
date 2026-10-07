@@ -33,7 +33,9 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await page.locator('#bank-file').setInputFiles(csv);
   await expect(page.getByLabel('Date', { exact: true })).toHaveValue('1'); // Buchungstag guessed
   await page.getByRole('button', { name: 'Check rows' }).click();
-  await expect(page.getByText('5 readable · 0 already there or possibly entered · 0 unreadable')).toBeVisible();
+  await expect(
+    page.getByText('5 readable · 0 already there or possibly entered · 0 unreadable'),
+  ).toBeVisible();
   await expect(page.getByLabel('Category for row 2')).toHaveValue(/.+/); // REWE → Groceries suggested
   await page.getByLabel('Category for row 5').selectOption({ label: 'Restaurants' });
   await shot(page, '16-bank-review');
@@ -42,7 +44,9 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
 
   await page.locator('#bank-file').setInputFiles(csv);
   await page.getByRole('button', { name: 'Check rows' }).click();
-  await expect(page.getByText('5 readable · 5 already there or possibly entered · 0 unreadable')).toBeVisible();
+  await expect(
+    page.getByText('5 readable · 5 already there or possibly entered · 0 unreadable'),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import 0 transactions' })).toBeDisabled();
   await page.getByLabel('Decimal separator').selectOption(',');
   await page.getByLabel('Date format').selectOption('yyyy-mm-dd');

@@ -7,6 +7,7 @@ import { useMe } from '../auth/auth';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
 import { Brand } from './Brand';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { navItems } from './nav';
 
 export function AppShell() {
@@ -25,8 +26,9 @@ export function AppShell() {
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 hidden w-60 flex-col border-r border-slate-200 bg-white md:flex dark:border-slate-800 dark:bg-slate-900">
-        <div className="px-5 py-5">
+        <div className="flex items-center justify-between gap-2 px-5 py-5">
           <Brand />
+          <ThemeToggle compact />
         </div>
         <nav className="flex-1 space-y-1 px-3">
           {navItems.map((item) => (
@@ -64,9 +66,12 @@ export function AppShell() {
       <div className="md:pl-60">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden dark:border-slate-800 dark:bg-slate-900">
           <Brand />
-          <Button variant="ghost" aria-label="Log out" onClick={() => logout.mutate()}>
-            <LogOut size={18} aria-hidden />
-          </Button>
+          <span className="flex items-center gap-1">
+            <ThemeToggle compact />
+            <Button variant="ghost" aria-label="Log out" onClick={() => logout.mutate()}>
+              <LogOut size={18} aria-hidden />
+            </Button>
+          </span>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:px-8 md:pb-8">
           <Outlet />

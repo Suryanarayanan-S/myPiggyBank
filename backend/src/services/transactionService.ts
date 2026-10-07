@@ -81,6 +81,7 @@ function toDto(t: Row) {
     transferAccountName: t.transferAccount?.name ?? null,
     transferAmount: t.transferAmount === null ? null : Number(t.transferAmount),
     transferCurrency: t.transferAccount?.currency ?? null,
+    isMonthlyTotal: t.isMonthlyTotal,
   };
 }
 

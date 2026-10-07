@@ -14,3 +14,17 @@ export function parseDay(s: string): Date | null {
 }
 
 export const formatDay = (d: Date) => d.toISOString().slice(0, 10);
+
+export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** UTC [start, end) of a "YYYY-MM" month. */
+export function monthRange(month: string): { start: Date; end: Date } {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  return { start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) };
+}
+
+export function previousMonth(month: string): string {
+  const { start } = monthRange(month);
+  start.setUTCMonth(start.getUTCMonth() - 1);
+  return start.toISOString().slice(0, 7);
+}

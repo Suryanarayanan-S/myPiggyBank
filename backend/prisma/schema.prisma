@@ -8,16 +8,16 @@ datasource db {
 }
 
 model Family {
-  id               String          @id @default(uuid())
+  id               String             @id @default(uuid())
   name             String
-  spendingCurrency String          @default("EUR")
-  wealthCurrency   String          @default("INR")
+  spendingCurrency String             @default("EUR")
+  wealthCurrency   String             @default("INR")
   /// 50/30/20 bucket targets in whole percent (sum 100)
-  targetEssentials Int             @default(50)
-  targetFun        Int             @default(30)
-  targetFuture     Int             @default(20)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  targetEssentials Int                @default(50)
+  targetFun        Int                @default(30)
+  targetFuture     Int                @default(20)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
   users            User[]
   members          FamilyMember[]
   accounts         Account[]
@@ -25,6 +25,9 @@ model Family {
   transactions     Transaction[]
   exchangeRates    ExchangeRate[]
   categoryLimits   CategoryLimit[]
+  assets           Asset[]
+  liabilities      Liability[]
+  snapshots        NetWorthSnapshot[]
 }
 
 model User {
@@ -66,6 +69,8 @@ model FamilyMember {
   updatedAt    DateTime      @updatedAt
   accounts     Account[]
   transactions Transaction[]
+  assets       Asset[]
+  liabilities  Liability[]
 
   @@unique([familyId, name])
 }
@@ -177,4 +182,88 @@ model CategoryLimit {
   updatedAt  DateTime @updatedAt
 
   @@unique([familyId, month, categoryId])
+}
+
+model Asset {
+  id            String           @id @default(uuid())
+  familyId      String
+  family        Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name          String
+  /// liquid | property | investment | other
+  assetClass    String
+  currency      String
+  ownerMemberId String?
+  owner         FamilyMember?    @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  valuations    AssetValuation[]
+
+  @@unique([familyId, name])
+}
+
+model AssetValuation {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  date      DateTime
+  value     BigInt
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([assetId, date])
+}
+
+model Liability {
+  id             String             @id @default(uuid())
+  familyId       String
+  family         Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name           String
+  /// mortgage | car_loan | personal_loan | credit_card | other
+  type           String
+  currency       String
+  ownerMemberId  String?
+  owner          FamilyMember?      @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  originalAmount BigInt?
+  /// annual interest in basis points (3.75 % = 375)
+  interestRateBp Int?
+  monthlyPayment BigInt?
+  startDate      DateTime?
+  endDate        DateTime?
+  lender         String?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  balances       LiabilityBalance[]
+
+  @@unique([familyId, name])
+}
+
+model LiabilityBalance {
+  id          String    @id @default(uuid())
+  liabilityId String
+  liability   Liability @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+  date        DateTime
+  outstanding BigInt
+  createdAt   DateTime  @default(now())
+
+  @@index([liabilityId, date])
+}
+
+model NetWorthSnapshot {
+  id          String   @id @default(uuid())
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  date        DateTime
+  currency    String
+  assets      BigInt?
+  liabilities BigInt?
+  netWorth    BigInt
+  /// JSON of the computed breakdown at the time; null for manual history entries
+  breakdown   String?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([familyId, date])
 }

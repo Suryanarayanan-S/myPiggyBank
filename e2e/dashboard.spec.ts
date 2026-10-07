@@ -4,6 +4,7 @@ import { buildWorkbook } from '../backend/test/fixtures/workbook';
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(300); // let colour transitions finish before capturing
     await page.screenshot({ path: `e2e/screenshots/${name}-${scheme}.png`, fullPage: true });
   }
   await page.emulateMedia({ colorScheme: 'light' });

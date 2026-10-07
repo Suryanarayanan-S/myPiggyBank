@@ -16,6 +16,7 @@ import { Button } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
+import { AmountField } from './WealthForms';
 import { api } from '../../lib/api';
 import { AXIS, GRID, INK, SURFACE, axisTick, niceTicks } from '../../lib/chart';
 import { formatCompact, formatMoney, parseAmountInput } from '../../lib/money';
@@ -169,6 +170,7 @@ export function SnapshotHistory({ data }: { data: NetWorthResponse }) {
             mode={modal}
             currency={currency}
             netWorth={data.current.netWorth}
+            unconverted={data.current.unconverted}
             onDone={async () => (await refresh(), setModal(null))}
           />
         </Modal>
@@ -181,13 +183,16 @@ function SnapshotForm({
   mode,
   currency,
   netWorth,
+  unconverted,
   onDone,
 }: {
   mode: 'today' | 'past';
   currency: string;
   netWorth: number;
+  unconverted: { currency: string; amount: number }[];
   onDone: () => void;
 }) {
+  const blocked = mode === 'today' && unconverted.length > 0;
   const [note, setNote] = useState('');
   const [date, setDate] = useState(localDay());
   const [amount, setAmount] = useState('');
@@ -209,10 +214,18 @@ function SnapshotForm({
       }}
     >
       {mode === 'today' ? (
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          Saves today’s net worth of <strong>{formatMoney(netWorth, currency)}</strong> with its
-          breakdown.
-        </p>
+        blocked ? (
+          <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
+            {unconverted.map((u) => formatMoney(u.amount, u.currency)).join(' and ')} cannot be
+            converted to {currency} yet. Add this month’s exchange rate in Settings first, otherwise
+            the snapshot would be too low.
+          </p>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Saves today’s net worth of <strong>{formatMoney(netWorth, currency)}</strong> with its
+            breakdown.
+          </p>
+        )
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <Field label="Date" htmlFor="snap-date">
@@ -224,19 +237,14 @@ function SnapshotForm({
               onChange={(e) => setDate(e.target.value)}
             />
           </Field>
-          <Field
+          <AmountField
+            id="snap-amount"
             label={`Net worth (${currency})`}
-            htmlFor="snap-amount"
+            value={amount}
+            onChange={setAmount}
+            currency={currency}
             hint="e.g. 135 L or 1.35 Cr"
-          >
-            <Input
-              id="snap-amount"
-              required
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </Field>
+          />
         </div>
       )}
       <Field label="Note" htmlFor="snap-note" hint="What happened, e.g. “Car withdraw”">
@@ -249,7 +257,7 @@ function SnapshotForm({
       )}
       <FormError error={save.error} />
       <div className="flex justify-end">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={save.isPending || blocked}>
           Save
         </Button>
       </div>

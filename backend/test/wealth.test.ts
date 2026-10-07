@@ -251,4 +251,49 @@ describe('wealth API', () => {
     const ownerFromOther = await other('POST', '/api/assets', { ...house(), name: 'X' });
     expect(ownerFromOther.statusCode).toBe(404);
   });
+
+  it('refuses a currency change once an asset or loan has history (it would rescale every value)', async () => {
+    const a = (await call('POST', '/api/assets', house())).json().data;
+    const res = await call('PUT', `/api/assets/${a.id}`, { currency: 'EUR' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('CURRENCY_LOCKED');
+    const fresh = (
+      await call('POST', '/api/assets', { name: 'Gold', assetClass: 'other', currency: 'INR' })
+    ).json().data;
+    expect((await call('PUT', `/api/assets/${fresh.id}`, { currency: 'EUR' })).statusCode).toBe(
+      200,
+    );
+    const loan = (
+      await call('POST', '/api/liabilities', {
+        name: 'Loan',
+        type: 'other',
+        currency: 'INR',
+        outstanding: 100,
+      })
+    ).json().data;
+    expect(
+      (await call('PUT', `/api/liabilities/${loan.id}`, { currency: 'EUR' })).json().error.code,
+    ).toBe('CURRENCY_LOCKED');
+  });
+
+  it("refuses to save today's snapshot while some amounts cannot be converted", async () => {
+    await call('POST', '/api/accounts', {
+      name: 'Sparkasse',
+      type: 'current',
+      currency: 'EUR',
+      openingBalance: 250_000,
+    });
+    const res = await call('POST', '/api/net-worth/snapshots', { note: 'x' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('UNCONVERTED_AMOUNTS');
+    expect(await prisma.netWorthSnapshot.count()).toBe(0);
+  });
+
+  it.each([[{ date: '2025-01-01' }], [{ date: '2025-01-01', netWorth: '135' }], [{ netWorth: 5 }]])(
+    'rejects a malformed past entry instead of saving a snapshot for today %#',
+    async (body) => {
+      expect((await call('POST', '/api/net-worth/snapshots', body)).statusCode).toBe(400);
+      expect(await prisma.netWorthSnapshot.count()).toBe(0);
+    },
+  );
 });

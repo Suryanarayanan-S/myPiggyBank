@@ -34,11 +34,9 @@ export const wealthRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/liabilities', async (req) => ({ data: await w.listLiabilities(app.prisma, fam(req)) }));
   app.post('/liabilities', async (req, reply) =>
-    reply
-      .status(201)
-      .send({
-        data: await w.createLiability(app.prisma, fam(req), parse(w.LiabilityCreate, req.body)),
-      }),
+    reply.status(201).send({
+      data: await w.createLiability(app.prisma, fam(req), parse(w.LiabilityCreate, req.body)),
+    }),
   );
   app.put('/liabilities/:id', async (req) => ({
     data: await w.updateLiability(
@@ -62,11 +60,9 @@ export const wealthRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/net-worth', async (req) => ({ data: await w.getNetWorth(app.prisma, fam(req)) }));
   app.post('/net-worth/snapshots', async (req, reply) =>
-    reply
-      .status(201)
-      .send({
-        data: await w.createSnapshot(app.prisma, fam(req), parse(w.SnapshotInput, req.body)),
-      }),
+    reply.status(201).send({
+      data: await w.createSnapshot(app.prisma, fam(req), parse(w.SnapshotInput, req.body)),
+    }),
   );
   app.put('/net-worth/snapshots/:id', async (req) => ({
     data: await w.updateSnapshot(app.prisma, fam(req), id(req), parse(w.SnapshotUpdate, req.body)),

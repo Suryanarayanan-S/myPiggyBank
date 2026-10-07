@@ -18,6 +18,9 @@ const amount = z
 const name = z.string().trim().min(1, 'Name is required').max(80);
 const note = z.string().trim().max(200).nullable().optional();
 const today = () => formatDay(new Date());
+// Values are stored in the item's currency; switching it would silently rescale the history.
+const currencyLocked = () =>
+  new AppError(400, 'CURRENCY_LOCKED', 'The currency cannot be changed once values are recorded');
 const num = (v: bigint | null) => (v === null ? null : Number(v));
 
 // ---------- assets ----------
@@ -111,7 +114,10 @@ export async function updateAsset(
   id: string,
   input: z.output<typeof AssetUpdate>,
 ) {
-  await ownedAsset(prisma, familyId, id);
+  const existing = await ownedAsset(prisma, familyId, id);
+  if (input.currency && input.currency !== existing.currency) {
+    if (await prisma.assetValuation.count({ where: { assetId: id } })) throw currencyLocked();
+  }
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
   if (input.name)
     await uniqueName(
@@ -269,7 +275,10 @@ export async function updateLiability(
   id: string,
   input: z.output<typeof LiabilityUpdate>,
 ) {
-  await ownedLiability(prisma, familyId, id);
+  const existing = await ownedLiability(prisma, familyId, id);
+  if (input.currency && input.currency !== existing.currency) {
+    if (await prisma.liabilityBalance.count({ where: { liabilityId: id } })) throw currencyLocked();
+  }
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
   if (input.name)
     await uniqueName(
@@ -369,9 +378,10 @@ export async function getNetWorth(prisma: PrismaClient, familyId: string) {
   return { current, snapshots, previousMonth: latestBefore(28), previousYear: latestBefore(365) };
 }
 
+// Strict objects: a malformed past entry must be rejected, never treated as "snapshot today".
 export const SnapshotInput = z.union([
-  z.object({ date: day, netWorth: z.number().int().refine(Number.isSafeInteger), note }),
-  z.object({ note }),
+  z.strictObject({ date: day, netWorth: z.number().int().refine(Number.isSafeInteger), note }),
+  z.strictObject({ note }),
 ]);
 export const SnapshotUpdate = z.object({ note });
 
@@ -394,6 +404,13 @@ export async function createSnapshot(
     return snapshotDto(s);
   }
   const nw = await currentNetWorth(prisma, familyId);
+  if (nw.unconverted.length > 0) {
+    throw new AppError(
+      409,
+      'UNCONVERTED_AMOUNTS',
+      `Add an exchange rate first: ${nw.unconverted.map((u) => u.currency).join(', ')} amounts cannot be converted to ${nw.currency} and the snapshot would be too low`,
+    );
+  }
   const s = await prisma.netWorthSnapshot.create({
     data: {
       familyId,

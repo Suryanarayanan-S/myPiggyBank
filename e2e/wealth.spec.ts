@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(300); // let colour transitions finish before capturing
     await page.screenshot({ path: `e2e/screenshots/${name}-${scheme}.png`, fullPage: true });
   }
   await page.emulateMedia({ colorScheme: 'light' });
@@ -80,6 +81,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   const past = page.getByRole('dialog');
   await past.getByLabel('Date').fill('2024-01-26');
   await past.getByLabel('Net worth (INR)').fill('1.35 Cr');
+  await expect(past.getByText('= ₹1,35,00,000.00')).toBeVisible(); // what was understood is always shown
   await past.getByLabel('Note').fill('Initial');
   await past.getByRole('button', { name: 'Save' }).click();
   await expect(past).toBeHidden();

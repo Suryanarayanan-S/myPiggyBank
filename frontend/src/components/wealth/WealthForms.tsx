@@ -20,7 +20,7 @@ function useRefresh() {
 }
 const asInput = (cents: number | null | undefined) => (cents == null ? '' : String(cents / 100));
 
-function AmountField({
+export function AmountField({
   id,
   label,
   value,
@@ -40,9 +40,13 @@ function AmountField({
     <Field
       label={label}
       htmlFor={id}
+      // Always show what was understood, so "135" can never be mistaken for "135 L".
       hint={
-        hint ??
-        (parsed !== null ? `= ${formatMoney(parsed, currency)}` : 'e.g. 80 L, 1.2 Cr or 25,00,000')
+        parsed !== null
+          ? `= ${formatMoney(parsed, currency)}`
+          : value.trim()
+            ? 'Not a valid amount'
+            : (hint ?? 'e.g. 80 L, 1.2 Cr or 25,00,000')
       }
     >
       <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
@@ -148,6 +152,12 @@ export function AssetForm({
           <Select
             id="asset-currency"
             value={f.currency}
+            disabled={!!asset?.history.length}
+            title={
+              asset?.history.length
+                ? 'Locked: values are already recorded in this currency'
+                : undefined
+            }
             onChange={(e) => setF({ ...f, currency: e.target.value })}
           >
             {CURRENCIES.map((c) => (
@@ -297,6 +307,12 @@ export function LiabilityForm({
           <Select
             id="li-currency"
             value={f.currency}
+            disabled={!!liability?.history.length}
+            title={
+              liability?.history.length
+                ? 'Locked: values are already recorded in this currency'
+                : undefined
+            }
             onChange={(e) => setF({ ...f, currency: e.target.value })}
           >
             {CURRENCIES.map((c) => (

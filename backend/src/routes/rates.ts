@@ -1,0 +1,23 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { IdParams, parse } from '../lib/validate.js';
+import { currentUser, requireAuth } from '../auth/requireAuth.js';
+import { RateInput, deleteRate, listRates, upsertRate } from '../services/rateService.js';
+
+export const rateRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook('preHandler', requireAuth);
+
+  app.get('/exchange-rates', async (req) => ({
+    data: await listRates(app.prisma, currentUser(req).familyId),
+  }));
+
+  app.put('/exchange-rates', async (req) => {
+    const input = parse(RateInput, req.body);
+    return { data: await upsertRate(app.prisma, currentUser(req).familyId, input) };
+  });
+
+  app.delete('/exchange-rates/:id', async (req) => {
+    const { id } = parse(IdParams, req.params);
+    await deleteRate(app.prisma, currentUser(req).familyId, id);
+    return { data: { ok: true } };
+  });
+};

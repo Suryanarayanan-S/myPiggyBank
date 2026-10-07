@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompact, formatMoney, parseMoneyInput } from './money';
+import { formatCompact, formatMoney, parseAmountInput, parseMoneyInput } from './money';
 
 describe('formatMoney', () => {
   it('formats cents as German-locale euros by default', () => {
@@ -62,5 +62,27 @@ describe('formatCompact', () => {
     expect(formatCompact(250000000, 'USD')).toBe('$2.5M');
     expect(formatCompact(52400, 'EUR')).toBe('€524');
     expect(formatCompact(-12845000, 'EUR')).toBe('-€128.5k');
+  });
+});
+
+describe('parseAmountInput (lakh / crore)', () => {
+  it.each([
+    ['80 L', 800_000_000],
+    ['80L', 800_000_000],
+    ['80 lakh', 800_000_000],
+    ['80 lakhs', 800_000_000],
+    ['4.5 lac', 45_000_000],
+    ['₹25 L', 250_000_000],
+    ['1.2 Cr', 1_200_000_000],
+    ['1,2 Cr', 1_200_000_000],
+    ['0.5 crore', 500_000_000],
+    ['25,00,000', 250_000_000],
+    ['52,40', 5_240],
+  ])('%j → %i', (input, cents) => {
+    expect(parseAmountInput(input)).toBe(cents);
+  });
+
+  it.each(['L', 'Cr', '80 X', '1.2.3 Cr', '-', '1.234 L'])('rejects %j', (input) => {
+    expect(parseAmountInput(input)).toBeNull();
   });
 });

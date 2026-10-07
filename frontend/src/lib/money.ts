@@ -79,3 +79,29 @@ export function parseMoneyInput(input: string): number | null {
   if (!Number.isSafeInteger(cents)) return null;
   return sign ? -cents : cents;
 }
+
+const UNITS: Record<string, number> = {
+  l: 1e5,
+  lakh: 1e5,
+  lakhs: 1e5,
+  lac: 1e5,
+  lacs: 1e5,
+  cr: 1e7,
+  crore: 1e7,
+  crores: 1e7,
+};
+
+/**
+ * Like parseMoneyInput, but also understands lakh and crore: "80 L", "4.5 lac", "1.2 Cr",
+ * "0,5 crore" (at most two decimals before the unit, so "1.234 L" is rejected as ambiguous).
+ */
+export function parseAmountInput(input: string): number | null {
+  const m = input.trim().match(/^₹?\s*(\d+(?:[.,]\d{1,2})?)\s*([a-z]+)$/i);
+  if (m) {
+    const unit = UNITS[m[2]!.toLowerCase()];
+    if (!unit) return null;
+    const cents = Math.round(Number(m[1]!.replace(',', '.')) * unit * 100);
+    return Number.isSafeInteger(cents) ? cents : null;
+  }
+  return parseMoneyInput(input);
+}

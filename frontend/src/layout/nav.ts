@@ -3,6 +3,7 @@ import {
   Landmark,
   LayoutDashboard,
   PieChart,
+  Repeat,
   Settings,
   Upload,
   Wallet,
@@ -24,6 +25,7 @@ export const navItems: NavItem[] = [
   { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight, primary: true },
   { to: '/accounts', label: 'Accounts', icon: Wallet },
   { to: '/wealth', label: 'Wealth', icon: Landmark, primary: true },
+  { to: '/recurring', label: 'Recurring', icon: Repeat },
   { to: '/import', label: 'Import', icon: Upload },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
-import { Plus, Search } from 'lucide-react';
+import { Download, Plus, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { TransactionForm } from '../components/transactions/TransactionForm';
 import { Button } from '../components/ui/Button';
@@ -63,9 +63,18 @@ export function TransactionsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <MonthNav month={month} onChange={(m) => update({ month: m })} />
-        <Button onClick={() => setEditing('new')}>
-          <Plus size={16} aria-hidden /> Add transaction
-        </Button>
+        <div className="flex gap-2">
+          <a
+            href={`/api/export/transactions.csv?from=${month}-01&to=${monthEnd(month)}`}
+            download
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <Download size={16} aria-hidden /> Export CSV
+          </a>
+          <Button onClick={() => setEditing('new')}>
+            <Plus size={16} aria-hidden /> Add transaction
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

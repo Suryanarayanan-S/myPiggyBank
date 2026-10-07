@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Lock } from 'lucide-react';
 import { useMe } from '../auth/auth';
+import { BankImport } from '../components/import/BankImport';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Field, FormError } from '../components/ui/Field';
@@ -34,7 +35,7 @@ const CATCH_ALL: Record<Bucket, string> = {
   future: 'Other savings',
 };
 
-export function ImportPage() {
+function SpreadsheetImport() {
   const me = useMe();
   const queryClient = useQueryClient();
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -381,5 +382,41 @@ function ResultCard({ result }: { result: ImportResult }) {
         </span>
       </p>
     </Card>
+  );
+}
+
+export function ImportPage() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'bank' ? 'bank' : 'spreadsheet';
+  return (
+    <div className="space-y-5">
+      <div
+        role="tablist"
+        aria-label="Import type"
+        className="inline-flex rounded-lg bg-slate-100 p-1 dark:bg-slate-800"
+      >
+        {(
+          [
+            ['spreadsheet', 'Monthly spreadsheet'],
+            ['bank', 'Bank statement (CSV)'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            onClick={() => setParams(value === 'bank' ? { tab: 'bank' } : {}, { replace: true })}
+            className={clsx(
+              'rounded-md px-3 py-1.5 text-sm font-medium',
+              tab === value ? 'bg-white shadow-sm dark:bg-slate-900' : 'text-slate-500',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'bank' ? <BankImport /> : <SpreadsheetImport />}
+    </div>
   );
 }

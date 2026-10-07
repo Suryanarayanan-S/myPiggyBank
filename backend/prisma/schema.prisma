@@ -308,6 +308,8 @@ model RecurringRule {
   frequency    String
   startDate    DateTime
   endDate      DateTime?
+  /// occurrences before this date are not generated (the day the rule was created, unless back-filled)
+  generateFrom DateTime
   active       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

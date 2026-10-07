@@ -4,12 +4,7 @@ import { z } from 'zod';
 import { AppError } from '../lib/errors.js';
 import { toAuthUser, type AuthUser } from '../auth/sessions.js';
 
-const email = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .max(254)
-  .pipe(z.email('Enter a valid email address'));
+const email = z.string().trim().toLowerCase().max(254).pipe(z.email('Enter a valid email address'));
 
 export const RegisterInput = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100),

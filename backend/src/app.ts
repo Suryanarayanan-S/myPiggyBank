@@ -9,6 +9,7 @@ import { AppError } from './lib/errors.js';
 import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
+import { memberRoutes } from './routes/members.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -67,6 +68,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(authRoutes, {
         loginRateLimit: opts.loginRateLimit ?? { max: 10, timeWindow: '1 minute' },
       });
+      await api.register(memberRoutes);
     },
     { prefix: '/api' },
   );

@@ -1,5 +1,7 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { AppError } from './errors.js';
+
+export const IdParams = z.object({ id: z.uuid('Invalid id') });
 
 export function parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T> {
   const result = schema.safeParse(data);

@@ -21,10 +21,15 @@ export function insightsFor(
   previous: InsightTotals | null,
   targets: { essentials: number; fun: number; future: number },
   currency: string,
-  categories: { name: string; actual: number }[],
+  categories: { name: string; actual: number; bucket: string | null }[],
 ): Insight[] {
   const out: Insight[] = [];
   const money = (c: number) => formatMoney(c, currency);
+
+  if (t.netIncome === 0) {
+    out.push({ tone: 'info', text: 'No income recorded in this period yet.' });
+    return out;
+  }
 
   if (previous && previous.spent > 0) {
     const change = (t.spent - previous.spent) / previous.spent;
@@ -41,21 +46,17 @@ export function insightsFor(
       });
   }
 
-  if (t.netIncome === 0) {
-    out.push({ tone: 'info', text: 'No income recorded in this period yet.' });
-    return out;
-  }
-
   if (previous?.savingsRateBp != null && t.savingsRateBp !== null) {
     const diff = t.savingsRateBp - previous.savingsRateBp;
     const now = formatPercent(t.savingsRateBp);
     const before = formatPercent(previous.savingsRateBp);
-    if (diff > 0)
+    // Same threshold both ways: within ±0.5 pp counts as "about the same".
+    if (diff >= 50)
       out.push({
         tone: 'good',
         text: `Savings rate ${now}, up from ${before} in the previous period.`,
       });
-    else if (diff < -200)
+    else if (diff <= -50)
       out.push({
         tone: 'warning',
         text: `Savings rate ${now}, down from ${before} in the previous period.`,
@@ -91,8 +92,9 @@ export function insightsFor(
       text: `All three buckets are within their ${targets.essentials} / ${targets.fun} / ${targets.future} targets.`,
     });
 
-  const top = categories[0];
-  if (top && t.spent + t.future > 0) {
+  // Future You is saving, not an expense, so it never counts as the "largest expense".
+  const top = categories.find((c) => c.bucket !== 'future');
+  if (top && t.spent > 0) {
     const spending = t.spent;
     out.push({
       tone: 'info',

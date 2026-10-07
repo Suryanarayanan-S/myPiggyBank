@@ -15,41 +15,48 @@ import {
   BUCKET_COLOR,
   GRID,
   INK,
+  MUTED,
   SURFACE,
   axisTick,
   niceTicks,
   shortMonth,
 } from '../../lib/chart';
 import type { Dashboard } from '../../lib/dashboardTypes';
+import { cashFlowRows } from '../../lib/cashflow';
 import { formatCompact, formatMoney } from '../../lib/money';
 
 export function CashFlowChart({ d }: { d: Dashboard }) {
-  const data = d.months.map((m) => ({
-    ...m,
-    label: shortMonth(m.month),
-    essentialsAll: m.essentials + m.uncategorised,
-  }));
+  const data = cashFlowRows(d.months);
+  const hasUncategorised = data.some((m) => m.uncategorised > 0);
   const money = (c: number) => formatMoney(c, d.currency);
-  const ticks = niceTicks(
-    Math.max(0, ...data.map((m) => Math.max(m.netIncome, m.essentialsAll + m.fun + m.future))),
-  );
+  const ticks = niceTicks(Math.max(0, ...data.map((m) => Math.max(m.netIncome, m.stackTop))));
   return (
     <ChartCard
       title="Income and where it went"
       subtitle="Per month: Essentials, Fun and Future You, with net income as a line"
       legend={[
         { label: 'Essentials', color: BUCKET_COLOR.essentials },
+        ...(hasUncategorised ? [{ label: 'Uncategorised', color: MUTED }] : []),
         { label: 'Fun', color: BUCKET_COLOR.fun },
         { label: 'Future You', color: BUCKET_COLOR.future },
         { label: 'Net income', color: INK, shape: 'line' },
       ]}
       table={
         <DataTable
-          head={['Month', 'Net income', 'Essentials', 'Fun', 'Future You', 'Unused']}
+          head={[
+            'Month',
+            'Net income',
+            'Essentials',
+            ...(hasUncategorised ? ['Uncategorised'] : []),
+            'Fun',
+            'Future You',
+            'Unused',
+          ]}
           rows={d.months.map((m) => [
             shortMonth(m.month),
             money(m.netIncome),
-            money(m.essentials + m.uncategorised),
+            money(m.essentials),
+            ...(hasUncategorised ? [money(m.uncategorised)] : []),
             money(m.fun),
             money(m.future),
             money(m.unused),
@@ -92,9 +99,18 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
                             { label: 'Net income', value: money(p.netIncome), color: INK },
                             {
                               label: 'Essentials',
-                              value: money(p.essentialsAll),
+                              value: money(p.essentials),
                               color: BUCKET_COLOR.essentials,
                             },
+                            ...(p.uncategorised
+                              ? [
+                                  {
+                                    label: 'Uncategorised',
+                                    value: money(p.uncategorised),
+                                    color: MUTED,
+                                  },
+                                ]
+                              : []),
                             { label: 'Fun', value: money(p.fun), color: BUCKET_COLOR.fun },
                             {
                               label: 'Future You',
@@ -110,10 +126,20 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
               }}
             />
             <Bar
-              dataKey="essentialsAll"
+              dataKey="essentials"
               name="Essentials"
               stackId="s"
               fill={BUCKET_COLOR.essentials}
+              stroke={SURFACE}
+              strokeWidth={1}
+              maxBarSize={24}
+              isAnimationActive={false}
+            />
+            <Bar
+              dataKey="uncategorised"
+              name="Uncategorised"
+              stackId="s"
+              fill={MUTED}
               stroke={SURFACE}
               strokeWidth={1}
               maxBarSize={24}

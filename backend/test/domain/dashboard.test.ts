@@ -94,13 +94,31 @@ describe('buildDashboard', () => {
     });
   });
 
-  it('compares with the preceding period of the same length', () => {
-    expect(d.previous).toMatchObject({
-      netIncome: 200_000,
-      fun: 150_000,
-      spent: 150_000,
-      unused: 50_000,
+  it('does not compare with a previous period that is only partly recorded', () => {
+    // Apr–Jun: only May has data — comparing would claim e.g. "+342 % spending".
+    expect(d.previous).toBeNull();
+    expect(d.previousCoverage).toEqual({ recorded: 1, months: 3 });
+  });
+
+  it('compares with the preceding period when every month of it is recorded', () => {
+    const full = [
+      ...txns,
+      t('2026-04', 'income', 2000, 'salary'),
+      t('2026-06', 'expense', 100, 'rent'),
+    ];
+    const x = buildDashboard({ ...base, from: '2026-07', to: '2026-09', txns: full });
+    expect(x.previous).toMatchObject({ netIncome: 400_000, fun: 150_000, spent: 160_000 });
+    expect(x.previousCoverage).toEqual({ recorded: 3, months: 3 });
+  });
+
+  it('ignores a previous period that only has transfers', () => {
+    const x = buildDashboard({
+      ...base,
+      from: '2026-08',
+      to: '2026-08',
+      txns: [...txns.filter((y) => y.month === '2026-08'), t('2026-07', 'transfer', 10, null)],
     });
+    expect(x.previous).toBeNull();
   });
 
   it('has no previous period when nothing was recorded before', () => {

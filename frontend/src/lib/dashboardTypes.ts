@@ -19,6 +19,7 @@ export type Dashboard = {
   months: (Totals & { month: string })[];
   totals: Totals;
   previous: Totals | null;
+  previousCoverage: { recorded: number; months: number };
   categories: { categoryId: string | null; name: string; bucket: Bucket | null; actual: number }[];
   members: { memberId: string | null; name: string; actual: number }[];
   unconverted: { currency: string; amount: number }[];

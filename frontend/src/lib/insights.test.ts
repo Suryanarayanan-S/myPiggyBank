@@ -14,8 +14,8 @@ const totals = (p: Partial<InsightTotals> = {}): InsightTotals => ({
 });
 const targets = { essentials: 50, fun: 30, future: 20 };
 const cats = [
-  { name: 'Rent', actual: 91_200 },
-  { name: 'Groceries', actual: 29_600 },
+  { name: 'Rent', actual: 91_200, bucket: 'essentials' as const },
+  { name: 'Groceries', actual: 29_600, bucket: 'essentials' as const },
 ];
 const texts = (xs: { text: string }[]) => xs.map((x) => x.text);
 
@@ -68,6 +68,53 @@ describe('insightsFor', () => {
       tone: 'good',
       text: 'All three buckets are within their 50 / 30 / 20 targets.',
     });
+  });
+
+  it('never calls Future You an expense, and never exceeds 100 % of spending', () => {
+    const withSavings = [{ name: 'ETF', actual: 300_000, bucket: 'future' as const }, ...cats];
+    const out = texts(insightsFor(totals({ spent: 200_000 }), null, targets, 'EUR', withSavings));
+    expect(out.find((x) => x.includes('largest expense'))).toMatch(/^Rent was the largest expense/);
+    const noSpending = insightsFor(totals({ spent: 0 }), null, targets, 'EUR', withSavings);
+    expect(texts(noSpending).some((x) => x.includes('largest expense'))).toBe(false);
+  });
+
+  it('uses the same threshold for savings-rate rises and falls', () => {
+    const tiny = insightsFor(
+      totals({ savingsRateBp: 3002 }),
+      totals({ savingsRateBp: 3000 }),
+      targets,
+      'EUR',
+      cats,
+    );
+    expect(texts(tiny)).toContain(
+      'Savings rate 30.0 %, about the same as the previous period (30.0 %).',
+    );
+    const fall = insightsFor(
+      totals({ savingsRateBp: 2810 }),
+      totals({ savingsRateBp: 3000 }),
+      targets,
+      'EUR',
+      cats,
+    );
+    expect(fall).toContainEqual({
+      tone: 'warning',
+      text: 'Savings rate 28.1 %, down from 30.0 % in the previous period.',
+    });
+  });
+
+  it('makes no comparisons at all without income, even with a previous period', () => {
+    const out = insightsFor(
+      totals({
+        netIncome: 0,
+        savingsRateBp: null,
+        sharesBp: { essentials: null, fun: null, future: null },
+      }),
+      totals(),
+      targets,
+      'EUR',
+      cats,
+    );
+    expect(out).toEqual([{ tone: 'info', text: 'No income recorded in this period yet.' }]);
   });
 
   it('names the largest expense category', () => {

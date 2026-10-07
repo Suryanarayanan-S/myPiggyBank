@@ -65,7 +65,11 @@ export function StatTiles({ d }: { d: Dashboard }) {
               >
                 {money(value)}
               </p>
-              <p className="text-xs text-slate-400">{tile.hint}</p>
+              <p className="text-xs text-slate-400">
+                {tile.key === 'spent' && t.uncategorised > 0
+                  ? 'Essentials + Fun + uncategorised'
+                  : tile.hint}
+              </p>
               {p && (
                 <Delta
                   diff={value - (p[tile.key] as number)}

@@ -105,6 +105,16 @@ export function DashboardPage() {
             </Card>
           )}
           <StatTiles d={d} />
+          {(!d.previous && d.previousCoverage.recorded > 0) || range.to === today ? (
+            <p className="-mt-2 text-xs text-slate-500">
+              {!d.previous && d.previousCoverage.recorded > 0
+                ? `No comparison with the previous period: only ${d.previousCoverage.recorded} of its ${d.previousCoverage.months} months are recorded. `
+                : ''}
+              {range.to === today
+                ? 'This period includes the current month, which is still in progress.'
+                : ''}
+            </p>
+          ) : null}
           <Insights
             items={insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories)}
           />

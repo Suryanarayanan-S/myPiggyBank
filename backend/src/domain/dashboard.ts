@@ -75,7 +75,14 @@ export function buildDashboard(input: {
     );
 
   const summaries = range.map(summarize);
-  const hasPrevious = input.txns.some((t) => t.month >= previousRange[0]! && t.month < input.from);
+  // Compare only with a previous period in which every month has income or expenses recorded;
+  // a partly recorded one would produce claims like "+342 % spending".
+  const recorded = new Set(
+    input.txns
+      .filter((t) => t.type !== 'transfer' && t.month >= previousRange[0]! && t.month < input.from)
+      .map((t) => t.month),
+  );
+  const previousCoverage = { recorded: recorded.size, months: previousRange.length };
 
   const categories = new Map<
     string | null,
@@ -138,7 +145,8 @@ export function buildDashboard(input: {
       }),
     })),
     totals: total(summaries),
-    previous: hasPrevious ? total(previousRange.map(summarize)) : null,
+    previous: recorded.size === previousRange.length ? total(previousRange.map(summarize)) : null,
+    previousCoverage,
     categories: [...categories.values()].sort(byActual),
     members: [...members.values()].sort(byActual),
     unconverted: [...unconverted].map(([currency, amount]) => ({ currency, amount })),

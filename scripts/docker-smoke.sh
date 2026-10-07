@@ -4,18 +4,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-export DATA_DIR
-DATA_DIR=$(mktemp -d)
+# Like a fresh clone: the data dir does not exist yet, so Docker creates it (root-owned).
+TMP_ROOT=$(mktemp -d)
+export DATA_DIR="$TMP_ROOT/data"
 export APP_PORT=18080
 PROJECT=pbsmoke
 BASE="http://127.0.0.1:${APP_PORT}"
 cleanup() {
   docker compose -p "$PROJECT" down -v >/dev/null 2>&1 || true
-  rm -rf "$DATA_DIR"
+  rm -rf "$TMP_ROOT" 2>/dev/null || docker run --rm -v "$TMP_ROOT:/t" alpine rm -rf /t/data
 }
 trap cleanup EXIT
 
-docker compose -p "$PROJECT" up -d --build --wait
+docker compose -p "$PROJECT" up -d --build --wait || { docker compose -p "$PROJECT" logs --tail 20; exit 1; }
 curl -fsS "$BASE/api/health" | grep -q '"status":"ok"'
 echo "✓ health"
 

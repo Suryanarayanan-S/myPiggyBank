@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suggestCategory } from '../../src/domain/categorize.js';
+import { suggestCategory, suggestForBank } from '../../src/domain/categorize.js';
 
 type B = 'essentials' | 'fun' | 'future' | null;
 const c = (id: string, name: string, kind: 'income' | 'expense', bucket: B) => ({
@@ -83,5 +83,50 @@ describe('suggestCategory', () => {
     expect(s('Freelancing', 'income', null)).toEqual({ categoryId: 'other-inc' });
     expect(s('Other Income', 'income', null)).toEqual({ categoryId: 'other-inc' });
     expect(s('5', 'income', null)).toEqual({ categoryId: 'other-inc' });
+  });
+});
+
+describe('suggestForBank', () => {
+  const bankCats = [
+    c('salary', 'Salary', 'income', null),
+    c('interest', 'Interest', 'income', null),
+    c('rent', 'Rent', 'expense', 'essentials'),
+    c('groceries', 'Groceries', 'expense', 'essentials'),
+    c('transport', 'Transportation', 'expense', 'essentials'),
+    c('subs', 'Subscriptions', 'expense', 'fun'),
+    c('restaurants', 'Restaurants', 'expense', 'fun'),
+    c('bakery', 'Bakery', 'expense', 'fun'),
+  ];
+  const s = (
+    text: string,
+    type: 'income' | 'expense',
+    rules: { pattern: string; categoryId: string }[] = [],
+  ) => suggestForBank(text, type, bankCats, rules);
+
+  it.each([
+    ['LASTSCHRIFT REWE Markt; Filiale 123', 'expense', 'groceries'],
+    ['NETFLIX.COM', 'expense', 'subs'],
+    ['DAUERAUFTRAG Miete Oktober', 'expense', 'rent'],
+    ['DB Vertrieb GmbH Fahrkarte', 'expense', 'transport'],
+    ['LOHN GEHALT Oktober', 'income', 'salary'],
+    ['Zinsen 2026', 'income', 'interest'],
+  ] as const)('%s → %s', (text, type, id) => expect(s(text, type)).toBe(id));
+
+  it('learned rules win over built-in keywords, longest pattern first', () => {
+    const rules = [
+      { pattern: 'rewe', categoryId: 'restaurants' },
+      { pattern: 'rewe to go', categoryId: 'bakery' },
+    ];
+    expect(s('REWE To Go Hbf', 'expense', rules)).toBe('bakery');
+    expect(s('REWE Markt', 'expense', rules)).toBe('restaurants');
+  });
+
+  it('ignores a rule or keyword whose category kind does not match the transaction type', () => {
+    expect(s('REWE refund', 'income')).toBeNull();
+    expect(s('Gehalt', 'income', [{ pattern: 'gehalt', categoryId: 'groceries' }])).toBe('salary');
+  });
+
+  it('returns null when nothing matches', () => {
+    expect(s('Bäckerei Schäfer', 'expense')).toBeNull();
   });
 });

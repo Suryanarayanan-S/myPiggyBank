@@ -28,6 +28,8 @@ model Family {
   assets           Asset[]
   liabilities      Liability[]
   snapshots        NetWorthSnapshot[]
+  categoryRules    CategoryRule[]
+  recurringRules   RecurringRule[]
 }
 
 model User {
@@ -59,18 +61,19 @@ model Session {
 }
 
 model FamilyMember {
-  id           String        @id @default(uuid())
-  familyId     String
-  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name         String
-  userId       String?       @unique
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  accounts     Account[]
-  transactions Transaction[]
-  assets       Asset[]
-  liabilities  Liability[]
+  id             String          @id @default(uuid())
+  familyId       String
+  family         Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name           String
+  userId         String?         @unique
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  transactions   Transaction[]
+  assets         Asset[]
+  liabilities    Liability[]
+  recurringRules RecurringRule[]
 
   @@unique([familyId, name])
 }
@@ -92,23 +95,24 @@ model ExchangeRate {
 }
 
 model Account {
-  id             String        @id @default(uuid())
+  id             String          @id @default(uuid())
   familyId       String
-  family         Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family         Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   name           String
   /// current | savings | tagesgeld | cash | credit_card | investment | other
   type           String
   currency       String
-  openingBalance BigInt        @default(0)
+  openingBalance BigInt          @default(0)
   ownerMemberId  String?
-  owner          FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  owner          FamilyMember?   @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
   /// liquid | property | investment | other
-  assetClass     String        @default("liquid")
-  archived       Boolean       @default(false)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  transactions   Transaction[] @relation("TransactionAccount")
-  transfersIn    Transaction[] @relation("TransferAccount")
+  assetClass     String          @default("liquid")
+  archived       Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  transactions   Transaction[]   @relation("TransactionAccount")
+  transfersIn    Transaction[]   @relation("TransferAccount")
+  recurringRules RecurringRule[]
 
   @@unique([familyId, name])
   @@index([familyId])
@@ -128,39 +132,44 @@ model Category {
   updatedAt    DateTime        @updatedAt
   transactions Transaction[]
   limits       CategoryLimit[]
+  rules        CategoryRule[]
+  recurring    RecurringRule[]
 
   @@unique([familyId, kind, name])
 }
 
 model Transaction {
-  id                String        @id @default(uuid())
+  id                String         @id @default(uuid())
   familyId          String
-  family            Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family            Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
   accountId         String
-  account           Account       @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  account           Account        @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
   date              DateTime
   /// > 0, minor units of the account currency
   amount            BigInt
   /// income | expense | transfer
   type              String
   categoryId        String?
-  category          Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category          Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   memberId          String?
-  member            FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  member            FamilyMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   merchant          String?
   notes             String?
   /// ",tag1,tag2," lower-case, for LIKE matching
-  tags              String        @default("")
+  tags              String         @default("")
   transferAccountId String?
-  transferAccount   Account?      @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: Cascade)
+  transferAccount   Account?       @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: Cascade)
   transferAmount    BigInt?
   /// one-per-category monthly total entered in the month grid
-  isMonthlyTotal    Boolean       @default(false)
+  isMonthlyTotal    Boolean        @default(false)
   /// "xlsx:YYYY-MM" for rows brought in by the spreadsheet importer
   importBatch       String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  recurringRuleId   String?
+  recurringRule     RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
+  @@unique([recurringRuleId, date])
   @@index([familyId, date])
   @@index([accountId, date])
   @@index([familyId, categoryId])
@@ -266,4 +275,43 @@ model NetWorthSnapshot {
   updatedAt   DateTime @updatedAt
 
   @@index([familyId, date])
+}
+
+model CategoryRule {
+  id         String   @id @default(uuid())
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /// case-insensitive text matched inside a bank statement line
+  pattern    String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([familyId, pattern])
+}
+
+model RecurringRule {
+  id           String        @id @default(uuid())
+  familyId     String
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name         String
+  /// income | expense
+  type         String
+  amount       BigInt
+  accountId    String
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  memberId     String?
+  member       FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  /// weekly | monthly | quarterly | yearly
+  frequency    String
+  startDate    DateTime
+  endDate      DateTime?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([familyId])
 }

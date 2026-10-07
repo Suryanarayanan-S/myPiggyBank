@@ -81,3 +81,63 @@ export const CATCH_ALL: Record<Bucket, string> = {
   fun: 'Other fun',
   future: 'Other savings',
 };
+
+/** Built-in merchant keywords for bank statements (German and international). */
+const BANK_KEYWORDS: { pattern: RegExp; kind: 'income' | 'expense'; category: string }[] = [
+  {
+    pattern: /\b(rewe|edeka|aldi|lidl|netto|penny|kaufland|dm-drogerie|rossmann)\b/i,
+    kind: 'expense',
+    category: 'Groceries',
+  },
+  {
+    pattern: /netflix|spotify|disney|prime video|amazon prime|youtube premium/i,
+    kind: 'expense',
+    category: 'Subscriptions',
+  },
+  {
+    pattern: /\b(db|bahn|mvv|bvg|hvv|vvs|uber|shell|aral|esso|jet)\b/i,
+    kind: 'expense',
+    category: 'Transportation',
+  },
+  { pattern: /\bmiete\b|\brent\b/i, kind: 'expense', category: 'Rent' },
+  { pattern: /telekom|vodafone|\bo2\b|congstar/i, kind: 'expense', category: 'Phone' },
+  {
+    pattern: /stadtwerke|\bstrom\b|vattenfall|e\.on|eon\b/i,
+    kind: 'expense',
+    category: 'Electricity',
+  },
+  {
+    pattern: /lieferando|restaurant|mcdonald|burger king|starbucks/i,
+    kind: 'expense',
+    category: 'Restaurants',
+  },
+  { pattern: /amazon|zalando|ikea|otto\b/i, kind: 'expense', category: 'Shopping' },
+  { pattern: /versicherung|allianz|\bhuk\b|ergo\b|axa\b/i, kind: 'expense', category: 'Insurance' },
+  { pattern: /gehalt|\blohn\b|salary/i, kind: 'income', category: 'Salary' },
+  { pattern: /zinsen|interest/i, kind: 'income', category: 'Interest' },
+];
+
+/**
+ * Category for a bank-statement line: learned rules first (longest matching pattern), then the
+ * built-in merchant keywords. Only categories of the transaction's kind are suggested.
+ * Same shape as an AI provider would have, so one can be plugged in later.
+ */
+export function suggestForBank(
+  text: string,
+  type: 'income' | 'expense',
+  categories: Category[],
+  rules: { pattern: string; categoryId: string }[],
+): string | null {
+  const lower = text.toLowerCase();
+  const ofKind = (id: string) => categories.some((c) => c.id === id && c.kind === type);
+  const learned = rules
+    .filter((r) => r.pattern && lower.includes(r.pattern.toLowerCase()) && ofKind(r.categoryId))
+    .sort((a, b) => b.pattern.length - a.pattern.length)[0];
+  if (learned) return learned.categoryId;
+  for (const k of BANK_KEYWORDS) {
+    if (k.kind !== type || !k.pattern.test(text)) continue;
+    const hit = categories.find((c) => c.kind === type && norm(c.name) === norm(k.category));
+    if (hit) return hit.id;
+  }
+  return null;
+}

@@ -8,18 +8,23 @@ datasource db {
 }
 
 model Family {
-  id               String         @id @default(uuid())
+  id               String          @id @default(uuid())
   name             String
-  spendingCurrency String         @default("EUR")
-  wealthCurrency   String         @default("INR")
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  spendingCurrency String          @default("EUR")
+  wealthCurrency   String          @default("INR")
+  /// 50/30/20 bucket targets in whole percent (sum 100)
+  targetEssentials Int             @default(50)
+  targetFun        Int             @default(30)
+  targetFuture     Int             @default(20)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   users            User[]
   members          FamilyMember[]
   accounts         Account[]
   categories       Category[]
   transactions     Transaction[]
   exchangeRates    ExchangeRate[]
+  categoryLimits   CategoryLimit[]
 }
 
 model User {
@@ -105,18 +110,19 @@ model Account {
 }
 
 model Category {
-  id           String        @id @default(uuid())
+  id           String          @id @default(uuid())
   familyId     String
-  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family       Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   name         String
   /// income | expense
   kind         String
   /// essentials | fun | future (expense only)
   bucket       String?
-  sortOrder    Int           @default(0)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  sortOrder    Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   transactions Transaction[]
+  limits       CategoryLimit[]
 
   @@unique([familyId, kind, name])
 }
@@ -143,10 +149,29 @@ model Transaction {
   transferAccountId String?
   transferAccount   Account?      @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: Cascade)
   transferAmount    BigInt?
+  /// one-per-category monthly total entered in the month grid
+  isMonthlyTotal    Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   @@index([familyId, date])
   @@index([accountId, date])
   @@index([familyId, categoryId])
+  @@index([familyId, isMonthlyTotal, date])
+}
+
+model CategoryLimit {
+  id         String   @id @default(uuid())
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// YYYY-MM
+  month      String
+  /// spending currency, minor units, > 0
+  amount     BigInt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([familyId, month, categoryId])
 }

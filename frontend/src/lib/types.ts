@@ -11,6 +11,7 @@ export type Family = {
   name: string;
   spendingCurrency: string;
   wealthCurrency: string;
+  targets: { essentials: number; fun: number; future: number };
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

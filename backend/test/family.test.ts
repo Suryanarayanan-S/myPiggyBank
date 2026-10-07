@@ -20,7 +20,33 @@ describe('family settings', () => {
       name: 'Soundararajan',
       spendingCurrency: 'EUR',
       wealthCurrency: 'INR',
+      targets: { essentials: 50, fun: 30, future: 20 },
     });
+  });
+
+  it('updates the 50/30/20 bucket targets', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/family',
+      headers: { cookie },
+      payload: { targets: { essentials: 60, fun: 25, future: 15 } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.targets).toEqual({ essentials: 60, fun: 25, future: 15 });
+  });
+
+  it.each([
+    [{ essentials: 50, fun: 30, future: 19 }],
+    [{ essentials: 110, fun: -10, future: 0 }],
+    [{ essentials: 50.5, fun: 29.5, future: 20 }],
+  ])('rejects targets that are not whole percents summing to 100 %#', async (targets) => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/family',
+      headers: { cookie },
+      payload: { targets },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('updates name and currencies', async () => {

@@ -4,6 +4,8 @@ import { z } from 'zod';
 export const CURRENCIES = ['EUR', 'INR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'SGD'] as const;
 export type Currency = (typeof CURRENCIES)[number];
 export const CurrencySchema = z.enum(CURRENCIES, 'Unsupported currency');
+/** `?currency=` on read endpoints: show the money in this currency instead of the default. */
+export const ViewQuery = z.object({ currency: CurrencySchema.optional() });
 
 const MICROS = 1_000_000;
 
@@ -88,4 +90,23 @@ export function mergeRates(manual: Rate[], live: Rate[]): Rate[] {
   const pair = (r: Rate) => `${r.month}|${[r.base, r.quote].sort().join('|')}`;
   const taken = new Set(manual.map(pair));
   return [...manual, ...live.filter((r) => !taken.has(pair(r)))];
+}
+
+/** Sum in `to`; amounts without a rate are listed per currency instead of being added 1:1. */
+export function sumConverted(
+  items: { amount: number; currency: string; month: string }[],
+  to: string,
+  rates: Rate[],
+) {
+  let total = 0;
+  const unconverted = new Map<string, number>();
+  for (const i of items) {
+    const v = convert(i.amount, i.currency, to, i.month, rates);
+    if (v === null) unconverted.set(i.currency, (unconverted.get(i.currency) ?? 0) + i.amount);
+    else total += v;
+  }
+  return {
+    total,
+    unconverted: [...unconverted].map(([currency, amount]) => ({ currency, amount })),
+  };
 }

@@ -7,7 +7,9 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
 
   app.get('/dashboard', async (req) => {
-    const { from, to } = parse(DashboardQuery, req.query);
-    return { data: await getDashboard(app.prisma, currentUser(req).familyId, from, to) };
+    const { from, to, currency } = parse(DashboardQuery, req.query);
+    return {
+      data: await getDashboard(app.prisma, currentUser(req).familyId, from, to, currency),
+    };
   });
 };

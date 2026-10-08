@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { loadRates } from './rateService.js';
 import type { Bucket } from '../domain/budget.js';
 import { buildDashboard, monthsBetween, type DashboardTxn } from '../domain/dashboard.js';
+import { CurrencySchema, sumConverted } from '../domain/currency.js';
 import { MONTH_RE, monthRange } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
 import { listAccounts } from './accountService.js';
@@ -12,6 +13,7 @@ import { getFamily } from './familyService.js';
 export const DashboardQuery = z.object({
   from: z.string().regex(MONTH_RE, 'Use a month as YYYY-MM'),
   to: z.string().regex(MONTH_RE, 'Use a month as YYYY-MM'),
+  currency: CurrencySchema.optional(),
 });
 
 export async function getDashboard(
@@ -19,6 +21,7 @@ export async function getDashboard(
   familyId: string,
   from: string,
   to: string,
+  view?: string,
 ) {
   let length: number;
   try {
@@ -62,7 +65,7 @@ export async function getDashboard(
   const dashboard = buildDashboard({
     from,
     to,
-    currency: family.spendingCurrency,
+    currency: view ?? family.spendingCurrency,
     targets: family.targets,
     rates,
     categories,
@@ -80,6 +83,9 @@ export async function getDashboard(
     })),
   });
 
+  const currency = view ?? family.spendingCurrency;
+  const now = new Date().toISOString().slice(0, 7);
+  const live = accounts.filter((a) => !a.archived);
   const balances = new Map<string, number>();
   for (const a of accounts) {
     if (!a.archived) balances.set(a.currency, (balances.get(a.currency) ?? 0) + a.balance);
@@ -87,6 +93,14 @@ export async function getDashboard(
   return {
     ...dashboard,
     targets: family.targets,
+    accountsTotal: {
+      currency,
+      ...sumConverted(
+        live.map((a) => ({ amount: a.balance, currency: a.currency, month: now })),
+        currency,
+        rates,
+      ),
+    },
     firstMonth: first ? first.date.toISOString().slice(0, 7) : null,
     accounts: [...balances]
       .map(([currency, balance]) => ({ currency, balance }))

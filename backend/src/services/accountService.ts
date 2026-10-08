@@ -1,6 +1,8 @@
 import type { Account, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { CurrencySchema } from '../domain/currency.js';
+import { CurrencySchema, sumConverted } from '../domain/currency.js';
+import { getFamily } from './familyService.js';
+import { loadRates } from './rateService.js';
 import { computeBalances, type BalanceTxn } from '../domain/balances.js';
 import { monthBounds } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
@@ -161,4 +163,19 @@ export async function deleteAccount(prisma: PrismaClient, familyId: string, id: 
     );
   }
   await prisma.account.delete({ where: { id } });
+}
+
+/** All open accounts in one currency (default: the wealth currency), at the latest rates. */
+export async function accountsTotal(prisma: PrismaClient, familyId: string, view?: string) {
+  const [family, accounts, rates] = await Promise.all([
+    getFamily(prisma, familyId),
+    listAccounts(prisma, familyId),
+    loadRates(prisma, familyId),
+  ]);
+  const currency = view ?? family.wealthCurrency;
+  const month = new Date().toISOString().slice(0, 7);
+  const items = accounts
+    .filter((a) => !a.archived)
+    .map((a) => ({ amount: a.balance, currency: a.currency, month }));
+  return { currency, ...sumConverted(items, currency, rates) };
 }

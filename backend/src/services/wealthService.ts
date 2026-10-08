@@ -8,6 +8,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import { listAccounts } from './accountService.js';
 import { getFamily } from './familyService.js';
 import { assertMember } from './ownership.js';
+import { convert } from '../domain/currency.js';
 
 const LIABILITY_TYPES = ['mortgage', 'car_loan', 'personal_loan', 'credit_card', 'other'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
@@ -324,7 +325,7 @@ export async function deleteBalance(
 }
 
 // ---------- net worth + snapshots ----------
-async function currentNetWorth(prisma: PrismaClient, familyId: string) {
+async function currentNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
   const [family, rates, members, accounts, assets, liabilities] = await Promise.all([
     getFamily(prisma, familyId),
     loadRates(prisma, familyId),
@@ -338,7 +339,7 @@ async function currentNetWorth(prisma: PrismaClient, familyId: string) {
     listLiabilities(prisma, familyId),
   ]);
   return computeNetWorth({
-    currency: family.wealthCurrency,
+    currency: view ?? family.wealthCurrency,
     month: today().slice(0, 7),
     rates,
     members,
@@ -360,18 +361,36 @@ const snapshotDto = (s: SnapshotRow) => ({
   manual: s.breakdown === null,
 });
 
-export async function getNetWorth(prisma: PrismaClient, familyId: string) {
-  const [current, rows] = await Promise.all([
-    currentNetWorth(prisma, familyId),
+/** Net worth in `view` (default: the wealth currency). Snapshots are converted with the rate of
+ *  their month; one that cannot be converted keeps its own currency. */
+export async function getNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
+  const [current, rows, rates] = await Promise.all([
+    currentNetWorth(prisma, familyId, view),
     prisma.netWorthSnapshot.findMany({
       where: { familyId },
       orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
     }),
+    loadRates(prisma, familyId),
   ]);
-  const snapshots = rows.map(snapshotDto);
+  const to = current.currency;
+  const snapshots = rows.map(snapshotDto).map((s) => {
+    if (s.currency === to) return s;
+    const month = s.date.slice(0, 7);
+    const conv = (v: number | null) =>
+      v === null ? null : convert(v, s.currency, to, month, rates);
+    const netWorth = conv(s.netWorth);
+    if (netWorth === null) return s;
+    return {
+      ...s,
+      currency: to,
+      netWorth,
+      assets: conv(s.assets),
+      liabilities: conv(s.liabilities),
+    };
+  });
   const latestBefore = (days: number) => {
     const cutoff = formatDay(new Date(Date.now() - days * 86_400_000));
-    return [...snapshots].reverse().find((s) => s.date <= cutoff) ?? null;
+    return [...snapshots].reverse().find((s) => s.date <= cutoff && s.currency === to) ?? null;
   };
   return { current, snapshots, previousMonth: latestBefore(28), previousYear: latestBefore(365) };
 }

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { formatDay, parseDay } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertAccount, assertCategory, assertMember } from './ownership.js';
+import { CurrencySchema, sumConverted } from '../domain/currency.js';
+import { loadRates } from './rateService.js';
 
 const TYPES = ['income', 'expense', 'transfer'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
@@ -49,6 +51,8 @@ export const ListQuery = z.object({
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  /** Also total the filtered set in this currency. */
+  currency: CurrencySchema.optional(),
 });
 
 const include = {
@@ -215,15 +219,20 @@ export async function listTransactions(
     total,
     page: q.page,
     pageSize: q.pageSize,
-    totals: await totalsFor(prisma, where),
+    ...(await totalsFor(prisma, familyId, where, q.currency)),
   };
 }
 
 /** Income/expense sums per account currency over the whole filtered set (transfers excluded). */
-async function totalsFor(prisma: PrismaClient, where: Prisma.TransactionWhereInput) {
+async function totalsFor(
+  prisma: PrismaClient,
+  familyId: string,
+  where: Prisma.TransactionWhereInput,
+  view: string | undefined,
+) {
   const rows = await prisma.transaction.findMany({
     where: { AND: [where, { type: { in: ['income', 'expense'] } }] },
-    select: { type: true, amount: true, account: { select: { currency: true } } },
+    select: { type: true, amount: true, date: true, account: { select: { currency: true } } },
   });
   const sums = new Map<string, { currency: string; income: number; expense: number }>();
   for (const r of rows) {
@@ -232,5 +241,35 @@ async function totalsFor(prisma: PrismaClient, where: Prisma.TransactionWhereInp
     entry[r.type as 'income' | 'expense'] += Number(r.amount);
     sums.set(currency, entry);
   }
-  return [...sums.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+  const totals = [...sums.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+  if (!view) return { totals, converted: null };
+  // The same totals in one currency, each transaction at the rate of its month.
+  const rates = await loadRates(prisma, familyId);
+  const part = (type: string) =>
+    sumConverted(
+      rows
+        .filter((r) => r.type === type)
+        .map((r) => ({
+          amount: Number(r.amount),
+          currency: r.account.currency,
+          month: r.date.toISOString().slice(0, 7),
+        })),
+      view,
+      rates,
+    );
+  const income = part('income');
+  const expense = part('expense');
+  const unconverted = new Map<string, number>();
+  for (const u of [...income.unconverted, ...expense.unconverted]) {
+    unconverted.set(u.currency, (unconverted.get(u.currency) ?? 0) + u.amount);
+  }
+  return {
+    totals,
+    converted: {
+      currency: view,
+      income: income.total,
+      expense: expense.total,
+      unconverted: [...unconverted].map(([currency, amount]) => ({ currency, amount })),
+    },
+  };
 }

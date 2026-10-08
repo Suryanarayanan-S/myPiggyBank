@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { ViewQuery } from '../domain/currency.js';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as w from '../services/wealthService.js';
@@ -58,7 +59,9 @@ export const wealthRoutes: FastifyPluginAsync = async (app) => {
     return { data: await w.deleteBalance(app.prisma, fam(req), p.id, p.subId) };
   });
 
-  app.get('/net-worth', async (req) => ({ data: await w.getNetWorth(app.prisma, fam(req)) }));
+  app.get('/net-worth', async (req) => ({
+    data: await w.getNetWorth(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
+  }));
   app.post('/net-worth/snapshots', async (req, reply) =>
     reply.status(201).send({
       data: await w.createSnapshot(app.prisma, fam(req), parse(w.SnapshotInput, req.body)),

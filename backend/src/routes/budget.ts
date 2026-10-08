@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { ViewQuery } from '../domain/currency.js';
 import { parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import {
@@ -20,7 +21,8 @@ export const budgetRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/budget/:month', async (req) => {
     const { month } = parse(MonthParams, req.params);
-    return { data: await getSummary(app.prisma, currentUser(req).familyId, month) };
+    const { currency } = parse(ViewQuery, req.query);
+    return { data: await getSummary(app.prisma, currentUser(req).familyId, month, currency) };
   });
 
   app.put('/budget/:month/limits', async (req) => {

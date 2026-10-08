@@ -6,6 +6,7 @@ import {
   findRate,
   formatRate,
   mergeRates,
+  sumConverted,
   parseRate,
   type Rate,
 } from '../../src/domain/currency.js';
@@ -114,5 +115,21 @@ describe('mergeRates', () => {
   });
   it('drops the overridden live row', () => {
     expect(rates.filter((r) => r.month === '2026-09')).toEqual(manual);
+  });
+});
+
+describe('sumConverted', () => {
+  it('adds what it can convert and lists the rest per currency, never 1:1', () => {
+    const r = sumConverted(
+      [
+        { amount: 1_000, currency: 'EUR', month: '2026-09' },
+        { amount: 978_550, currency: 'INR', month: '2026-09' },
+        { amount: 500, currency: 'USD', month: '2026-09' },
+        { amount: 700, currency: 'USD', month: '2026-09' },
+      ],
+      'EUR',
+      rates,
+    );
+    expect(r).toEqual({ total: 1_000 + 10_000, unconverted: [{ currency: 'USD', amount: 1_200 }] });
   });
 });

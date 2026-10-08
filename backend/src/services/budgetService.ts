@@ -6,6 +6,7 @@ import { MONTH_RE, monthRange, previousMonth } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { listCategories } from './categoryService.js';
 import { getFamily } from './familyService.js';
+import { convert } from '../domain/currency.js';
 
 export const MonthParams = z.object({
   month: z.string().regex(MONTH_RE, 'Use a month as YYYY-MM'),
@@ -20,7 +21,14 @@ export const LimitsInput = z.object({
   limits: z.array(z.object({ categoryId: z.uuid(), amount: cents.nullable() })).max(500),
 });
 
-export async function getSummary(prisma: PrismaClient, familyId: string, month: string) {
+/** The month in `view` (default: the spending currency). Limits are stored in the spending
+ *  currency, so elsewhere they are shown converted and cannot be edited. */
+export async function getSummary(
+  prisma: PrismaClient,
+  familyId: string,
+  month: string,
+  view?: string,
+) {
   const { start, end } = monthRange(month);
   const [family, txns, rates, limits, categories] = await Promise.all([
     getFamily(prisma, familyId),
@@ -39,13 +47,17 @@ export async function getSummary(prisma: PrismaClient, familyId: string, month: 
     prisma.categoryLimit.findMany({ where: { familyId, month } }),
     listCategories(prisma, familyId),
   ]);
-  return summarizeMonth({
+  const currency = view ?? family.spendingCurrency;
+  const summary = summarizeMonth({
     month,
-    currency: family.spendingCurrency,
+    currency,
     targets: family.targets,
     rates,
     categories,
-    limits: limits.map((l) => ({ categoryId: l.categoryId, amount: Number(l.amount) })),
+    limits: limits.flatMap((l) => {
+      const amount = convert(Number(l.amount), family.spendingCurrency, currency, month, rates);
+      return amount === null ? [] : [{ categoryId: l.categoryId, amount }];
+    }),
     txns: txns.map((t): SummaryTxn => ({
       type: t.type as SummaryTxn['type'],
       amount: Number(t.amount),
@@ -56,6 +68,7 @@ export async function getSummary(prisma: PrismaClient, familyId: string, month: 
       isMonthlyTotal: t.isMonthlyTotal,
     })),
   });
+  return { ...summary, limitsEditable: currency === family.spendingCurrency };
 }
 
 export async function setLimits(

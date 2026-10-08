@@ -1,9 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { ViewQuery } from '../domain/currency.js';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import {
   AccountCreate,
   AccountUpdate,
+  accountsTotal,
   createAccount,
   deleteAccount,
   listAccounts,
@@ -15,6 +17,14 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/accounts', async (req) => ({
     data: await listAccounts(app.prisma, currentUser(req).familyId),
+  }));
+
+  app.get('/accounts/total', async (req) => ({
+    data: await accountsTotal(
+      app.prisma,
+      currentUser(req).familyId,
+      parse(ViewQuery, req.query).currency,
+    ),
   }));
 
   app.post('/accounts', async (req, reply) => {

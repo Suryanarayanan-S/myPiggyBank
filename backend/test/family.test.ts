@@ -20,6 +20,7 @@ describe('family settings', () => {
       name: 'Soundararajan',
       spendingCurrency: 'EUR',
       wealthCurrency: 'INR',
+      rateMode: 'manual',
       targets: { essentials: 50, fun: 30, future: 20 },
     });
   });

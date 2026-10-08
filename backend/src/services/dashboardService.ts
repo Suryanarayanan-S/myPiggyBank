@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { loadRates } from './rateService.js';
 import type { Bucket } from '../domain/budget.js';
 import { buildDashboard, monthsBetween, type DashboardTxn } from '../domain/dashboard.js';
 import { MONTH_RE, monthRange } from '../lib/dates.js';
@@ -47,10 +48,7 @@ export async function getDashboard(
         category: { select: { name: true, bucket: true } },
       },
     }),
-    prisma.exchangeRate.findMany({
-      where: { familyId },
-      select: { month: true, base: true, quote: true, rateMicros: true },
-    }),
+    loadRates(prisma, familyId),
     listCategories(prisma, familyId),
     prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
     listAccounts(prisma, familyId),

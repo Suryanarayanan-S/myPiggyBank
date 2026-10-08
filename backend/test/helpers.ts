@@ -11,9 +11,10 @@ export function makeApp(overrides: Partial<AppOptions> = {}) {
   return buildApp({ prisma, config: testConfig, logger: false, ...overrides });
 }
 
-/** Every domain table cascades from Family, so deleting families empties the DB. */
+/** Every domain table cascades from Family, so deleting families empties the DB (plus live rates). */
 export async function resetDb() {
   await prisma.family.deleteMany();
+  await prisma.liveRate.deleteMany(); // public rates, not family data
 }
 
 export async function signUp(

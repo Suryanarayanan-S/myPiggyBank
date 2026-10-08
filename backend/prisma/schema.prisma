@@ -12,6 +12,8 @@ model Family {
   name             String
   spendingCurrency String             @default("EUR")
   wealthCurrency   String             @default("INR")
+  /// "manual" (only hand-entered rates) or "live" (daily ECB rates; hand-entered ones win)
+  rateMode         String             @default("manual")
   /// 50/30/20 bucket targets in whole percent (sum 100)
   targetEssentials Int                @default(50)
   targetFun        Int                @default(30)
@@ -92,6 +94,21 @@ model ExchangeRate {
   updatedAt  DateTime @updatedAt
 
   @@unique([familyId, month, base, quote])
+}
+
+/// Public ECB reference rates (not family data): 1 EUR = rateMicros / 1e6 quote, per month.
+model LiveRate {
+  /// YYYY-MM
+  month      String
+  quote      String
+  rateMicros Int
+  /// ECB date of the rate, YYYY-MM-DD
+  asOf       String
+  /// true once fetched for a finished month (the month-end rate); never fetched again
+  final      Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@id([month, quote])
 }
 
 model Account {

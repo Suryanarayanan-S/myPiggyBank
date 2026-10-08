@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { convert, findRate, formatRate, parseRate, type Rate } from '../../src/domain/currency.js';
+import {
+  CURRENCIES,
+  convert,
+  expandLiveRates,
+  findRate,
+  formatRate,
+  mergeRates,
+  parseRate,
+  type Rate,
+} from '../../src/domain/currency.js';
 
 const rates: Rate[] = [
   { month: '2026-08', base: 'EUR', quote: 'INR', rateMicros: 96_500_000 },
@@ -55,5 +64,55 @@ describe('convert', () => {
   });
   it('returns null when no rate is available', () => {
     expect(convert(100, 'EUR', 'GBP', '2026-09', rates)).toBeNull();
+  });
+});
+
+describe('CURRENCIES', () => {
+  it('covers the ECB set the family may use', () => {
+    expect([...CURRENCIES]).toEqual(['EUR', 'INR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'SGD']);
+  });
+});
+
+describe('expandLiveRates', () => {
+  const live = [
+    { month: '2026-09', quote: 'INR', rateMicros: 100_000_000 },
+    { month: '2026-09', quote: 'USD', rateMicros: 1_250_000 },
+  ];
+  const rates = expandLiveRates(live);
+
+  it('keeps EUR → X', () => {
+    expect(findRate(rates, '2026-09', 'EUR', 'INR')).toBe(100_000_000);
+  });
+  it('derives cross rates through EUR', () => {
+    expect(findRate(rates, '2026-09', 'USD', 'INR')).toBe(80_000_000);
+    expect(findRate(rates, '2026-09', 'INR', 'USD')).toBe(12_500);
+  });
+  it('keeps months apart', () => {
+    const r = expandLiveRates([
+      ...live,
+      { month: '2026-10', quote: 'INR', rateMicros: 90_000_000 },
+    ]);
+    expect(findRate(r, '2026-10', 'EUR', 'INR')).toBe(90_000_000);
+    expect(findRate(r, '2026-10', 'USD', 'INR')).toBe(80_000_000); // USD falls back to September
+  });
+});
+
+describe('mergeRates', () => {
+  const live = expandLiveRates([
+    { month: '2026-09', quote: 'INR', rateMicros: 100_000_000 },
+    { month: '2026-10', quote: 'INR', rateMicros: 101_000_000 },
+  ]);
+  const manual = [{ month: '2026-09', base: 'INR', quote: 'EUR', rateMicros: 10_000 }];
+  const rates = mergeRates(manual, live);
+
+  it('lets a hand-entered rate win for its month, whichever direction it was entered in', () => {
+    expect(findRate(rates, '2026-09', 'EUR', 'INR')).toBe(100_000_000);
+    expect(findRate(rates, '2026-09', 'INR', 'EUR')).toBe(10_000);
+  });
+  it('uses the live rate for other months', () => {
+    expect(findRate(rates, '2026-10', 'EUR', 'INR')).toBe(101_000_000);
+  });
+  it('drops the overridden live row', () => {
+    expect(rates.filter((r) => r.month === '2026-09')).toEqual(manual);
   });
 });

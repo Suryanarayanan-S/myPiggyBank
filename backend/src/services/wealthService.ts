@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { loadRates } from './rateService.js';
 import { CurrencySchema } from '../domain/currency.js';
 import { ASSET_CLASSES, computeNetWorth } from '../domain/networth.js';
 import { formatDay, parseDay } from '../lib/dates.js';
@@ -326,10 +327,7 @@ export async function deleteBalance(
 async function currentNetWorth(prisma: PrismaClient, familyId: string) {
   const [family, rates, members, accounts, assets, liabilities] = await Promise.all([
     getFamily(prisma, familyId),
-    prisma.exchangeRate.findMany({
-      where: { familyId },
-      select: { month: true, base: true, quote: true, rateMicros: true },
-    }),
+    loadRates(prisma, familyId),
     prisma.familyMember.findMany({
       where: { familyId },
       orderBy: { createdAt: 'asc' },

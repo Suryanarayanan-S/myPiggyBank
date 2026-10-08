@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
+import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { generateDue } from './services/recurringService.js';
 
 const config = loadConfig();
@@ -14,7 +15,14 @@ const frontendDist =
     ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist')
     : undefined;
 
-const app = await buildApp({ prisma, config, logger: true, frontendDist });
+const app = await buildApp({
+  prisma,
+  config,
+  logger: true,
+  frontendDist,
+  fetchRates: (url) => fetch(url, { signal: AbortSignal.timeout(15_000) }),
+  ratesUrl: config.RATES_URL,
+});
 
 const shutdown = async () => {
   await app.close();
@@ -33,3 +41,17 @@ const runRecurring = () =>
     .catch((err) => app.log.error(err, 'recurring generation failed'));
 await runRecurring();
 setInterval(runRecurring, 60 * 60 * 1000).unref();
+
+// Live exchange rates: only downloaded when a family chose them; checked every 6 hours.
+const runRates = async () => {
+  if (!app.liveRates || !(await liveRatesWanted(prisma))) return;
+  const status = await refreshLiveRates(
+    prisma,
+    app.liveRates.fetch,
+    new Date().toISOString().slice(0, 10),
+    app.liveRates.url,
+  );
+  if (status.lastError) app.log.warn({ error: status.lastError }, 'live rate download failed');
+};
+void runRates().catch((err) => app.log.error(err, 'live rate download failed'));
+setInterval(() => void runRates().catch(() => {}), 6 * 60 * 60 * 1000).unref();

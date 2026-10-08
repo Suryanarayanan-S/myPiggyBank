@@ -1,6 +1,13 @@
 import type { ExchangeRate, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { CurrencySchema, formatRate, parseRate } from '../domain/currency.js';
+import {
+  CurrencySchema,
+  expandLiveRates,
+  formatRate,
+  mergeRates,
+  parseRate,
+  type Rate,
+} from '../domain/currency.js';
 import { notFound } from '../lib/errors.js';
 
 // rateMicros is a 32-bit column; 2000 covers every supported pair (e.g. GBP→INR ≈ 110).
@@ -56,4 +63,19 @@ export async function upsertRate(
 export async function deleteRate(prisma: PrismaClient, familyId: string, id: string) {
   const { count } = await prisma.exchangeRate.deleteMany({ where: { id, familyId } });
   if (!count) throw notFound('Exchange rate');
+}
+
+const rateSelect = { month: true, base: true, quote: true, rateMicros: true } as const;
+
+/** The rates conversions use: hand-entered ones, plus live ones when the family chose live mode. */
+export async function loadRates(prisma: PrismaClient, familyId: string): Promise<Rate[]> {
+  const [family, manual] = await Promise.all([
+    prisma.family.findUniqueOrThrow({ where: { id: familyId }, select: { rateMode: true } }),
+    prisma.exchangeRate.findMany({ where: { familyId }, select: rateSelect }),
+  ]);
+  if (family.rateMode !== 'live') return manual;
+  const live = await prisma.liveRate.findMany({
+    select: { month: true, quote: true, rateMicros: true },
+  });
+  return mergeRates(manual, expandLiveRates(live));
 }

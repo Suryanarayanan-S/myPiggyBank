@@ -9,6 +9,7 @@ export const FamilyInput = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100).optional(),
   spendingCurrency: CurrencySchema.optional(),
   wealthCurrency: CurrencySchema.optional(),
+  rateMode: z.enum(['manual', 'live']).optional(),
   targets: z
     .object({ essentials: pct, fun: pct, future: pct })
     .refine((t) => t.essentials + t.fun + t.future === 100, 'Targets must add up to 100 %')
@@ -20,21 +21,26 @@ const select = {
   name: true,
   spendingCurrency: true,
   wealthCurrency: true,
+  rateMode: true,
   targetEssentials: true,
   targetFun: true,
   targetFuture: true,
 } as const;
 
-type Row = { id: string; name: string; spendingCurrency: string; wealthCurrency: string } & Record<
-  'targetEssentials' | 'targetFun' | 'targetFuture',
-  number
->;
+type Row = {
+  id: string;
+  name: string;
+  spendingCurrency: string;
+  wealthCurrency: string;
+  rateMode: string;
+} & Record<'targetEssentials' | 'targetFun' | 'targetFuture', number>;
 
 const toDto = (f: Row) => ({
   id: f.id,
   name: f.name,
   spendingCurrency: f.spendingCurrency,
   wealthCurrency: f.wealthCurrency,
+  rateMode: f.rateMode as 'manual' | 'live',
   targets: { essentials: f.targetEssentials, fun: f.targetFun, future: f.targetFuture },
 });
 export type FamilyDto = ReturnType<typeof toDto>;

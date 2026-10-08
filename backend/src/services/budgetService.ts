@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { loadRates } from './rateService.js';
 import { summarizeMonth, type Bucket, type SummaryTxn } from '../domain/budget.js';
 import { MONTH_RE, monthRange, previousMonth } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
@@ -34,10 +35,7 @@ export async function getSummary(prisma: PrismaClient, familyId: string, month: 
         category: { select: { name: true, bucket: true } },
       },
     }),
-    prisma.exchangeRate.findMany({
-      where: { familyId },
-      select: { month: true, base: true, quote: true, rateMicros: true },
-    }),
+    loadRates(prisma, familyId),
     prisma.categoryLimit.findMany({ where: { familyId, month } }),
     listCategories(prisma, familyId),
   ]);

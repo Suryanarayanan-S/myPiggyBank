@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
+import { AppError } from '../lib/errors.js';
+import { liveStatus, refreshLiveRates } from '../services/liveRateService.js';
 import { RateInput, deleteRate, listRates, upsertRate } from '../services/rateService.js';
 
 export const rateRoutes: FastifyPluginAsync = async (app) => {
@@ -13,6 +15,18 @@ export const rateRoutes: FastifyPluginAsync = async (app) => {
   app.put('/exchange-rates', async (req) => {
     const input = parse(RateInput, req.body);
     return { data: await upsertRate(app.prisma, currentUser(req).familyId, input) };
+  });
+
+  app.get('/exchange-rates/live', async () => ({ data: await liveStatus(app.prisma) }));
+
+  app.post('/exchange-rates/live/refresh', async () => {
+    if (!app.liveRates) {
+      throw new AppError(503, 'LIVE_RATES_OFF', 'This server is not set up to download rates');
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      data: await refreshLiveRates(app.prisma, app.liveRates.fetch, today, app.liveRates.url),
+    };
   });
 
   app.delete('/exchange-rates/:id', async (req) => {

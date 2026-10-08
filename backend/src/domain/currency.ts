@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-export const CURRENCIES = ['EUR', 'INR', 'USD', 'GBP'] as const;
+// All in the ECB reference set (live rates) and all with 2 decimals (minor units = cents).
+export const CURRENCIES = ['EUR', 'INR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'SGD'] as const;
 export type Currency = (typeof CURRENCIES)[number];
 export const CurrencySchema = z.enum(CURRENCIES, 'Unsupported currency');
 
@@ -54,4 +55,37 @@ export function convert(
   if (micros === null) return null;
   const abs = (BigInt(Math.abs(cents)) * BigInt(micros) + BigInt(MICROS / 2)) / BigInt(MICROS);
   return Number(abs) * (cents < 0 ? -1 : 1);
+}
+
+/** A live reference rate: 1 EUR = rateMicros / 1e6 `quote`, for `month`. */
+export type LiveRate = { month: string; quote: string; rateMicros: number };
+
+/** Live EUR → X rates as every pair among the published currencies (cross rates via EUR). */
+export function expandLiveRates(live: LiveRate[]): Rate[] {
+  const byMonth = new Map<string, Map<string, number>>();
+  for (const r of live) {
+    const m = byMonth.get(r.month) ?? new Map([['EUR', MICROS]]);
+    m.set(r.quote, r.rateMicros);
+    byMonth.set(r.month, m);
+  }
+  const out: Rate[] = [];
+  for (const [month, m] of byMonth) {
+    const codes = [...m.keys()];
+    for (const base of codes) {
+      for (const quote of codes) {
+        // One direction per pair is enough: findRate inverts. EUR-based pairs stay exact.
+        if (base === quote || (base !== 'EUR' && (quote === 'EUR' || base > quote))) continue;
+        const rateMicros = Math.round((m.get(quote)! * MICROS) / m.get(base)!);
+        if (rateMicros > 0) out.push({ month, base, quote, rateMicros });
+      }
+    }
+  }
+  return out;
+}
+
+/** Hand-entered rates win over live ones for the same month and currency pair. */
+export function mergeRates(manual: Rate[], live: Rate[]): Rate[] {
+  const pair = (r: Rate) => `${r.month}|${[r.base, r.quote].sort().join('|')}`;
+  const taken = new Set(manual.map(pair));
+  return [...manual, ...live.filter((r) => !taken.has(pair(r)))];
 }

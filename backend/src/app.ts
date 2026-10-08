@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import type { PrismaClient } from '@prisma/client';
 import type { Config } from './config.js';
+import { DEFAULT_RATES_URL, type FetchRates } from './services/liveRateService.js';
 import { AppError } from './lib/errors.js';
 import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
@@ -31,6 +32,9 @@ export interface AppOptions {
   /** Absolute path to frontend/dist; when set, the SPA is served from Fastify. */
   frontendDist?: string;
   loginRateLimit?: { max: number; timeWindow: string };
+  /** Downloads live exchange rates; without it the server never goes online for rates. */
+  fetchRates?: FetchRates;
+  ratesUrl?: string;
 }
 
 function safeHost(origin: string): string | null {
@@ -46,6 +50,10 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   app.decorate('prisma', opts.prisma);
   app.decorate('appConfig', opts.config);
+  app.decorate(
+    'liveRates',
+    opts.fetchRates ? { fetch: opts.fetchRates, url: opts.ratesUrl ?? DEFAULT_RATES_URL } : null,
+  );
   app.decorateRequest('user', null);
 
   // Only JSON bodies are accepted; text/plain is a CORS-"simple" type usable for CSRF.

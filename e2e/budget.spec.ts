@@ -54,9 +54,18 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await expect(page.getByText('21.0 %')).toBeVisible(); // essentials share
   await expect(page.getByText(/below its 20 % target/)).toBeVisible(); // future you 10.1 %
 
+  const essentials = page.getByRole('region', { name: 'Essentials' });
+  await expect(essentials.getByText('Phone')).toBeHidden(); // nothing spent: folded away
+  await essentials.getByRole('button', { name: /more with no spending/ }).click();
+  await expect(essentials.getByText('Phone')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Set limit for Groceries' }).click();
   await page.getByLabel('Limit for Groceries').fill('250');
   await page.getByLabel('Limit for Groceries').press('Enter');
   await expect(page.getByText('46,00 € over')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change limit for Groceries' })).toHaveText(
+    'Limit 250,00 €',
+  );
   await shot(page, '08-budget');
 
   await page.setViewportSize({ width: 390, height: 844 });

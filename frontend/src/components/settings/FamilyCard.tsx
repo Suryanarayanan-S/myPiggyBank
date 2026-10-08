@@ -17,7 +17,8 @@ export function FamilyCard({ family, email }: { family: Family; email: string })
   });
   const save = useMutation({
     mutationFn: () => api.put('/family', form),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['me'] }),
+    // Currencies change every converted figure, so refresh everything.
+    onSuccess: () => queryClient.invalidateQueries(),
   });
   const dirty =
     form.name !== family.name ||

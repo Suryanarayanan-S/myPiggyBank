@@ -16,6 +16,8 @@ import { useAccounts, useCategories, useMembers } from '../lib/queries';
 import { BUCKETS, type Page, type Transaction } from '../lib/types';
 import { isMonth, localMonth, monthEnd } from '../lib/months';
 import { MonthNav } from '../components/ui/MonthNav';
+import { useViewCurrency } from '../lib/viewCurrency';
+import { useMe } from '../auth/auth';
 
 const PAGE_SIZE = 100;
 const dayLabel = (d: string) =>
@@ -40,6 +42,8 @@ export function TransactionsPage() {
     setParams(next, { replace: true });
   };
   const [editing, setEditing] = useState<Transaction | 'new' | null>(null);
+  const me = useMe();
+  const [view] = useViewCurrency();
   const accounts = useAccounts();
   const categories = useCategories();
   const members = useMembers();
@@ -52,6 +56,9 @@ export function TransactionsPage() {
   });
   for (const k of ['type', 'accountId', 'categoryId', 'memberId', 'q'])
     if (filter(k)) query.set(k, filter(k));
+  // Totals are also given in one currency: the chosen one, else the spending currency.
+  const totalIn = view === 'default' ? me.data?.family.spendingCurrency : view;
+  if (totalIn) query.set('currency', totalIn);
   const txns = useQuery({
     queryKey: ['transactions', query.toString()],
     queryFn: () => api.get<Page<Transaction>>(`/transactions?${query}`),
@@ -78,6 +85,11 @@ export function TransactionsPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {txns.data?.converted &&
+          (txns.data.totals.length > 1 ||
+            txns.data.totals[0]?.currency !== txns.data.converted.currency) && (
+            <ConvertedTotals c={txns.data.converted} />
+          )}
         {txns.data?.totals.map(({ currency, ...t }) => (
           <Card key={currency} className="!p-4">
             <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
@@ -248,5 +260,30 @@ export function TransactionsPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function ConvertedTotals({ c }: { c: NonNullable<Page<Transaction>['converted']> }) {
+  return (
+    <Card className="!p-4">
+      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        All in {c.currency}
+      </p>
+      <div className="mt-1 flex justify-between text-sm">
+        <span>Income</span>
+        <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+          {formatMoney(c.income, c.currency)}
+        </span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span>Expenses</span>
+        <span className="font-medium tabular-nums">{formatMoney(c.expense, c.currency)}</span>
+      </div>
+      {c.unconverted.length > 0 && (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+          Without a rate: {c.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
+        </p>
+      )}
+    </Card>
   );
 }

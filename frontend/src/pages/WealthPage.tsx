@@ -26,6 +26,7 @@ import {
   type Liability,
   type NetWorthResponse,
 } from '../lib/wealthTypes';
+import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 type Dialog =
   | { kind: 'asset'; item?: Asset }
@@ -36,9 +37,10 @@ type Dialog =
 export function WealthPage() {
   const me = useMe();
   const members = useMembers();
+  const [view] = useViewCurrency();
   const nw = useQuery({
-    queryKey: ['net-worth'],
-    queryFn: () => api.get<NetWorthResponse>('/net-worth'),
+    queryKey: ['net-worth', view],
+    queryFn: () => api.get<NetWorthResponse>(withView('/net-worth', view)),
   });
   const assets = useQuery({ queryKey: ['assets'], queryFn: () => api.get<Asset[]>('/assets') });
   const liabilities = useQuery({
@@ -46,7 +48,8 @@ export function WealthPage() {
     queryFn: () => api.get<Liability[]>('/liabilities'),
   });
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const currency = me.data?.family.wealthCurrency ?? 'INR';
+  const wealthCurrency = me.data?.family.wealthCurrency ?? 'INR';
+  const currency = nw.data?.current.currency ?? wealthCurrency;
   const owner = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
   const close = () => setDialog(null);
@@ -195,16 +198,16 @@ export function WealthPage() {
         </Card>
       </div>
 
-      {nw.data && <SnapshotHistory data={nw.data} />}
+      {nw.data && <SnapshotHistory data={nw.data} wealthCurrency={wealthCurrency} />}
 
       {dialog?.kind === 'asset' && (
         <Modal title={dialog.item ? `Edit ${dialog.item.name}` : 'Add asset'} onClose={close}>
-          <AssetForm asset={dialog.item} currency={currency} onDone={close} />
+          <AssetForm asset={dialog.item} currency={wealthCurrency} onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'liability' && (
         <Modal title={dialog.item ? `Edit ${dialog.item.name}` : 'Add loan'} onClose={close}>
-          <LiabilityForm liability={dialog.item} currency={currency} onDone={close} />
+          <LiabilityForm liability={dialog.item} currency={wealthCurrency} onDone={close} />
         </Modal>
       )}
       {(dialog?.kind === 'asset-history' || dialog?.kind === 'liability-history') && (

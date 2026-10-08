@@ -11,12 +11,14 @@ export type Family = {
   name: string;
   spendingCurrency: string;
   wealthCurrency: string;
+  rateMode: 'manual' | 'live';
   targets: { essentials: number; fun: number; future: number };
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };
 
-export const CURRENCIES = ['EUR', 'INR', 'USD', 'GBP'] as const;
+export const CURRENCIES = ['EUR', 'INR', 'USD', 'GBP', 'CHF', 'AUD', 'CAD', 'SGD'] as const;
+export type Currency = (typeof CURRENCIES)[number];
 
 export const ACCOUNT_TYPES = {
   current: 'Current account',
@@ -90,6 +92,13 @@ export type Page<T> = {
   page: number;
   pageSize: number;
   totals: CurrencyTotals[];
+  /** The same totals in one currency (present when the request named one). */
+  converted: {
+    currency: string;
+    income: number;
+    expense: number;
+    unconverted: { currency: string; amount: number }[];
+  } | null;
 };
 
 export type Rate = { id: string; month: string; base: string; quote: string; rate: string };
@@ -127,6 +136,8 @@ export type MonthSummary = {
   buckets: BucketSummary[];
   categories: CategorySummary[];
   unconverted: { currency: string; amount: number }[];
+  /** Limits are stored in the spending currency; in another view currency they are read-only. */
+  limitsEditable: boolean;
 };
 export type MonthEntry = {
   month: string;

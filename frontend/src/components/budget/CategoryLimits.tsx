@@ -19,14 +19,14 @@ const BUCKET_COLOR: Record<Bucket, string> = {
   future: 'var(--c-future)',
 };
 
-type Save = (limit: { categoryId: string; amount: number | null }) => void;
+type Save = ((limit: { categoryId: string; amount: number | null }) => void) | null;
 
 export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: React.ReactNode }) {
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: (limit: { categoryId: string; amount: number | null }) =>
       api.put<MonthSummary>(`/budget/${s.month}/limits`, { limits: [limit] }),
-    onSuccess: (data) => queryClient.setQueryData(['budget', s.month], data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budget', s.month] }),
   });
   const groups = groupCategories(s.categories);
   const uncategorised = s.categories.find((c) => c.categoryId === null && c.actual > 0);
@@ -34,7 +34,10 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
   return (
     <Card title="Categories" actions={actions}>
       <p className="mb-4 text-sm text-slate-500">
-        Where the money went this month. Set an optional monthly limit on any category.
+        Where the money went this month.{' '}
+        {s.limitsEditable
+          ? 'Set an optional monthly limit on any category.'
+          : `Limits are shown converted to ${s.currency}; switch to your spending currency to change them.`}
       </p>
       <FormError error={save.error} />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -67,7 +70,7 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
                   c={c}
                   currency={s.currency}
                   color={BUCKET_COLOR[g.bucket]}
-                  save={save.mutate}
+                  save={s.limitsEditable ? save.mutate : null}
                 />
               ))}
             </ul>
@@ -75,7 +78,7 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
               key={`${s.month}-${g.bucket}`}
               rows={g.hidden}
               currency={s.currency}
-              save={save.mutate}
+              save={s.limitsEditable ? save.mutate : null}
             />
           </section>
         ))}
@@ -151,6 +154,13 @@ function Row({
 function LimitEditor({ c, currency, save }: { c: CategorySummary; currency: string; save: Save }) {
   const [editing, setEditing] = useState(false);
   if (!c.categoryId) return null;
+  if (!save) {
+    return c.limit === null ? null : (
+      <span className="px-1 text-slate-500 tabular-nums">
+        Limit {formatMoney(c.limit, currency)}
+      </span>
+    );
+  }
   if (!editing) {
     return (
       <button

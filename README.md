@@ -97,6 +97,15 @@ docker compose start
 
 To move to another laptop: copy the backup file over, run `./scripts/setup.sh` there, then `npm run restore -- <file>`.
 
+## Currencies and exchange rates
+
+- **Entering money:** a transaction uses its account's currency, so add an account per currency (e.g. Sparkasse in EUR, ICICI in INR). Assets and loans each have their own currency. Supported: EUR, INR, USD, GBP, CHF, AUD, CAD, SGD.
+- **Show in:** the coin picker at the top of the sidebar (or the phone header) shows every page in one currency. _Default_ keeps each page's own currency: spending pages in the spending currency, wealth and accounts in the wealth currency (both set in Settings). Monthly figures use that month's rate; balances and net worth use the latest. Budget limits and snapshots are stored in their own currency, so they can only be changed in Default view.
+- **Rates** (Settings → Exchange rates):
+  - _Only my rates_ — one hand-entered rate per month; a month without one uses the latest earlier month.
+  - _Live (daily ECB)_ — the server downloads the official European Central Bank reference rates from [Frankfurter](https://frankfurter.dev) once at start and every 6 hours (only the rate list is fetched; no data of yours is sent). Past months use their month-end rate. A rate you enter yourself still wins for its month. Offline, the last downloaded rates are kept. The source can be changed with `RATES_URL` in `.env`.
+- Amounts that have no rate are never added 1:1: they are listed separately as "without a rate".
+
 ## Looks: modern and retro
 
 Click the controller icon (top of the sidebar, the phone header, or the login page) to switch between the **modern** look (follows your system light/dark setting) and the **retro 8-bit** look (PICO-8 colours, pixel fonts, "PRESS START" screen). Click again to switch back; the choice is remembered on this device. The start screen is skipped for people who prefer reduced motion.

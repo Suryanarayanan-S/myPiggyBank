@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, Trash2 } from 'lucide-react';
+import clsx from 'clsx';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Field, FormError } from '../ui/Field';
@@ -18,6 +19,8 @@ const monthLabel = (m: string) =>
     timeZone: 'UTC',
   });
 
+type LiveStatus = { asOf: string | null; fetchedAt: string | null; lastError: string | null };
+
 export function RatesCard({ family }: { family: Family }) {
   const rates = useRates();
   const queryClient = useQueryClient();
@@ -27,7 +30,8 @@ export function RatesCard({ family }: { family: Family }) {
     quote: family.wealthCurrency === family.spendingCurrency ? 'INR' : family.wealthCurrency,
     rate: '',
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['rates'] });
+  // Rates change every converted figure, so refresh everything (not just this list).
+  const refresh = () => queryClient.invalidateQueries();
   const save = useMutation({
     mutationFn: () => api.put('/exchange-rates', form),
     onSuccess: async () => {
@@ -40,12 +44,86 @@ export function RatesCard({ family }: { family: Family }) {
     onSuccess: refresh,
   });
 
+  const live = family.rateMode === 'live';
+  const status = useQuery({
+    queryKey: ['rates', 'live'],
+    queryFn: () => api.get<LiveStatus>('/exchange-rates/live'),
+    enabled: live,
+  });
+  const download = useMutation({
+    mutationFn: () => api.post<LiveStatus>('/exchange-rates/live/refresh'),
+    onSuccess: refresh,
+  });
+  const mode = useMutation({
+    mutationFn: (rateMode: 'manual' | 'live') => api.put('/family', { rateMode }),
+    onSuccess: async (_d, rateMode) => {
+      await refresh();
+      if (rateMode === 'live') download.mutate();
+    },
+  });
+
   return (
     <Card title="Exchange rates">
-      <p className="mb-4 text-sm text-slate-500">
-        One rate per month, used to convert between currencies (e.g. India spending into your EUR
-        month). If a month has no rate, the latest earlier month is used.
-      </p>
+      <div
+        role="radiogroup"
+        aria-label="Exchange rate source"
+        className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700"
+      >
+        {(
+          [
+            ['live', 'Live (daily ECB)'],
+            ['manual', 'Only my rates'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={family.rateMode === value}
+            disabled={mode.isPending}
+            onClick={() => family.rateMode !== value && mode.mutate(value)}
+            className={clsx(
+              'rounded-md px-3 py-1.5 text-sm font-medium',
+              family.rateMode === value
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {live ? (
+        <div className="mb-4 space-y-1 text-sm text-slate-500">
+          <p>
+            Official European Central Bank reference rates, downloaded once a day (only the rates
+            are fetched; none of your data leaves this computer). Past months use their month-end
+            rate. A rate you enter below wins for its month.
+          </p>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>
+              {status.data?.asOf
+                ? `Rates from ${status.data.asOf}.`
+                : download.isPending
+                  ? 'Downloading rates…'
+                  : 'No rates downloaded yet.'}
+            </span>
+            {status.data?.lastError && (
+              <span className="text-amber-700 dark:text-amber-400">
+                Last download failed: {status.data.lastError}
+              </span>
+            )}
+            <Button variant="ghost" disabled={download.isPending} onClick={() => download.mutate()}>
+              <RefreshCw size={14} aria-hidden /> Update now
+            </Button>
+          </p>
+        </div>
+      ) : (
+        <p className="mb-4 text-sm text-slate-500">
+          One rate per month, used to convert between currencies (e.g. India spending into your EUR
+          month). If a month has no rate, the latest earlier month is used.
+        </p>
+      )}
       <form
         className="grid grid-cols-2 items-end gap-3 sm:grid-cols-5"
         onSubmit={(e) => {
@@ -99,7 +177,7 @@ export function RatesCard({ family }: { family: Family }) {
         </Button>
       </form>
       <div className="mt-2">
-        <FormError error={save.error ?? remove.error} />
+        <FormError error={save.error ?? remove.error ?? mode.error ?? download.error} />
       </div>
       <ul className="mt-4 divide-y divide-slate-200 text-sm dark:divide-slate-800">
         {rates.data?.map((r) => (

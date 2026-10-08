@@ -16,11 +16,13 @@ import { insightsFor } from '../lib/insights';
 import { formatMoney } from '../lib/money';
 import { isMonth, localMonth, monthTitle } from '../lib/months';
 import { PRESETS, periodRange, type Preset } from '../lib/periods';
+import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 export function DashboardPage() {
   const me = useMe();
   const [params, setParams] = useSearchParams();
   const today = localMonth();
+  const [view] = useViewCurrency();
   const preset = (
     PRESETS.some((p) => p.value === params.get('period')) ? params.get('period') : 'last-12'
   ) as Preset;
@@ -38,8 +40,9 @@ export function DashboardPage() {
   });
   const range = periodRange(preset, today, first.data ?? null, custom);
   const dash = useQuery({
-    queryKey: ['dashboard', range.from, range.to],
-    queryFn: () => api.get<Dashboard>(`/dashboard?from=${range.from}&to=${range.to}`),
+    queryKey: ['dashboard', range.from, range.to, view],
+    queryFn: () =>
+      api.get<Dashboard>(withView(`/dashboard?from=${range.from}&to=${range.to}`, view)),
     placeholderData: keepPreviousData,
     enabled: preset !== 'all' || first.isSuccess,
   });
@@ -130,6 +133,23 @@ export function DashboardPage() {
           {d.accounts.length > 0 && (
             <Card title="Account balances today">
               <dl className="flex flex-wrap gap-x-8 gap-y-2">
+                {(d.accounts.length > 1 || d.accounts[0]?.currency !== d.currency) && (
+                  <div>
+                    <dt className="text-xs text-slate-500">All accounts in {d.currency}</dt>
+                    <dd className="text-lg font-semibold">
+                      {formatMoney(d.accountsTotal.total, d.currency)}
+                      {d.accountsTotal.unconverted.length > 0 && (
+                        <span className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400">
+                          +{' '}
+                          {d.accountsTotal.unconverted
+                            .map((u) => formatMoney(u.amount, u.currency))
+                            .join(' + ')}{' '}
+                          without a rate
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                )}
                 {d.accounts.map((a) => (
                   <div key={a.currency}>
                     <dt className="text-xs text-slate-500">{a.currency} accounts</dt>

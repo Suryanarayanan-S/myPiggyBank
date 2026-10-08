@@ -7,6 +7,7 @@ import { useMe } from '../auth/auth';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
 import { Brand } from './Brand';
+import { CurrencySwitch } from '../components/CurrencySwitch';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { navItems } from './nav';
 
@@ -29,6 +30,9 @@ export function AppShell() {
         <div className="flex items-center justify-between gap-2 px-5 py-5">
           <Brand />
           <ThemeToggle compact />
+        </div>
+        <div className="-mt-2 px-3 pb-3">
+          <CurrencySwitch label />
         </div>
         <nav className="flex-1 space-y-1 px-3">
           {navItems.map((item) => (
@@ -67,6 +71,7 @@ export function AppShell() {
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden dark:border-slate-800 dark:bg-slate-900">
           <Brand />
           <span className="flex items-center gap-1">
+            <CurrencySwitch />
             <ThemeToggle compact />
             <Button variant="ghost" aria-label="Log out" onClick={() => logout.mutate()}>
               <LogOut size={18} aria-hidden />

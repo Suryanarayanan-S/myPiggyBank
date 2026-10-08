@@ -26,4 +26,13 @@ export type Dashboard = {
   targets: { essentials: number; fun: number; future: number };
   firstMonth: string | null;
   accounts: { currency: string; balance: number }[];
+  /** Open accounts together, in the dashboard currency at today's rate. */
+  accountsTotal: Converted;
+};
+
+/** A total in one currency plus whatever had no exchange rate (never added 1:1). */
+export type Converted = {
+  currency: string;
+  total: number;
+  unconverted: { currency: string; amount: number }[];
 };

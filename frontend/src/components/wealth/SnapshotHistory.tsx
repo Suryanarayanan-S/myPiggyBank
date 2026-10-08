@@ -23,12 +23,21 @@ import { formatCompact, formatMoney, parseAmountInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import type { NetWorthResponse } from '../../lib/wealthTypes';
 
-export function SnapshotHistory({ data }: { data: NetWorthResponse }) {
+export function SnapshotHistory({
+  data,
+  wealthCurrency,
+}: {
+  data: NetWorthResponse;
+  wealthCurrency: string;
+}) {
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['net-worth'] });
   const [modal, setModal] = useState<'today' | 'past' | null>(null);
   const currency = data.current.currency;
-  const snaps = data.snapshots;
+  // Snapshots are saved in the wealth currency; one that could not be converted keeps its own
+  // currency and stays out of the chart (it is still listed below).
+  const snaps = data.snapshots.filter((s) => s.currency === currency);
+  const editable = currency === wealthCurrency;
   const update = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) =>
       api.put(`/net-worth/snapshots/${id}`, { note: note || null }),
@@ -49,11 +58,21 @@ export function SnapshotHistory({ data }: { data: NetWorthResponse }) {
         table={
           <DataTable
             head={['Date', 'Net worth', 'Note']}
-            rows={snaps.map((s) => [s.date, formatMoney(s.netWorth, s.currency), s.note ?? ''])}
+            rows={data.snapshots.map((s) => [
+              s.date,
+              formatMoney(s.netWorth, s.currency),
+              s.note ?? '',
+            ])}
           />
         }
       >
-        <div className="mb-4 flex flex-wrap gap-2">
+        {!editable && (
+          <p className="mb-4 text-sm text-slate-500">
+            Shown in {currency}. Snapshots are saved in {wealthCurrency}; switch “Show in” to
+            Default to add one.
+          </p>
+        )}
+        <div className={editable ? 'mb-4 flex flex-wrap gap-2' : 'hidden'}>
           <Button onClick={() => setModal('today')}>
             <Camera size={16} aria-hidden /> Save today’s snapshot
           </Button>
@@ -118,7 +137,7 @@ export function SnapshotHistory({ data }: { data: NetWorthResponse }) {
           </div>
         )}
         <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
-          {[...snaps].reverse().map((s) => (
+          {[...data.snapshots].reverse().map((s) => (
             <li
               key={s.id}
               className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-x-3 gap-y-1 py-2 sm:grid-cols-[6.5rem_7rem_1fr_auto]"
@@ -153,7 +172,7 @@ export function SnapshotHistory({ data }: { data: NetWorthResponse }) {
               </button>
             </li>
           ))}
-          {snaps.length === 0 && (
+          {data.snapshots.length === 0 && (
             <li className="py-2 text-slate-500">
               No snapshots yet. Save today’s, and add past entries from your old sheet.
             </li>

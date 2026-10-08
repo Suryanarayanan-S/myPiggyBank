@@ -16,6 +16,7 @@ import { api } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import { isMonth, localMonth } from '../lib/months';
 import type { MonthSummary } from '../lib/types';
+import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 export function BudgetPage() {
   const [params, setParams] = useSearchParams();
@@ -23,14 +24,15 @@ export function BudgetPage() {
   const me = useMe();
   const queryClient = useQueryClient();
   const [editTargets, setEditTargets] = useState(false);
+  const [view] = useViewCurrency();
 
   const summary = useQuery({
-    queryKey: ['budget', month],
-    queryFn: () => api.get<MonthSummary>(`/budget/${month}`),
+    queryKey: ['budget', month, view],
+    queryFn: () => api.get<MonthSummary>(withView(`/budget/${month}`, view)),
   });
   const copy = useMutation({
     mutationFn: () => api.post<MonthSummary>(`/budget/${month}/copy-previous`),
-    onSuccess: (data) => queryClient.setQueryData(['budget', month], data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budget', month] }),
   });
   const s = summary.data;
 
@@ -80,9 +82,11 @@ export function BudgetPage() {
           <CategoryLimits
             s={s}
             actions={
-              <Button variant="ghost" disabled={copy.isPending} onClick={() => copy.mutate()}>
-                <Copy size={16} aria-hidden /> Copy last month’s limits
-              </Button>
+              s.limitsEditable && (
+                <Button variant="ghost" disabled={copy.isPending} onClick={() => copy.mutate()}>
+                  <Copy size={16} aria-hidden /> Copy last month’s limits
+                </Button>
+              )
             }
           />
         </>

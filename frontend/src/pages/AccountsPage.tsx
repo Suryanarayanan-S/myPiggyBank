@@ -9,10 +9,22 @@ import { Modal } from '../components/ui/Modal';
 import { formatMoney } from '../lib/money';
 import { useAccounts, useMembers } from '../lib/queries';
 import { ACCOUNT_TYPES, type Account } from '../lib/types';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import type { Converted } from '../lib/dashboardTypes';
+import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 export function AccountsPage() {
   const me = useMe();
   const accounts = useAccounts();
+  const [view] = useViewCurrency();
+  const total = useQuery({
+    queryKey: ['accounts', 'total', view],
+    queryFn: () => api.get<Converted>(withView('/accounts/total', view)),
+  });
+  const currencies = new Set(
+    (accounts.data ?? []).filter((a) => !a.archived).map((a) => a.currency),
+  );
   const members = useMembers();
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
   const memberName = (id: string | null) =>
@@ -39,6 +51,22 @@ export function AccountsPage() {
             No accounts yet. Add your bank accounts, cash and cards — e.g. Sparkasse (EUR) or ICICI
             (INR).
           </p>
+        </Card>
+      )}
+
+      {total.data && (currencies.size > 1 || !currencies.has(total.data.currency)) && (
+        <Card>
+          <p className="text-sm text-slate-500">All open accounts in {total.data.currency}</p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {formatMoney(total.data.total, total.data.currency)}
+          </p>
+          {total.data.unconverted.length > 0 && (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+              Plus{' '}
+              {total.data.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(' and ')}{' '}
+              without an exchange rate.
+            </p>
+          )}
         </Card>
       )}
 

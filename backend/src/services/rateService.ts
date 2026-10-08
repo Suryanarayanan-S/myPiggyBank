@@ -2,6 +2,7 @@ import type { ExchangeRate, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import {
   CurrencySchema,
+  applyManualToLive,
   expandLiveRates,
   formatRate,
   mergeRates,
@@ -77,5 +78,5 @@ export async function loadRates(prisma: PrismaClient, familyId: string): Promise
   const live = await prisma.liveRate.findMany({
     select: { month: true, quote: true, rateMicros: true },
   });
-  return mergeRates(manual, expandLiveRates(live));
+  return mergeRates(manual, expandLiveRates(applyManualToLive(live, manual)));
 }

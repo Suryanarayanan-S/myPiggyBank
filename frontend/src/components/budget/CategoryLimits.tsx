@@ -83,6 +83,18 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
           </section>
         ))}
       </div>
+      {s.unconvertedLimits.length > 0 && (
+        <p className="mt-4 text-sm text-amber-700 dark:text-amber-400">
+          No exchange rate to {s.currency} for these limits, so they are not compared:{' '}
+          {s.unconvertedLimits
+            .map(
+              (l) =>
+                `${s.categories.find((c) => c.categoryId === l.categoryId)?.name ?? 'Category'} ${formatMoney(l.amount, l.currency)}`,
+            )
+            .join(', ')}
+          .
+        </p>
+      )}
       {uncategorised && (
         <p className="mt-4 text-sm text-slate-500">
           Plus{' '}

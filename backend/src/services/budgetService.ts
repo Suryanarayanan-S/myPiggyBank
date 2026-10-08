@@ -48,16 +48,18 @@ export async function getSummary(
     listCategories(prisma, familyId),
   ]);
   const currency = view ?? family.spendingCurrency;
+  const converted = limits.map((l) => ({
+    categoryId: l.categoryId,
+    stored: Number(l.amount),
+    amount: convert(Number(l.amount), family.spendingCurrency, currency, month, rates),
+  }));
   const summary = summarizeMonth({
     month,
     currency,
     targets: family.targets,
     rates,
     categories,
-    limits: limits.flatMap((l) => {
-      const amount = convert(Number(l.amount), family.spendingCurrency, currency, month, rates);
-      return amount === null ? [] : [{ categoryId: l.categoryId, amount }];
-    }),
+    limits: converted.flatMap((l) => (l.amount === null ? [] : [{ ...l, amount: l.amount }])),
     txns: txns.map((t): SummaryTxn => ({
       type: t.type as SummaryTxn['type'],
       amount: Number(t.amount),
@@ -68,7 +70,18 @@ export async function getSummary(
       isMonthlyTotal: t.isMonthlyTotal,
     })),
   });
-  return { ...summary, limitsEditable: currency === family.spendingCurrency };
+  return {
+    ...summary,
+    limitsEditable: currency === family.spendingCurrency,
+    // Limits with no rate into the view currency: shown as they are, never dropped silently.
+    unconvertedLimits: converted
+      .filter((l) => l.amount === null)
+      .map((l) => ({
+        categoryId: l.categoryId,
+        amount: l.stored,
+        currency: family.spendingCurrency,
+      })),
+  };
 }
 
 export async function setLimits(

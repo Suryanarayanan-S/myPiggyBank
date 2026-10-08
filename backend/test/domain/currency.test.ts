@@ -133,3 +133,24 @@ describe('sumConverted', () => {
     expect(r).toEqual({ total: 1_000 + 10_000, unconverted: [{ currency: 'USD', amount: 1_200 }] });
   });
 });
+
+describe('rates that cannot be right', () => {
+  it('expandLiveRates skips a zero rate instead of producing Infinity', () => {
+    const r = expandLiveRates([
+      { month: '2026-09', quote: 'AUD', rateMicros: 0 },
+      { month: '2026-09', quote: 'INR', rateMicros: 100_000_000 },
+    ]);
+    expect(r.every((x) => Number.isFinite(x.rateMicros) && x.rateMicros > 0)).toBe(true);
+    expect(findRate(r, '2026-09', 'AUD', 'INR')).toBeNull();
+  });
+  it('findRate ignores a non-positive stored rate', () => {
+    expect(
+      findRate(
+        [{ month: '2026-09', base: 'EUR', quote: 'USD', rateMicros: 0 }],
+        '2026-09',
+        'USD',
+        'EUR',
+      ),
+    ).toBeNull();
+  });
+});

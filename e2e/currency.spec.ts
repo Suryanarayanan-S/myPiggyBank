@@ -38,6 +38,17 @@ test('"Show in" switches every page to one currency and back to each page defaul
     page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
   await expect(card('Net income')).toContainText('1.000,00 €');
 
+  await page.getByRole('button', { name: 'Set limit for Groceries' }).click();
+  await page.getByLabel('Limit for Groceries').fill('150');
+  await page.getByLabel('Limit for Groceries').press('Enter');
+  await expect(page.getByRole('button', { name: 'Change limit for Groceries' })).toBeVisible();
+
+  // No EUR→USD rate: the limit is named, not silently dropped.
+  await showIn.selectOption('USD');
+  await expect(page.getByText(/No exchange rate to USD for these limits/)).toContainText(
+    'Groceries 150,00 €',
+  );
+
   await showIn.selectOption('INR');
   await expect(card('Net income')).toContainText('₹1,00,000.00');
   await expect(page.getByText(/Limits are shown converted to INR/)).toBeVisible();
@@ -53,5 +64,5 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await showIn.selectOption('default');
   await page.getByRole('link', { name: 'Budget' }).first().click();
   await expect(card('Net income')).toContainText('1.000,00 €');
-  await expect(page.getByRole('button', { name: 'Set limit for Groceries' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change limit for Groceries' })).toBeVisible();
 });

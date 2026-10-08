@@ -65,6 +65,10 @@ async function store(
   const rows = Object.entries(answer.rates)
     .filter(([quote]) => (SYMBOLS as readonly string[]).includes(quote))
     .map(([quote, rate]) => ({ quote, rateMicros: Math.round(rate * 1_000_000) }));
+  // A rate that rounds to 0 (or is absurdly large) would break every conversion: refuse it all.
+  if (rows.some((r) => r.rateMicros < 1 || r.rateMicros > 2_000_000_000)) {
+    throw new Error('Rate service gave an unexpected answer');
+  }
   await prisma.$transaction(
     rows.map(({ quote, rateMicros }) =>
       prisma.liveRate.upsert({
@@ -92,10 +96,15 @@ export async function refreshLiveRates(
       orderBy: { date: 'asc' },
       select: { date: true },
     });
+    // A finished month is done once it has a final rate for every currency (a partial answer
+    // is asked again next time).
+    const finals = await prisma.liveRate.groupBy({
+      by: ['month'],
+      where: { final: true, quote: { in: [...SYMBOLS] } },
+      _count: { quote: true },
+    });
     const done = new Set(
-      (await prisma.liveRate.findMany({ where: { final: true }, select: { month: true } })).map(
-        (r) => r.month,
-      ),
+      finals.filter((f) => f._count.quote >= SYMBOLS.length).map((f) => f.month),
     );
     const oldest = addMonths(current, -MAX_BACKFILL_MONTHS);
     let month = first ? first.date.toISOString().slice(0, 7) : current;

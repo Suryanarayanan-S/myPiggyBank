@@ -108,3 +108,25 @@ describe('viewing money in another currency', () => {
     expect((await f.call('GET', '/api/transactions')).json().data.converted).toBeNull();
   });
 });
+
+describe('budget limits without a rate', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDb();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('are reported, not silently dropped', async () => {
+    const f = await family(app);
+    await f.call('PUT', '/api/budget/2026-09/limits', {
+      limits: [{ categoryId: f.cat('Groceries'), amount: 25_000 }],
+    });
+    const usd = (await f.call('GET', '/api/budget/2026-09?currency=USD')).json().data;
+    expect(usd.unconvertedLimits).toEqual([
+      { categoryId: f.cat('Groceries'), amount: 25_000, currency: 'EUR' },
+    ]);
+    const eur = (await f.call('GET', '/api/budget/2026-09')).json().data;
+    expect(eur.unconvertedLimits).toEqual([]);
+  });
+});

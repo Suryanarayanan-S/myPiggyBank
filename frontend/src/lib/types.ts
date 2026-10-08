@@ -138,6 +138,8 @@ export type MonthSummary = {
   unconverted: { currency: string; amount: number }[];
   /** Limits are stored in the spending currency; in another view currency they are read-only. */
   limitsEditable: boolean;
+  /** Limits that have no exchange rate into the view currency, in their own currency. */
+  unconvertedLimits: { categoryId: string; amount: number; currency: string }[];
 };
 export type MonthEntry = {
   month: string;

@@ -15,7 +15,12 @@ function fakeProvider(opts: { latestDate?: string; fail?: boolean; body?: unknow
     return {
       ok: true,
       status: 200,
-      json: async () => opts.body ?? { base: 'EUR', date, rates: { INR: inr, USD: 1.25 } },
+      json: async () =>
+        opts.body ?? {
+          base: 'EUR',
+          date,
+          rates: { INR: inr, USD: 1.25, GBP: 0.85, CHF: 0.93, AUD: 1.6, CAD: 1.59, SGD: 1.43 },
+        },
     };
   };
   return { urls, fetchRates };
@@ -87,11 +92,17 @@ describe('live exchange rates', () => {
     expect((await budget()).essentials).toBe(10_900);
   });
 
-  it('refresh stores the latest rate and backfills month-end rates from the first transaction', async () => {
-    await inrGroceries('2026-08-15');
+  it('the refresh route downloads and reports the status', async () => {
     const res = await call('POST', '/api/exchange-rates/live/refresh');
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toMatchObject({ asOf: '2026-10-07', lastError: null });
+  });
+
+  it('refresh stores the latest rate and backfills month-end rates from the first transaction', async () => {
+    await inrGroceries('2026-08-15');
+    // A fixed "today", so the test does not depend on the real date.
+    const status = await refreshLiveRates(prisma, provider.fetchRates, '2026-10-07');
+    expect(status).toMatchObject({ asOf: '2026-10-07', lastError: null });
     expect(provider.urls.some((u) => u.includes('/latest?base=EUR&symbols=INR,USD,GBP'))).toBe(
       true,
     );
@@ -105,6 +116,51 @@ describe('live exchange rates', () => {
       ['2026-09', 109_000_000, true],
       ['2026-10', 110_000_000, false],
     ]);
+  });
+
+  it('fetches a finished month again when its answer lacked a currency', async () => {
+    await inrGroceries('2026-09-15');
+    const partial = fakeProvider({ body: { date: '2026-09-30', rates: { USD: 1.25 } } });
+    await refreshLiveRates(prisma, partial.fetchRates, '2026-10-07');
+    provider.urls.length = 0;
+    await refreshLiveRates(prisma, provider.fetchRates, '2026-10-08');
+    expect(provider.urls.filter((u) => u.includes('/2026-09-30?'))).toHaveLength(1);
+  });
+
+  it('rejects a rate too small to store, keeping everything else', async () => {
+    const tiny = fakeProvider({ body: { date: '2026-10-07', rates: { INR: 110, SGD: 1e-7 } } });
+    const status = await refreshLiveRates(prisma, tiny.fetchRates, '2026-10-07');
+    expect(status.lastError).toMatch(/unexpected answer/i);
+    expect(await prisma.liveRate.count()).toBe(0);
+  });
+
+  it('a hand-entered EUR rate also steers cross rates of that month', async () => {
+    const usd = (
+      await call('POST', '/api/accounts', { name: 'Chase', type: 'current', currency: 'USD' })
+    ).json().data;
+    const cats: { id: string; name: string }[] = (await call('GET', '/api/categories')).json().data;
+    await call('POST', '/api/transactions', {
+      date: '2026-09-10',
+      amount: 12_500, // $125
+      type: 'expense',
+      accountId: usd.id,
+      categoryId: cats.find((c) => c.name === 'Groceries')!.id,
+    });
+    await prisma.liveRate.createMany({
+      data: [
+        { month: '2026-09', quote: 'INR', rateMicros: 90_000_000, asOf: '2026-09-30', final: true },
+        { month: '2026-09', quote: 'USD', rateMicros: 1_250_000, asOf: '2026-09-30', final: true },
+      ],
+    });
+    await call('PUT', '/api/family', { rateMode: 'live' });
+    await call('PUT', '/api/exchange-rates', {
+      month: '2026-09',
+      base: 'EUR',
+      quote: 'INR',
+      rate: '100',
+    });
+    const s = (await call('GET', '/api/budget/2026-09?currency=INR')).json().data;
+    expect(s.essentials).toBe(1_000_000); // $125 → €100 → ₹10,000 at the user's own 100
   });
 
   it('does not fetch a finished month twice', async () => {

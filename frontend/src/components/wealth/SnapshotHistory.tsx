@@ -180,14 +180,14 @@ export function SnapshotHistory({
         </ul>
         <FormError error={update.error ?? remove.error} />
       </ChartCard>
-      {modal && (
+      {modal && editable && (
         <Modal
           title={modal === 'today' ? 'Save today’s snapshot' : 'Add a past entry'}
           onClose={() => setModal(null)}
         >
           <SnapshotForm
             mode={modal}
-            currency={currency}
+            currency={wealthCurrency}
             netWorth={data.current.netWorth}
             unconverted={data.current.unconverted}
             onDone={async () => (await refresh(), setModal(null))}

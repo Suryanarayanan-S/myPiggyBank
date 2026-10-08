@@ -35,7 +35,7 @@ export function findRate(rates: Rate[], month: string, from: string, to: string)
   if (from === to) return MICROS;
   let best: { month: string; micros: number } | null = null;
   for (const r of rates) {
-    if (r.month > month) continue;
+    if (r.month > month || !(r.rateMicros > 0) || !Number.isFinite(r.rateMicros)) continue;
     let micros: number | null = null;
     if (r.base === from && r.quote === to) micros = r.rateMicros;
     else if (r.base === to && r.quote === from)
@@ -72,17 +72,37 @@ export function expandLiveRates(live: LiveRate[]): Rate[] {
   }
   const out: Rate[] = [];
   for (const [month, m] of byMonth) {
-    const codes = [...m.keys()];
+    const codes = [...m.keys()].filter((c) => m.get(c)! > 0); // a zero rate cannot be divided by
     for (const base of codes) {
       for (const quote of codes) {
         // One direction per pair is enough: findRate inverts. EUR-based pairs stay exact.
         if (base === quote || (base !== 'EUR' && (quote === 'EUR' || base > quote))) continue;
         const rateMicros = Math.round((m.get(quote)! * MICROS) / m.get(base)!);
-        if (rateMicros > 0) out.push({ month, base, quote, rateMicros });
+        if (rateMicros > 0 && Number.isFinite(rateMicros)) {
+          out.push({ month, base, quote, rateMicros });
+        }
       }
     }
   }
   return out;
+}
+
+/**
+ * A hand-entered EUR rate replaces the live EUR rate of its month before cross rates are built,
+ * so e.g. USD→INR agrees with the user's own EUR→INR for that month.
+ */
+export function applyManualToLive(live: LiveRate[], manual: Rate[]): LiveRate[] {
+  const out = new Map(live.map((r) => [`${r.month}|${r.quote}`, r]));
+  const months = new Set(live.map((r) => r.month));
+  for (const r of manual) {
+    if (!months.has(r.month) || !(r.rateMicros > 0)) continue;
+    if (r.base === 'EUR') out.set(`${r.month}|${r.quote}`, { ...r, quote: r.quote });
+    else if (r.quote === 'EUR') {
+      const rateMicros = Math.round((MICROS * MICROS) / r.rateMicros);
+      out.set(`${r.month}|${r.base}`, { month: r.month, quote: r.base, rateMicros });
+    }
+  }
+  return [...out.values()].map(({ month, quote, rateMicros }) => ({ month, quote, rateMicros }));
 }
 
 /** Hand-entered rates win over live ones for the same month and currency pair. */

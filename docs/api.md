@@ -75,4 +75,4 @@ the money in that currency instead of the default.
 
 ## Other
 
-`GET /health` — `{ ok: true }`, used by Docker.
+`GET /health` — `{ "data": { "status": "ok" } }` when the database answers; used by Docker.

@@ -82,6 +82,7 @@ Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
 | `COOKIE_SECURE`      | `false`                  | `true` when served over HTTPS (also enables HTTPS upgrades)      |
 | `ALLOW_REGISTRATION` | `true`                   | Allow new accounts                                               |
 | `SESSION_DAYS`       | `30`                     | Login session lifetime                                           |
+| `LOGIN_RATE_LIMIT`   | `10`                     | Login / register attempts per minute per client                  |
 | `TZ`                 | `Europe/Berlin` (Docker) | Decides what "today" is for recurring transactions and snapshots |
 | `RATES_URL`          | Frankfurter API          | Source of live exchange rates (only used in live mode)           |
 

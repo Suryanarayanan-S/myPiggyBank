@@ -22,6 +22,7 @@ const app = await buildApp({
   logger: true,
   frontendDist,
   fetchRates: (url) => fetch(url, { signal: AbortSignal.timeout(15_000) }),
+  loginRateLimit: { max: config.LOGIN_RATE_LIMIT, timeWindow: '1 minute' },
   ratesUrl: config.RATES_URL,
 });
 

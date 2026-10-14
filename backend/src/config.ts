@@ -8,6 +8,8 @@ const EnvSchema = z.object({
   COOKIE_SECURE: z.stringbool().default(false),
   ALLOW_REGISTRATION: z.stringbool().default(true),
   SESSION_DAYS: z.coerce.number().int().positive().default(30),
+  /** Login / register / account-deletion attempts per minute and client. */
+  LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   /** Where live exchange rates come from (Frankfurter API, ECB reference rates). */
   RATES_URL: z.url().default('https://api.frankfurter.dev/v1'),
 });

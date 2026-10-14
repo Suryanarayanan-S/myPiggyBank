@@ -7,10 +7,11 @@ import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertMember } from './ownership.js';
 import { loadRates } from './rateService.js';
+import { holdingValues } from './holdingService.js';
 
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
 const cents = z.number().int('Use whole cents').refine(Number.isSafeInteger, 'Amount is too large');
-const LINK_KINDS = ['account', 'asset'] as const;
+const LINK_KINDS = ['account', 'asset', 'holding'] as const;
 type LinkKind = (typeof LINK_KINDS)[number];
 
 const fields = {
@@ -49,12 +50,14 @@ async function checkLinks(
   const ids = (kind: LinkKind) => [
     ...new Set(links.filter((l) => l.kind === kind).map((l) => l.id)),
   ];
-  const [accounts, assets] = await Promise.all([
+  const [accounts, assets, holdings] = await Promise.all([
     prisma.account.count({ where: { familyId, id: { in: ids('account') } } }),
     prisma.asset.count({ where: { familyId, id: { in: ids('asset') } } }),
+    prisma.holding.count({ where: { familyId, id: { in: ids('holding') } } }),
   ]);
   if (accounts !== ids('account').length) throw notFound('Account');
   if (assets !== ids('asset').length) throw notFound('Asset');
+  if (holdings !== ids('holding').length) throw notFound('Holding');
 }
 
 const dedupe = (links: { kind: LinkKind; id: string }[]) => [
@@ -188,7 +191,9 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
   });
   // The dashboard asks on every visit; without goals there is nothing else to load.
   if (goals.length === 0) return [];
-  const [accounts, txns, assets, rates] = await Promise.all([
+  const today = todayLocal();
+  const before = addDays(today, -91); // about 3 months ago, for the pace
+  const [accounts, txns, assets, rates, holdingsNow, holdingsBefore] = await Promise.all([
     prisma.account.findMany({ where: { familyId } }),
     prisma.transaction.findMany({
       where: { familyId },
@@ -206,9 +211,10 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
       include: { valuations: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
     }),
     loadRates(prisma, familyId),
+    holdingValues(prisma, familyId, today),
+    holdingValues(prisma, familyId, before),
   ]);
-  const today = todayLocal();
-  const before = addDays(today, -91); // about 3 months ago, for the pace
+  const holdingBefore = new Map(holdingsBefore.map((h) => [h.id, h.value ?? 0]));
   const balanceTxns = txns.map((t) => ({
     ...t,
     type: t.type as BalanceTxn['type'],
@@ -249,6 +255,20 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
               currency: a.currency,
               amount: balancesToday.get(a.id) ?? 0,
               before: balancesBefore.get(a.id) ?? 0,
+            },
+          ];
+        }
+        if (l.kind === 'holding') {
+          const h = holdingsNow.find((x) => x.id === l.refId);
+          if (!h) return [];
+          return [
+            {
+              kind: 'holding' as const,
+              id: h.id,
+              name: h.name,
+              currency: h.currency,
+              amount: h.value ?? 0,
+              before: holdingBefore.get(h.id) ?? 0,
             },
           ];
         }

@@ -15,6 +15,7 @@ import { MonthEntryPage } from './pages/MonthEntryPage';
 import { ImportPage } from './pages/ImportPage';
 import { WealthPage } from './pages/WealthPage';
 import { GoalsPage } from './pages/GoalsPage';
+import { InvestmentsPage } from './pages/InvestmentsPage';
 import { RecurringPage } from './pages/RecurringPage';
 
 export function App() {
@@ -37,6 +38,7 @@ export function App() {
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="wealth" element={<WealthPage />} />
+          <Route path="investments" element={<InvestmentsPage />} />
           <Route path="goals" element={<GoalsPage />} />
           <Route path="recurring" element={<RecurringPage />} />
           <Route path="import" element={<ImportPage />} />

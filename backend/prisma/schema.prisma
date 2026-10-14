@@ -33,6 +33,7 @@ model Family {
   categoryRules    CategoryRule[]
   recurringRules   RecurringRule[]
   goals            Goal[]
+  holdings         Holding[]
 }
 
 model User {
@@ -78,6 +79,7 @@ model FamilyMember {
   liabilities    Liability[]
   recurringRules RecurringRule[]
   goals          Goal[]
+  holdings       Holding[]
 
   @@unique([familyId, name])
 }
@@ -132,6 +134,7 @@ model Account {
   transactions   Transaction[]   @relation("TransactionAccount")
   transfersIn    Transaction[]   @relation("TransferAccount")
   recurringRules RecurringRule[]
+  holdings       Holding[]
 
   @@unique([familyId, name])
   @@index([familyId])
@@ -387,4 +390,59 @@ model GoalEntry {
   createdAt DateTime @default(now())
 
   @@index([goalId])
+}
+
+/// A security held by the family (stock, ETF, fund, gold…), valued from trades and prices.
+model Holding {
+  id            String         @id @default(uuid())
+  familyId      String
+  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name          String
+  /// stock | etf | fund | gold | other
+  kind          String
+  /// ticker or ISIN
+  symbol        String?
+  currency      String
+  ownerMemberId String?
+  owner         FamilyMember?  @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  /// the depot account it sits in (informational)
+  accountId     String?
+  account       Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  note          String?
+  archived      Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  trades        HoldingTrade[]
+  prices        HoldingPrice[]
+
+  @@index([familyId])
+}
+
+model HoldingTrade {
+  id        String   @id @default(uuid())
+  holdingId String
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  /// buy | sell | dividend
+  type      String
+  /// micro-units (1 unit = 1 000 000); 0 for dividends
+  units     BigInt
+  /// minor units: paid (buy) or received (sell, dividend)
+  amount    BigInt
+  fees      BigInt   @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([holdingId])
+}
+
+model HoldingPrice {
+  id        String   @id @default(uuid())
+  holdingId String
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  /// micros of the currency per unit (€98.4567 = 98 456 700)
+  price     BigInt
+  createdAt DateTime @default(now())
+
+  @@unique([holdingId, date])
 }

@@ -11,6 +11,7 @@ import { formatMoney, parseAmountInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import { useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
+import type { HoldingsResponse } from '../../lib/investments';
 import type { Asset } from '../../lib/wealthTypes';
 
 const asInput = (cents: number) => String(cents / 100).replace('.', ',');
@@ -29,6 +30,10 @@ export function GoalForm({
   const accounts = useAccounts();
   const members = useMembers();
   const assets = useQuery({ queryKey: ['assets'], queryFn: () => api.get<Asset[]>('/assets') });
+  const holdings = useQuery({
+    queryKey: ['holdings', 'default'],
+    queryFn: () => api.get<HoldingsResponse>('/holdings'),
+  });
   const [f, setF] = useState({
     name: goal?.name ?? '',
     target: goal ? asInput(goal.targetAmount) : '',
@@ -152,8 +157,8 @@ export function GoalForm({
           What counts towards it
         </legend>
         <p className="text-xs text-slate-500">
-          Ticked accounts count with their balance and assets with their latest value. Money kept
-          elsewhere can be added as entries on the goal.
+          Ticked accounts count with their balance, assets and investments with their value. Money
+          kept elsewhere can be added as entries on the goal.
         </p>
         <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
           {accounts.data
@@ -190,6 +195,23 @@ export function GoalForm({
               </span>
             </label>
           ))}
+          {holdings.data?.holdings
+            .filter((h) => !h.archived || f.links.has(`holding:${h.id}`))
+            .map((h) => (
+              <label key={h.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={f.links.has(`holding:${h.id}`)}
+                    onChange={() => toggle(`holding:${h.id}`)}
+                  />
+                  {h.name} <span className="text-xs text-slate-400">investment</span>
+                </span>
+                <span className="text-xs text-slate-500 tabular-nums">
+                  {h.value === null ? '—' : formatMoney(h.value, h.currency)}
+                </span>
+              </label>
+            ))}
           {accounts.data?.length === 0 && assets.data?.length === 0 && (
             <p className="text-sm text-slate-500">No accounts or assets yet.</p>
           )}

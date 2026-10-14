@@ -23,6 +23,7 @@ import { wealthRoutes } from './routes/wealth.js';
 import { bankImportRoutes } from './routes/bankImport.js';
 import { recurringRoutes } from './routes/recurring.js';
 import { goalRoutes } from './routes/goals.js';
+import { holdingRoutes } from './routes/holdings.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -132,6 +133,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(bankImportRoutes);
       await api.register(recurringRoutes);
       await api.register(goalRoutes);
+      await api.register(holdingRoutes);
     },
     { prefix: '/api' },
   );

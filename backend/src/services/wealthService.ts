@@ -8,6 +8,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import { listAccounts } from './accountService.js';
 import { getFamily } from './familyService.js';
 import { assertMember } from './ownership.js';
+import { holdingValues } from './holdingService.js';
 
 const LIABILITY_TYPES = ['mortgage', 'car_loan', 'personal_loan', 'credit_card', 'other'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
@@ -330,7 +331,7 @@ async function currentNetWorth(
   view?: string,
   loaded?: Rate[],
 ) {
-  const [family, rates, members, accounts, assets, liabilities] = await Promise.all([
+  const [family, rates, members, accounts, assets, liabilities, holdings] = await Promise.all([
     getFamily(prisma, familyId),
     loaded ?? loadRates(prisma, familyId),
     prisma.familyMember.findMany({
@@ -341,6 +342,7 @@ async function currentNetWorth(
     listAccounts(prisma, familyId),
     listAssets(prisma, familyId),
     listLiabilities(prisma, familyId),
+    holdingValues(prisma, familyId),
   ]);
   return computeNetWorth({
     currency: view ?? family.wealthCurrency,
@@ -348,7 +350,8 @@ async function currentNetWorth(
     rates,
     members,
     accounts,
-    assets,
+    // Holdings count like assets of the investment class.
+    assets: [...assets, ...holdings],
     liabilities,
   });
 }

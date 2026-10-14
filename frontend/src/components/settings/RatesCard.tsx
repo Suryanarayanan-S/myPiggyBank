@@ -189,7 +189,9 @@ export function RatesCard({ family }: { family: Family }) {
             <Button
               variant="ghost"
               aria-label={`Delete rate for ${monthLabel(r.month)}`}
-              onClick={() => remove.mutate(r.id)}
+              onClick={() =>
+                window.confirm(`Delete the rate for ${monthLabel(r.month)}?`) && remove.mutate(r.id)
+              }
             >
               <Trash2 size={14} aria-hidden />
             </Button>

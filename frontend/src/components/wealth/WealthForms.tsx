@@ -499,7 +499,9 @@ export function HistoryForm({
                 type="button"
                 aria-label={`Delete entry from ${r.date}`}
                 className="p-1 text-slate-400 hover:text-rose-600"
-                onClick={() => remove.mutate(r.id)}
+                onClick={() =>
+                  window.confirm(`Delete the entry from ${r.date}?`) && remove.mutate(r.id)
+                }
               >
                 <Trash2 size={14} aria-hidden />
               </button>

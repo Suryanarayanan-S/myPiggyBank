@@ -18,7 +18,9 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-const backup = args.find((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
+// Flags that take a value; --force takes none, so a file may follow it.
+const WITH_VALUE = new Set(['--db', '--out']);
+const backup = args.find((a, i) => !a.startsWith('--') && !WITH_VALUE.has(args[i - 1]));
 if (!backup) fail('Usage: npm run restore -- <backup file> [--db data/piggybank.db]');
 const source = path.resolve(backup);
 const db = path.resolve(arg('db') ?? path.join(root, 'data/piggybank.db'));
@@ -49,16 +51,22 @@ if (!args.includes('--force')) {
 // 2. Check the file really is a myPiggyBank database.
 const check = new PrismaClient({ datasourceUrl: `file:${source}` });
 let ok = false;
+let damaged = false;
 try {
   const tables = await check.$queryRawUnsafe(`SELECT name FROM sqlite_master WHERE type = 'table'`);
   const names = new Set(tables.map((t) => t.name));
   ok = names.has('_prisma_migrations') && names.has('Family') && names.has('Transaction');
+  if (ok) {
+    const [result] = await check.$queryRawUnsafe('PRAGMA quick_check');
+    damaged = Object.values(result ?? {})[0] !== 'ok';
+  }
 } catch {
   ok = false;
 } finally {
   await check.$disconnect();
 }
 if (!ok) fail(`${source} is not a myPiggyBank backup. Nothing was changed.`);
+if (damaged) fail(`${source} is damaged (integrity check failed). Nothing was changed.`);
 
 // 3. Keep the current database, then put the backup in its place.
 fs.mkdirSync(out, { recursive: true });
@@ -73,8 +81,11 @@ if (fs.existsSync(db)) {
   }
   console.log(`Previous database kept at ${safety}`);
 }
+// Copy next to the target first, then swap in one step: never a half-written database.
+const incoming = `${db}.restoring`;
+fs.copyFileSync(source, incoming);
 for (const suffix of ['-wal', '-shm', '-journal']) fs.rmSync(db + suffix, { force: true });
-fs.copyFileSync(source, db);
+fs.renameSync(incoming, db);
 console.log(
   `Restored ${source} → ${db}. Start the app again (docker compose start / npm run dev).`,
 );

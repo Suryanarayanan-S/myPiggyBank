@@ -82,6 +82,43 @@ describe('backup and restore scripts', () => {
     expect(await familiesIn(target)).toEqual(['Backup family']);
   });
 
+  it('accepts --force before the backup file', async () => {
+    const target = path.join(dir, 'forced.db');
+    fs.copyFileSync(source, target);
+    const res = run('restore.mjs', [
+      '--force',
+      source,
+      '--db',
+      target,
+      '--out',
+      path.join(dir, 'f'),
+    ]);
+    expect(res.status, res.stderr).toBe(0);
+  });
+
+  it('refuses a damaged backup (integrity check) and leaves the database untouched', async () => {
+    const damaged = path.join(dir, 'damaged.db');
+    fs.copyFileSync(source, damaged);
+    const big = new PrismaClient({ datasourceUrl: `file:${damaged}` });
+    const fam = await big.family.findFirstOrThrow();
+    await big.familyMember.createMany({
+      data: Array.from({ length: 3000 }, (_, i) => ({ familyId: fam.id, name: `Member ${i}` })),
+    });
+    await big.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE)');
+    await big.$disconnect();
+    const size = fs.statSync(damaged).size;
+    const fd = fs.openSync(damaged, 'r+');
+    // The schema stays readable; only the last (data) page is scrambled.
+    fs.writeSync(fd, Buffer.alloc(4096, 0x5a), 0, 4096, size - 4096);
+    fs.closeSync(fd);
+    const target = path.join(dir, 'kept.db');
+    fs.copyFileSync(source, target);
+    const res = run('restore.mjs', [damaged, '--db', target, '--out', path.join(dir, 'd')]);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toMatch(/damaged|not a myPiggyBank backup/);
+    expect(await familiesIn(target)).toEqual(['Backup family']);
+  });
+
   it('refuses to restore while the app is running', async () => {
     const net = await import('node:net');
     const server = net.createServer().listen(0, '127.0.0.1');

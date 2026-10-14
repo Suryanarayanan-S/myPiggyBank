@@ -15,7 +15,7 @@ export type Family = {
   targets: { essentials: number; fun: number; future: number };
   bucketNames: Record<Bucket, string>;
   /** Extras that can be switched off in Settings. */
-  extras: { moneyStory: boolean; quickEntrySuggestions: boolean };
+  extras: { quickEntrySuggestions: boolean };
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

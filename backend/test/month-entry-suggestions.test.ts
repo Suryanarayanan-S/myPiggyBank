@@ -103,11 +103,14 @@ describe('extras switches', () => {
   it('are on for a new family and can be switched off', async () => {
     const call = client(app, (await signUp(app)).cookie);
     expect((await call('GET', '/api/family')).json().data.extras).toEqual({
-      moneyStory: true,
       quickEntrySuggestions: true,
     });
-    const res = await call('PUT', '/api/family', { extras: { moneyStory: false } });
-    expect(res.json().data.extras).toEqual({ moneyStory: false, quickEntrySuggestions: true });
+    const res = await call('PUT', '/api/family', { extras: { quickEntrySuggestions: false } });
+    expect(res.json().data.extras).toEqual({ quickEntrySuggestions: false });
+    // The money story was removed: its switch is gone too.
+    expect((await call('PUT', '/api/family', { extras: { moneyStory: false } })).statusCode).toBe(
+      400,
+    );
     // Unknown or empty switches are a mistake, not a silent no-op.
     expect(
       (await call('PUT', '/api/family', { extras: { quickEntryHints: false } })).statusCode,

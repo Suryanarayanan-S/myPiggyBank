@@ -13,3 +13,6 @@ switch in Settings.
   before) from money in the account's currency — without other accounts' grid totals and without
   recurring payments. "Like last month" / "Usual amounts" fill empty boxes only (categories without
   individual transactions this month); nothing is saved until Save.
+
+**Update (2026-10-15):** the user asked to remove the money story; it is gone (code, switch and
+`showMoneyStory` column). Quick entry suggestions stay.

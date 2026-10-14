@@ -6,11 +6,6 @@ import type { Family } from '../../lib/types';
 
 const EXTRAS: { key: keyof Family['extras']; label: string; hint: string }[] = [
   {
-    key: 'moneyStory',
-    label: 'Money story on the dashboard',
-    hint: 'A playful recap of the latest month, compared with the months before.',
-  },
-  {
     key: 'quickEntrySuggestions',
     label: 'Suggestions in Quick entry',
     hint: 'Fill empty boxes from last month or your usual amounts, then check and save.',

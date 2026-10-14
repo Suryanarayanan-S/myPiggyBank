@@ -23,7 +23,6 @@ model Family {
   nameFun          String             @default("Make Me Happy")
   nameFuture       String             @default("Make Me Rich")
   /// Extras that can be switched off in Settings
-  showMoneyStory   Boolean            @default(true)
   quickEntryHints  Boolean            @default(true)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt

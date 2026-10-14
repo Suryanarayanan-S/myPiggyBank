@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { generateDue } from '../src/services/recurringService.js';
 import { nextOccurrence } from '../src/domain/recurring.js';
+import { todayLocal } from '../src/lib/dates.js';
 import { client, makeApp, prisma, resetDb, signUp } from './helpers.js';
 
 describe('recurring transactions', () => {
@@ -133,7 +134,7 @@ describe('recurring transactions', () => {
   });
 
   it("shows the next date after today's already-created transaction", async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal(); // the app's "today" is the local day, not UTC
     const rule = (await call('POST', '/api/recurring', rent({ startDate: today }))).json().data;
     expect(await dates()).toEqual([today]);
     expect(rule.nextDate).toBe(
@@ -184,7 +185,7 @@ describe('recurring transactions', () => {
     await call('PUT', `/api/recurring/${rule.id}`, { active: false });
     await call('PUT', `/api/recurring/${rule.id}`, { active: true });
     const r = await prisma.recurringRule.findUniqueOrThrow({ where: { id: rule.id } });
-    expect(r.generateFrom.toISOString().slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
+    expect(r.generateFrom.toISOString().slice(0, 10)).toBe(todayLocal());
     expect(await prisma.transaction.count()).toBe(before);
   });
 });

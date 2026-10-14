@@ -27,7 +27,6 @@ export const FamilyInput = z.object({
     .optional(),
   extras: z
     .strictObject({
-      moneyStory: z.boolean().optional(),
       quickEntrySuggestions: z.boolean().optional(),
     })
     .refine((o) => Object.keys(o).length > 0, 'Choose a setting to change')
@@ -53,7 +52,6 @@ const select = {
   nameEssentials: true,
   nameFun: true,
   nameFuture: true,
-  showMoneyStory: true,
   quickEntryHints: true,
 } as const;
 
@@ -65,7 +63,7 @@ type Row = {
   rateMode: string;
 } & Record<'targetEssentials' | 'targetFun' | 'targetFuture', number> &
   Record<'nameEssentials' | 'nameFun' | 'nameFuture', string> &
-  Record<'showMoneyStory' | 'quickEntryHints', boolean>;
+  Record<'quickEntryHints', boolean>;
 
 const toDto = (f: Row) => ({
   id: f.id,
@@ -75,7 +73,7 @@ const toDto = (f: Row) => ({
   rateMode: f.rateMode as 'manual' | 'live',
   targets: { essentials: f.targetEssentials, fun: f.targetFun, future: f.targetFuture },
   bucketNames: { essentials: f.nameEssentials, fun: f.nameFun, future: f.nameFuture },
-  extras: { moneyStory: f.showMoneyStory, quickEntrySuggestions: f.quickEntryHints },
+  extras: { quickEntrySuggestions: f.quickEntryHints },
 });
 export type FamilyDto = ReturnType<typeof toDto>;
 
@@ -95,7 +93,6 @@ export async function updateFamily(
       targetFun: targets.fun,
       targetFuture: targets.future,
     }),
-    ...(extras?.moneyStory !== undefined && { showMoneyStory: extras.moneyStory }),
     ...(extras?.quickEntrySuggestions !== undefined && {
       quickEntryHints: extras.quickEntrySuggestions,
     }),

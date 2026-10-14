@@ -71,19 +71,6 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await cashFlow.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '12-dashboard');
 
-  // Money story: last month (400 € fun) against the usual of the months before (236 €).
-  const story = page.locator('section', { has: page.getByText(/in a nutshell$/) });
-  await expect(story).toContainText('Make Me Happy took a holiday');
-  await expect(story).toContainText('69 % more than usual');
-  // It can be switched off in Settings.
-  await page.getByRole('link', { name: 'Settings' }).first().click();
-  const toggle = page.getByRole('switch', { name: 'Money story on the dashboard' });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
-  await expect(tile('Net income')).toBeVisible();
-  await expect(page.getByText(/in a nutshell$/)).toBeHidden();
-
   await page.getByRole('radio', { name: 'All time' }).click();
   await expect(tile('Net income')).toContainText('14.250,00 €');
   await page.setViewportSize({ width: 390, height: 844 });

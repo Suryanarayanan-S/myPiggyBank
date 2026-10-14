@@ -69,10 +69,15 @@ export async function createGoal(
   if (input.memberId) await assertMember(prisma, familyId, input.memberId);
   const links = dedupe(input.links ?? []);
   await checkLinks(prisma, familyId, links);
-  const { links: _links, targetDate, ...rest } = input;
+  const { name, targetAmount, currency, memberId, note, status, targetDate } = input;
   const goal = await prisma.goal.create({
     data: {
-      ...rest,
+      name,
+      targetAmount,
+      currency,
+      memberId,
+      note,
+      status,
       familyId,
       targetDate: targetDate ? parseDay(targetDate) : null,
       links: { create: links.map((l) => ({ kind: l.kind, refId: l.id })) },

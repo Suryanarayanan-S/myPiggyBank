@@ -20,7 +20,8 @@ if [[ ! -f .env ]]; then
 fi
 mkdir -p data
 
-npm install
+# ci = exactly the versions in package-lock.json
+npm ci
 npm run db:migrate
 
 echo

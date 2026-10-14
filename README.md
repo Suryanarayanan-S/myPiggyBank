@@ -2,7 +2,9 @@
 
 A simple, private family-finance app: income, expenses, budgets, accounts and net worth — running on your own machine.
 
-> Status: Milestones 1–7 (login, family, accounts, transactions, EUR/INR, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, backup/restore). See `docs/superpowers/specs/` for the v1 design.
+> Status: v1 complete — login, family, accounts, transactions, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, eight currencies with live or own exchange rates, modern and retro looks, backup/restore, demo data. See `docs/superpowers/specs/` for the design.
+
+**Docs:** [how it works (pictures)](docs/how-it-works.html) · [architecture](docs/architecture.md) · [API](docs/api.md) · [database](docs/database.md) · [moving and restoring](docs/moving-and-restoring.md)
 
 New here? Open [docs/how-it-works.html](docs/how-it-works.html) in your browser for a picture guide to how the app works, from the screen to the database, and the tools behind each part.
 
@@ -57,28 +59,31 @@ Requirements: Git, Docker, and VS Code with the **Dev Containers** extension.
 
 ## Commands
 
-| Command                               | What it does                                         |
-| ------------------------------------- | ---------------------------------------------------- |
-| `npm run dev`                         | API on :3001 + web on :5173 with hot reload          |
-| `npm run build && npm start`          | Production mode: one server on http://localhost:3001 |
-| `npm test`                            | Backend + frontend tests                             |
-| `npm run check`                       | Lint + typecheck + tests                             |
-| `npm run format`                      | Prettier                                             |
-| `npm run db:migrate`                  | Apply database migrations                            |
-| `npm run backup` / `npm run restore`  | Back up / restore the database (see below)           |
-| `npm run e2e`                         | Browser tests (Playwright) with screenshots          |
-| `npm run prisma -w backend -- studio` | Browse the database                                  |
+| Command                               | What it does                                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `npm run dev`                         | API on :3001 + web on :5173 with hot reload                                                   |
+| `npm run build && npm start`          | Production mode on http://localhost:3001 (uses `data/dev.db`, like `npm run dev`)             |
+| `npm test`                            | Backend + frontend tests                                                                      |
+| `npm run check`                       | Lint + typecheck + tests                                                                      |
+| `npm run format`                      | Prettier                                                                                      |
+| `npm run db:migrate`                  | Apply database migrations                                                                     |
+| `npm run backup` / `npm run restore`  | Back up / restore the database (see below)                                                    |
+| `npm run e2e`                         | Browser tests (Playwright) with screenshots                                                   |
+| `npm run seed:demo [-- --reset]`      | Add a demo family (login `demo@mypiggybank.local` / `demo-password-2026`) to the dev database |
+| `npm run prisma -w backend -- studio` | Browse the database                                                                           |
 
 ## Environment variables (`.env`)
 
-| Variable             | Default                  | Meaning                                                     |
-| -------------------- | ------------------------ | ----------------------------------------------------------- |
-| `HOST`               | `127.0.0.1`              | Interface to listen on (this laptop only)                   |
-| `PORT`               | `3001`                   | API / production port                                       |
-| `DATABASE_URL`       | `file:../../data/dev.db` | Development SQLite file (relative to `backend/prisma/`)     |
-| `COOKIE_SECURE`      | `false`                  | `true` when served over HTTPS (also enables HTTPS upgrades) |
-| `ALLOW_REGISTRATION` | `true`                   | Allow new accounts                                          |
-| `SESSION_DAYS`       | `30`                     | Login session lifetime                                      |
+| Variable             | Default                  | Meaning                                                          |
+| -------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `HOST`               | `127.0.0.1`              | Interface to listen on (this laptop only)                        |
+| `PORT`               | `3001`                   | API / production port                                            |
+| `DATABASE_URL`       | `file:../../data/dev.db` | Development SQLite file (relative to `backend/prisma/`)          |
+| `COOKIE_SECURE`      | `false`                  | `true` when served over HTTPS (also enables HTTPS upgrades)      |
+| `ALLOW_REGISTRATION` | `true`                   | Allow new accounts                                               |
+| `SESSION_DAYS`       | `30`                     | Login session lifetime                                           |
+| `TZ`                 | `Europe/Berlin` (Docker) | Decides what "today" is for recurring transactions and snapshots |
+| `RATES_URL`          | Frankfurter API          | Source of live exchange rates (only used in live mode)           |
 
 ## Your data, backups and moving to another laptop
 
@@ -95,7 +100,9 @@ docker compose start
 
 `restore` checks that the file really is a myPiggyBank backup and keeps a copy of the database it replaces (`backups/before-restore-*.db`). The 20 newest backups are kept.
 
-To move to another laptop: copy the backup file over, run `./scripts/setup.sh` there, then `npm run restore -- <file>`.
+`restore` also refuses damaged files. To move to another laptop, follow [docs/moving-and-restoring.md](docs/moving-and-restoring.md). Keep a copy of a recent backup off this laptop (USB stick or cloud folder).
+
+**Demo data:** `npm run seed:demo` adds a clearly labelled demo family to the development database (`data/dev.db`) — handy for showing the app without your real numbers. It never touches other families; `-- --reset` recreates it.
 
 ## Currencies and exchange rates
 

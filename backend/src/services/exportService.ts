@@ -13,7 +13,7 @@ export const ExportQuery = ListQuery.pick({
 }).extend({ from: day, to: day });
 
 /** Byte-order mark so Excel opens the file as UTF-8. */
-const BOM = String.fromCharCode(0xfeff);
+export const BOM = String.fromCharCode(0xfeff);
 
 const BUCKET: Record<string, string> = {
   essentials: 'Essentials',
@@ -22,14 +22,14 @@ const BUCKET: Record<string, string> = {
 };
 
 /** A text cell: neutralises spreadsheet formulas, then quotes when needed. */
-function cell(value: string): string {
+export function cell(value: string): string {
   let v = value;
   if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
   return /[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
 /** Signed amount with a decimal comma (how German spreadsheets read numbers). */
-const amount = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
+export const csvAmount = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
 
 export async function exportTransactionsCsv(
   prisma: PrismaClient,
@@ -50,7 +50,7 @@ export async function exportTransactionsCsv(
     [
       formatDay(t.date),
       t.type,
-      amount(t.type === 'income' ? Number(t.amount) : -Number(t.amount)),
+      csvAmount(t.type === 'income' ? Number(t.amount) : -Number(t.amount)),
       t.account.currency,
       cell(t.account.name),
       cell(t.category?.name ?? ''),

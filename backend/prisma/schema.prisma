@@ -18,6 +18,10 @@ model Family {
   targetEssentials Int                @default(50)
   targetFun        Int                @default(30)
   targetFuture     Int                @default(20)
+  /// What the family calls its three buckets (shown everywhere instead of the bucket keys)
+  nameEssentials   String             @default("Keep Me Alive")
+  nameFun          String             @default("Make Me Happy")
+  nameFuture       String             @default("Make Me Rich")
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   users            User[]

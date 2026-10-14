@@ -1,3 +1,4 @@
+import { getFamily } from './familyService.js';
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { formatDay, parseDay } from '../lib/dates.js';
@@ -15,12 +16,6 @@ export const ExportQuery = ListQuery.pick({
 /** Byte-order mark so Excel opens the file as UTF-8. */
 export const BOM = String.fromCharCode(0xfeff);
 
-const BUCKET: Record<string, string> = {
-  essentials: 'Essentials',
-  fun: 'Fun',
-  future: 'Future You',
-};
-
 /** A text cell: neutralises spreadsheet formulas, then quotes when needed. */
 export function cell(value: string): string {
   let v = value;
@@ -36,6 +31,7 @@ export async function exportTransactionsCsv(
   familyId: string,
   query: z.output<typeof ExportQuery>,
 ) {
+  const BUCKET: Record<string, string> = (await getFamily(prisma, familyId)).bucketNames;
   const rows = await prisma.transaction.findMany({
     where: filterWhere(familyId, query),
     include: {
@@ -54,7 +50,7 @@ export async function exportTransactionsCsv(
       t.currency,
       cell(t.account?.name ?? ''),
       cell(t.category?.name ?? ''),
-      BUCKET[t.category?.bucket ?? ''] ?? '',
+      cell(BUCKET[t.category?.bucket ?? ''] ?? ''),
       cell(t.member?.name ?? 'Shared'),
       cell(t.merchant ?? ''),
       cell(t.notes ?? ''),

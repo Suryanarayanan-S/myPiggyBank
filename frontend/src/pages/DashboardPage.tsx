@@ -15,6 +15,7 @@ import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import type { Dashboard } from '../lib/dashboardTypes';
 import { insightsFor } from '../lib/insights';
+import { useBucketNames } from '../lib/buckets';
 import { insightText, type InsightsResponse } from '../lib/insightText';
 import { formatMoney } from '../lib/money';
 import { isMonth, localMonth, monthTitle } from '../lib/months';
@@ -24,6 +25,7 @@ import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 export function DashboardPage() {
   const me = useMe();
+  const names = useBucketNames();
   const [params, setParams] = useSearchParams();
   const today = localMonth();
   const [view] = useViewCurrency();
@@ -136,7 +138,7 @@ export function DashboardPage() {
                 text: insightText(i, observations.data!.currency),
                 link: i.link,
               })) ?? []),
-              ...insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories),
+              ...insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories, names),
             ]}
           />
           <CashFlowChart d={d} />

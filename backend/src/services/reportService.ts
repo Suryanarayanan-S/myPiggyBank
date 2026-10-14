@@ -90,12 +90,10 @@ const pct = (bp: number | null) =>
   bp === null ? '' : `${(bp / 100).toFixed(1).replace('.', ',')} %`;
 
 /** The report as a spreadsheet: months, then categories and people against last year. */
-export function reportCsv(r: Awaited<ReturnType<typeof getYearReport>>) {
-  const BUCKET: Record<string, string> = {
-    essentials: 'Essentials',
-    fun: 'Fun',
-    future: 'Future You',
-  };
+export function reportCsv(
+  r: Awaited<ReturnType<typeof getYearReport>>,
+  BUCKET: Record<'essentials' | 'fun' | 'future', string>,
+) {
   const row = (cells: string[]) => cells.join(';');
   const money = (m: (typeof r)['totals']) => [
     csvAmount(m.netIncome),
@@ -114,9 +112,9 @@ export function reportCsv(r: Awaited<ReturnType<typeof getYearReport>>) {
     row([
       'Month',
       'Net income',
-      'Essentials',
-      'Fun',
-      'Future You',
+      cell(BUCKET.essentials),
+      cell(BUCKET.fun),
+      cell(BUCKET.future),
       'Uncategorised',
       'Unused',
       'Savings rate',
@@ -134,7 +132,7 @@ export function reportCsv(r: Awaited<ReturnType<typeof getYearReport>>) {
     ...r.categories.map((c) =>
       row([
         cell(c.name),
-        c.bucket ? BUCKET[c.bucket]! : '',
+        c.bucket ? cell(BUCKET[c.bucket as keyof typeof BUCKET]) : '',
         csvAmount(c.actual),
         ...(before ? [csvAmount(c.previous), pct(c.changeBp)] : []),
       ]),

@@ -21,7 +21,8 @@ import {
 } from '../../lib/chart';
 import type { Dashboard } from '../../lib/dashboardTypes';
 import { formatPercent } from '../../lib/percent';
-import { BUCKETS, type Bucket } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { BUCKET_KEYS } from '../../lib/types';
 
 const pctTick = (v: number) => `${Math.round(v / 100)} %`;
 const bpTicks = (values: (number | null)[]) => {
@@ -32,6 +33,7 @@ const dot = (n: number, color: string) =>
   n <= 12 ? { r: 3, fill: color, stroke: SURFACE, strokeWidth: 2 } : false;
 
 export function SavingsRateChart({ d }: { d: Dashboard }) {
+  const names = useBucketNames();
   const data = d.months.map((m) => ({
     label: shortMonth(m.month),
     month: m.month,
@@ -41,7 +43,7 @@ export function SavingsRateChart({ d }: { d: Dashboard }) {
   return (
     <ChartCard
       title="Savings rate"
-      subtitle="(Future You + unused) ÷ net income, per month"
+      subtitle={`(${names.future} + unused) ÷ net income, per month`}
       table={
         <DataTable
           head={['Month', 'Savings rate']}
@@ -104,7 +106,8 @@ export function SavingsRateChart({ d }: { d: Dashboard }) {
 }
 
 export function ShareChart({ d }: { d: Dashboard }) {
-  const buckets = Object.keys(BUCKETS) as Bucket[];
+  const names = useBucketNames();
+  const buckets = BUCKET_KEYS;
   const data = d.months.map((m) => ({ label: shortMonth(m.month), ...m.sharesBp }));
   const ticks = bpTicks(
     d.months.flatMap((m) => [m.sharesBp.essentials, m.sharesBp.fun, m.sharesBp.future]),
@@ -114,13 +117,13 @@ export function ShareChart({ d }: { d: Dashboard }) {
       title="Share of income"
       subtitle="How each bucket compares with your targets, per month"
       legend={buckets.map((b) => ({
-        label: `${BUCKETS[b]} (target ${d.targets[b]} %)`,
+        label: `${names[b]} (target ${d.targets[b]} %)`,
         color: BUCKET_COLOR[b],
         shape: 'line' as const,
       }))}
       table={
         <DataTable
-          head={['Month', ...buckets.map((b) => BUCKETS[b])]}
+          head={['Month', ...buckets.map((b) => names[b])]}
           rows={d.months.map((m) => [
             shortMonth(m.month),
             ...buckets.map((b) => formatPercent(m.sharesBp[b])),
@@ -159,7 +162,7 @@ export function ShareChart({ d }: { d: Dashboard }) {
                     rows={
                       p
                         ? buckets.map((b) => ({
-                            label: BUCKETS[b],
+                            label: names[b],
                             value: formatPercent(p[b]),
                             color: BUCKET_COLOR[b],
                           }))
@@ -173,7 +176,7 @@ export function ShareChart({ d }: { d: Dashboard }) {
               <Line
                 key={b}
                 dataKey={b}
-                name={BUCKETS[b]}
+                name={names[b]}
                 type="linear"
                 stroke={BUCKET_COLOR[b]}
                 strokeWidth={2}

@@ -11,7 +11,8 @@ import { api } from '../lib/api';
 import { formatMoney, parseAmountInput } from '../lib/money';
 import { localDay } from '../lib/months';
 import { useAccounts, useCategories, useMembers } from '../lib/queries';
-import { BUCKETS } from '../lib/types';
+import { useBucketNames } from '../lib/buckets';
+import { BUCKET_KEYS } from '../lib/types';
 
 type Rule = {
   id: string;
@@ -154,6 +155,7 @@ export function RecurringPage() {
 }
 
 function RuleForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
+  const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
   const categories = useCategories();
@@ -273,8 +275,8 @@ function RuleForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           >
             <option value="">Uncategorised</option>
             {f.type === 'expense'
-              ? (Object.keys(BUCKETS) as (keyof typeof BUCKETS)[]).map((b) => (
-                  <optgroup key={b} label={BUCKETS[b]}>
+              ? BUCKET_KEYS.map((b) => (
+                  <optgroup key={b} label={names[b]}>
                     {cats
                       .filter((c) => c.bucket === b)
                       .map((c) => (

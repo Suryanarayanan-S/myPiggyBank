@@ -22,7 +22,32 @@ describe('family settings', () => {
       wealthCurrency: 'INR',
       rateMode: 'manual',
       targets: { essentials: 50, fun: 30, future: 20 },
+      bucketNames: { essentials: 'Keep Me Alive', fun: 'Make Me Happy', future: 'Make Me Rich' },
     });
+  });
+
+  it('renames the three buckets', async () => {
+    const put = (bucketNames: object) =>
+      app.inject({
+        method: 'PUT',
+        url: '/api/family',
+        headers: { cookie },
+        payload: { bucketNames },
+      });
+    const res = await put({ essentials: ' Bills ', fun: 'Treats', future: 'Later' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.bucketNames).toEqual({
+      essentials: 'Bills',
+      fun: 'Treats',
+      future: 'Later',
+    });
+    expect((await put({ essentials: '', fun: 'Treats', future: 'Later' })).statusCode).toBe(400);
+    expect((await put({ essentials: 'Same', fun: 'same', future: 'Later' })).statusCode).toBe(400);
+    expect((await put({ essentials: 'x'.repeat(31), fun: 'a', future: 'b' })).statusCode).toBe(400);
+    // Names the pages already use for other figures would be confusing.
+    expect((await put({ essentials: 'Bills', fun: 'Treats', future: 'spent' })).statusCode).toBe(
+      400,
+    );
   });
 
   it('updates the 50/30/20 bucket targets', async () => {

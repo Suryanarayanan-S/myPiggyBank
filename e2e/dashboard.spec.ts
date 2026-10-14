@@ -53,11 +53,13 @@ test('dashboard shows period totals, insights, charts with table views', async (
     page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
   await expect(tile('Net income')).toContainText('11.250,00 €');
   await expect(tile('Spent')).toContainText('5.308,00 €'); // 3×912 + 172 + 400 + 2000
-  await expect(tile('Future You')).toContainText('680,00 €');
+  await expect(tile('Make Me Rich')).toContainText('680,00 €');
   await expect(page.getByText('Financial insights')).toBeVisible();
   await expect(
     page
-      .getByText(/Fun took .* above its 30 % target|Future You got .* below its 20 % target/)
+      .getByText(
+        /Make Me Happy took .* above its 30 % target|Make Me Rich got .* below its 20 % target/,
+      )
       .first(),
   ).toBeVisible();
   await expect(page.getByText('Income and where it went')).toBeVisible();

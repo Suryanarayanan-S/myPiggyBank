@@ -7,17 +7,20 @@ import { FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { api } from '../../lib/api';
 import { useCategories } from '../../lib/queries';
-import { BUCKETS, type Bucket, type Category } from '../../lib/types';
+import { useMe } from '../../auth/auth';
+import { useBucketNames } from '../../lib/buckets';
+import { BUCKET_KEYS, type Bucket, type Category } from '../../lib/types';
 
 type Column = { key: string; title: string; kind: 'income' | 'expense'; bucket: Bucket | null };
-const COLUMNS: Column[] = [
-  { key: 'income', title: 'Income', kind: 'income', bucket: null },
-  { key: 'essentials', title: 'Essentials · 50%', kind: 'expense', bucket: 'essentials' },
-  { key: 'fun', title: 'Fun · 30%', kind: 'expense', bucket: 'fun' },
-  { key: 'future', title: 'Future You · 20%', kind: 'expense', bucket: 'future' },
-];
 
 export function CategoriesCard() {
+  const names = useBucketNames();
+  const targets = useMe().data?.family.targets;
+  const title = (b: Bucket) => (targets ? `${names[b]} · ${targets[b]}%` : names[b]);
+  const COLUMNS: Column[] = [
+    { key: 'income', title: 'Income', kind: 'income', bucket: null },
+    ...BUCKET_KEYS.map((b) => ({ key: b, title: title(b), kind: 'expense' as const, bucket: b })),
+  ];
   const categories = useCategories();
   const queryClient = useQueryClient();
   // Category names appear on many pages (transactions, budget, dashboard): refresh them all.
@@ -39,7 +42,8 @@ export function CategoriesCard() {
   return (
     <Card title="Categories">
       <p className="mb-4 text-sm text-slate-500">
-        Every expense belongs to a bucket: Essentials, Fun or Future You (savings and investments).
+        Every expense belongs to a bucket: {names.essentials}, {names.fun} or {names.future}{' '}
+        (savings and investments). Rename the buckets under Family.
       </p>
       <FormError error={error} />
       <div className="mt-2 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -67,6 +71,7 @@ function CategoryColumn({
   items: Category[];
   run: (fn: () => Promise<unknown>) => Promise<boolean>;
 }) {
+  const names = useBucketNames();
   const [name, setName] = useState('');
   const add = useMutation({
     mutationFn: () =>
@@ -111,9 +116,9 @@ function CategoryColumn({
                     run(() => api.put(`/categories/${c.id}`, { bucket: e.target.value }))
                   }
                 >
-                  {Object.entries(BUCKETS).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
+                  {BUCKET_KEYS.map((b) => (
+                    <option key={b} value={b}>
+                      {names[b]}
                     </option>
                   ))}
                 </select>

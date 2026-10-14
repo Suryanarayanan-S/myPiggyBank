@@ -91,7 +91,7 @@ describe('year report', () => {
     const lines = res.body.slice(1).split('\r\n');
     expect(lines[0]).toBe('Currency;EUR');
     expect(lines[1]).toBe(
-      'Month;Net income;Essentials;Fun;Future You;Uncategorised;Unused;Savings rate',
+      'Month;Net income;Keep Me Alive;Make Me Happy;Make Me Rich;Uncategorised;Unused;Savings rate',
     );
     expect(lines[2]).toBe('2026-01;5000,00;1100,00;0,00;0,00;0,00;3900,00;78,0 %');
     expect(lines).toContain('Category;Bucket;2026;Jan–Feb 2025;Change');

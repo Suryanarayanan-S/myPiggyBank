@@ -1,3 +1,4 @@
+import { DEFAULT_BUCKET_NAMES, type BucketNames } from './buckets';
 import { formatMoney } from './money';
 import { formatPercent } from './percent';
 
@@ -22,6 +23,7 @@ export function insightsFor(
   targets: { essentials: number; fun: number; future: number },
   currency: string,
   categories: { name: string; actual: number; bucket: string | null }[],
+  names: BucketNames = DEFAULT_BUCKET_NAMES,
 ): Insight[] {
   const out: Insight[] = [];
   const money = (c: number) => formatMoney(c, currency);
@@ -73,17 +75,17 @@ export function insightsFor(
   if (share.essentials !== null && share.essentials > targets.essentials * 100)
     off.push({
       tone: 'warning',
-      text: `Essentials took ${formatPercent(share.essentials)} of income, above its ${targets.essentials} % target.`,
+      text: `${names.essentials} took ${formatPercent(share.essentials)} of income, above its ${targets.essentials} % target.`,
     });
   if (share.fun !== null && share.fun > targets.fun * 100)
     off.push({
       tone: 'warning',
-      text: `Fun took ${formatPercent(share.fun)} of income, above its ${targets.fun} % target.`,
+      text: `${names.fun} took ${formatPercent(share.fun)} of income, above its ${targets.fun} % target.`,
     });
   if (share.future !== null && share.future < targets.future * 100)
     off.push({
       tone: 'warning',
-      text: `Future You got ${formatPercent(share.future)} of income, below its ${targets.future} % target.`,
+      text: `${names.future} got ${formatPercent(share.future)} of income, below its ${targets.future} % target.`,
     });
   if (off.length) out.push(...off);
   else

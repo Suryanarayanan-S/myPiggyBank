@@ -38,6 +38,21 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('97.85', { exact: true })).toBeVisible();
   await shot(page, '03-settings');
 
+  // Buckets carry the family's own names everywhere.
+  await expect(page.getByLabel('Needs bucket')).toHaveValue('Keep Me Alive');
+  await page.getByLabel('Needs bucket').fill('Bills & Burritos');
+  await page
+    .locator('form', { has: page.getByLabel('Needs bucket') })
+    .getByRole('button', { name: 'Save' })
+    .click();
+  await expect(page.getByText('Bills & Burritos · 50%')).toBeVisible();
+  await page.getByLabel('Needs bucket').fill('Keep Me Alive');
+  await page
+    .locator('form', { has: page.getByLabel('Needs bucket') })
+    .getByRole('button', { name: 'Save' })
+    .click();
+  await expect(page.getByText('Keep Me Alive · 50%')).toBeVisible();
+
   // Account
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();

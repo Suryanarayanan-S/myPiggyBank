@@ -4,9 +4,11 @@ import { Button } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { api } from '../../lib/api';
-import { BUCKETS, type Bucket, type Family } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { BUCKET_KEYS, type Family } from '../../lib/types';
 
 export function TargetsForm({ family, onDone }: { family: Family; onDone: () => void }) {
+  const names = useBucketNames();
   const queryClient = useQueryClient();
   const [t, setT] = useState(family.targets);
   const sum = t.essentials + t.fun + t.future;
@@ -28,8 +30,8 @@ export function TargetsForm({ family, onDone }: { family: Family; onDone: () => 
       }}
     >
       <div className="grid grid-cols-3 gap-3">
-        {(Object.keys(BUCKETS) as Bucket[]).map((b) => (
-          <Field key={b} label={`${BUCKETS[b]} %`} htmlFor={`target-${b}`}>
+        {BUCKET_KEYS.map((b) => (
+          <Field key={b} label={`${names[b]} %`} htmlFor={`target-${b}`}>
             <Input
               id={`target-${b}`}
               type="number"

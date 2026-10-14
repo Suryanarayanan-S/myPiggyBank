@@ -49,9 +49,9 @@ describe('insightsFor', () => {
     );
     expect(texts(out)).toEqual(
       expect.arrayContaining([
-        'Essentials took 55.0 % of income, above its 50 % target.',
-        'Fun took 31.0 % of income, above its 30 % target.',
-        'Future You got 10.1 % of income, below its 20 % target.',
+        'Keep Me Alive took 55.0 % of income, above its 50 % target.',
+        'Make Me Happy took 31.0 % of income, above its 30 % target.',
+        'Make Me Rich got 10.1 % of income, below its 20 % target.',
       ]),
     );
   });
@@ -136,5 +136,18 @@ describe('insightsFor', () => {
       [],
     );
     expect(out).toEqual([{ tone: 'info', text: 'No income recorded in this period yet.' }]);
+  });
+
+  it('uses the family’s own bucket names', () => {
+    const out = insightsFor(
+      totals({ sharesBp: { essentials: 5_500, fun: 3_100, future: 1_010 } }),
+      null,
+      targets,
+      'EUR',
+      cats,
+      { essentials: 'Keep Me Alive', fun: 'Make Me Happy', future: 'Make Me Rich' },
+    ).map((i) => i.text);
+    expect(out).toContain('Keep Me Alive took 55.0 % of income, above its 50 % target.');
+    expect(out).toContain('Make Me Rich got 10.1 % of income, below its 20 % target.');
   });
 });

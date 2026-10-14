@@ -15,8 +15,9 @@ import { defaultImportMode, type ImportMode } from '../lib/importDefaults';
 import { formatMoney } from '../lib/money';
 import { monthTitle } from '../lib/months';
 import { useAccounts, useCategories } from '../lib/queries';
+import { useBucketNames } from '../lib/buckets';
 import {
-  BUCKETS,
+  BUCKET_KEYS,
   type Bucket,
   type ImportLabel,
   type ImportPreview,
@@ -264,20 +265,21 @@ function MappingCard({
   /** The spreadsheet's amounts are imported in the spending currency. */
   currency: string;
 }) {
+  const names = useBucketNames();
   const categories = useCategories();
   const groups = useMemo(
     () =>
       [
         { title: 'Income', filter: (l: ImportLabel) => l.kind === 'income' },
-        ...(Object.keys(BUCKETS) as Bucket[]).map((b) => ({
-          title: BUCKETS[b],
+        ...BUCKET_KEYS.map((b) => ({
+          title: names[b],
           filter: (l: ImportLabel) => l.bucket === b,
         })),
       ].map((g) => ({
         ...g,
         labels: preview.labels.filter(g.filter).sort((a, b) => b.total - a.total),
       })),
-    [preview],
+    [preview, names],
   );
   const newNames = new Set(
     Object.values(mapping)

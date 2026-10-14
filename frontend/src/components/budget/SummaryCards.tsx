@@ -3,18 +3,28 @@ import { Card } from '../ui/Card';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
 import type { MonthSummary } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
 
 export function SummaryCards({ s }: { s: MonthSummary }) {
+  const names = useBucketNames();
   const items = [
     { label: 'Net income', value: formatMoney(s.netIncome, s.currency) },
-    { label: 'Spent', hint: 'Essentials + Fun', value: formatMoney(s.spent, s.currency) },
-    { label: 'Future You', hint: 'saved & invested', value: formatMoney(s.future, s.currency) },
+    {
+      label: 'Spent',
+      hint: `${names.essentials} + ${names.fun}`,
+      value: formatMoney(s.spent, s.currency),
+    },
+    { label: names.future, hint: 'saved & invested', value: formatMoney(s.future, s.currency) },
     {
       label: 'Unused',
       value: formatMoney(s.unused, s.currency),
       tone: s.unused < 0 ? 'bad' : undefined,
     },
-    { label: 'Savings rate', hint: 'Future You + unused', value: formatPercent(s.savingsRateBp) },
+    {
+      label: 'Savings rate',
+      hint: `${names.future} + unused`,
+      value: formatPercent(s.savingsRateBp),
+    },
   ];
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
+import { getFamily } from '../services/familyService.js';
 import { ReportQuery, YearParams, getYearReport, reportCsv } from '../services/reportService.js';
 
 const Params = z.object({ year: z.string().max(10) });
@@ -20,6 +21,8 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .type('text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="report-${year}-${report.currency}.csv"`)
-      .send(reportCsv(report));
+      .send(
+        reportCsv(report, (await getFamily(app.prisma, currentUser(req).familyId)).bucketNames),
+      );
   });
 };

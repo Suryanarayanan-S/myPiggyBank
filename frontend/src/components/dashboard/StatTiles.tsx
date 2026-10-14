@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import type { Dashboard, Totals } from '../../lib/dashboardTypes';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
+import { useBucketNames, type BucketNames } from '../../lib/buckets';
 
 function Delta({ diff, upIsGood, text }: { diff: number; upIsGood: boolean; text: string }) {
   if (diff === 0) return <p className="mt-1 text-xs text-slate-500">Same as previous period</p>;
@@ -24,14 +25,17 @@ function Delta({ diff, upIsGood, text }: { diff: number; upIsGood: boolean; text
   );
 }
 
-const TILES: { key: keyof Totals; label: string; hint: string; upIsGood: boolean }[] = [
+const tiles = (
+  names: BucketNames,
+): { key: keyof Totals; label: string; hint: string; upIsGood: boolean }[] => [
   { key: 'netIncome', label: 'Net income', hint: 'all income', upIsGood: true },
-  { key: 'spent', label: 'Spent', hint: 'Essentials + Fun', upIsGood: false },
-  { key: 'future', label: 'Future You', hint: 'saved & invested', upIsGood: true },
+  { key: 'spent', label: 'Spent', hint: `${names.essentials} + ${names.fun}`, upIsGood: false },
+  { key: 'future', label: names.future, hint: 'saved & invested', upIsGood: true },
   { key: 'unused', label: 'Unused', hint: 'left over', upIsGood: true },
 ];
 
 export function StatTiles({ d }: { d: Dashboard }) {
+  const names = useBucketNames();
   const { totals: t, previous: p, currency } = d;
   const money = (c: number) => formatMoney(c, currency);
   const signed = (c: number) => `${c > 0 ? '+' : '−'}${money(Math.abs(c))}`;
@@ -42,7 +46,7 @@ export function StatTiles({ d }: { d: Dashboard }) {
       <Card className="flex flex-col justify-center">
         <p className="text-sm font-medium text-slate-500">Savings rate</p>
         <p className="text-5xl font-semibold tracking-tight">{formatPercent(t.savingsRateBp)}</p>
-        <p className="mt-1 text-xs text-slate-500">(Future You + unused) ÷ net income</p>
+        <p className="mt-1 text-xs text-slate-500">({names.future} + unused) ÷ net income</p>
         {rateDiff !== null && (
           <Delta
             diff={rateDiff}
@@ -52,7 +56,7 @@ export function StatTiles({ d }: { d: Dashboard }) {
         )}
       </Card>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {TILES.map((tile) => {
+        {tiles(names).map((tile) => {
           const value = t[tile.key] as number;
           return (
             <Card key={tile.key} className="!p-4">
@@ -67,7 +71,7 @@ export function StatTiles({ d }: { d: Dashboard }) {
               </p>
               <p className="text-xs text-slate-400">
                 {tile.key === 'spent' && t.uncategorised > 0
-                  ? 'Essentials + Fun + uncategorised'
+                  ? `${names.essentials} + ${names.fun} + uncategorised`
                   : tile.hint}
               </p>
               {p && (

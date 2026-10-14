@@ -12,12 +12,14 @@ import { api } from '../lib/api';
 import { formatMoney, parseMoneyInput } from '../lib/money';
 import { isMonth, localMonth } from '../lib/months';
 import { useAccounts } from '../lib/queries';
-import { BUCKETS, type Bucket, type MonthEntry } from '../lib/types';
+import { useBucketNames } from '../lib/buckets';
+import { BUCKET_KEYS, type Bucket, type MonthEntry } from '../lib/types';
 
 const asInput = (cents: number | null) =>
   cents === null ? '' : (cents / 100).toFixed(2).replace('.', ',');
 
 export function MonthEntryPage() {
+  const names = useBucketNames();
   const [params, setParams] = useSearchParams();
   const month = isMonth(params.get('month')) ? params.get('month')! : localMonth();
   const me = useMe();
@@ -94,8 +96,8 @@ export function MonthEntryPage() {
 
   const groups: { title: string; filter: (r: MonthEntry['rows'][number]) => boolean }[] = [
     { title: 'Income', filter: (r) => r.kind === 'income' },
-    ...(Object.keys(BUCKETS) as Bucket[]).map((b) => ({
-      title: BUCKETS[b],
+    ...BUCKET_KEYS.map((b) => ({
+      title: names[b],
       filter: (r: MonthEntry['rows'][number]) => r.bucket === b,
     })),
   ];
@@ -206,7 +208,7 @@ export function MonthEntryPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="inline text-slate-500">Future You </dt>
+                  <dt className="inline text-slate-500">{names.future} </dt>
                   <dd className="inline font-semibold tabular-nums">
                     {formatMoney(byBucket('future'), currency)}
                   </dd>

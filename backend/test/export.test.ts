@@ -54,7 +54,7 @@ describe('CSV export', () => {
     );
     expect(lines).toHaveLength(3);
     expect(lines).toContain(
-      '2026-10-02;expense;-52,40;EUR;Sparkasse;Groceries;Essentials;Shared;"REWE; ""Markt""";;food',
+      '2026-10-02;expense;-52,40;EUR;Sparkasse;Groceries;Keep Me Alive;Shared;"REWE; ""Markt""";;food',
     );
   });
 
@@ -79,5 +79,15 @@ describe('CSV export', () => {
     const lines = res.body.slice(1).trim().split('\r\n');
     expect(lines).toHaveLength(2); // header + REWE
     expect(lines[1]).toContain('REWE');
+  });
+
+  it('writes bucket names safely, whatever the family calls them', async () => {
+    await call('PUT', '/api/family', {
+      bucketNames: { essentials: '=Bills; "x"', fun: 'Treats', future: 'Later' },
+    });
+    const res = await call('GET', '/api/export/transactions.csv?from=2026-10-01&to=2026-10-31');
+    expect(res.body).toContain(`;Groceries;"'=Bills; ""x""";`);
+    const report = await call('GET', '/api/reports/year/2026.csv');
+    expect(report.body).toContain(`Net income;"'=Bills; ""x""";Treats;Later;`);
   });
 });

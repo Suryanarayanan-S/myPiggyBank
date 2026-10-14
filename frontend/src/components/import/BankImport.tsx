@@ -18,11 +18,13 @@ import {
 import { fileToBase64 } from '../../lib/files';
 import { formatMoney } from '../../lib/money';
 import { useAccounts, useCategories } from '../../lib/queries';
-import { BUCKETS } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { BUCKET_KEYS } from '../../lib/types';
 
 type Choice = { include: boolean; categoryId: string; remember: boolean };
 
 export function BankImport() {
+  const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
   const categories = useCategories();
@@ -357,8 +359,8 @@ export function BankImport() {
                             >
                               <option value="">Uncategorised</option>
                               {r.type === 'expense'
-                                ? (Object.keys(BUCKETS) as (keyof typeof BUCKETS)[]).map((b) => (
-                                    <optgroup key={b} label={BUCKETS[b]}>
+                                ? BUCKET_KEYS.map((b) => (
+                                    <optgroup key={b} label={names[b]}>
                                       {cats
                                         .filter((x) => x.bucket === b)
                                         .map((x) => (

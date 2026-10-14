@@ -13,6 +13,7 @@ export type Family = {
   wealthCurrency: string;
   rateMode: 'manual' | 'live';
   targets: { essentials: number; fun: number; future: number };
+  bucketNames: Record<Bucket, string>;
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };
@@ -51,8 +52,9 @@ export type Account = {
   monthChange: number;
 };
 
-export const BUCKETS = { essentials: 'Essentials', fun: 'Fun', future: 'Future You' } as const;
-export type Bucket = keyof typeof BUCKETS;
+/** Bucket keys in display order; their names come from the family (`useBucketNames`). */
+export const BUCKET_KEYS = ['essentials', 'fun', 'future'] as const;
+export type Bucket = (typeof BUCKET_KEYS)[number];
 
 export type Category = {
   id: string;

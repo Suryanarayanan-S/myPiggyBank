@@ -11,12 +11,14 @@ import { defaultAccountId, rememberAccountId, selectableAccounts } from '../../l
 import { localDay } from '../../lib/months';
 import { parseMoneyInput } from '../../lib/money';
 import { useAccounts, useCategories, useMembers } from '../../lib/queries';
-import { BUCKETS, CURRENCIES, type Transaction, type TransactionType } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { BUCKET_KEYS, CURRENCIES, type Transaction, type TransactionType } from '../../lib/types';
 
 const asInput = (cents: number | null | undefined) =>
   cents == null ? '' : (cents / 100).toFixed(2).replace('.', ',');
 
 export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: () => void }) {
+  const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
   const categories = useCategories();
@@ -114,8 +116,8 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const cats = (categories.data ?? []).filter((c) => c.kind === type);
   const groups =
     type === 'expense'
-      ? (Object.keys(BUCKETS) as (keyof typeof BUCKETS)[]).map((b) => ({
-          label: BUCKETS[b],
+      ? BUCKET_KEYS.map((b) => ({
+          label: names[b],
           items: cats.filter((c) => c.bucket === b),
         }))
       : [{ label: 'Income', items: cats }];

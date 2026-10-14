@@ -14,15 +14,15 @@ the money in that currency instead of the default.
 
 ## Auth and family
 
-| Method                    | Path                       | Notes                                                                                          |
-| ------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
-| POST                      | `/auth/register`           | `{ name, email, password, familyName? }` — first user creates the family. Rate-limited.        |
-| POST                      | `/auth/login`              | `{ email, password }`. Rate-limited.                                                           |
-| POST                      | `/auth/logout`             |                                                                                                |
-| GET                       | `/auth/me`                 | `{ user, family }`                                                                             |
-| DELETE                    | `/auth/account`            | `{ password, confirm: "DELETE" }`; deletes the family if you were the last user. Rate-limited. |
-| GET / PUT                 | `/family`                  | name, `spendingCurrency`, `wealthCurrency`, `rateMode` (`manual` / `live`), `targets`          |
-| GET / POST / PUT / DELETE | `/members`, `/members/:id` | family members (labels for transactions)                                                       |
+| Method                    | Path                       | Notes                                                                                                |
+| ------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| POST                      | `/auth/register`           | `{ name, email, password, familyName? }` — first user creates the family. Rate-limited.              |
+| POST                      | `/auth/login`              | `{ email, password }`. Rate-limited.                                                                 |
+| POST                      | `/auth/logout`             |                                                                                                      |
+| GET                       | `/auth/me`                 | `{ user, family }`                                                                                   |
+| DELETE                    | `/auth/account`            | `{ password, confirm: "DELETE" }`; deletes the family if you were the last user. Rate-limited.       |
+| GET / PUT                 | `/family`                  | name, `spendingCurrency`, `wealthCurrency`, `rateMode` (`manual` / `live`), `targets`, `bucketNames` |
+| GET / POST / PUT / DELETE | `/members`, `/members/:id` | family members (labels for transactions)                                                             |
 
 ## Money in and out
 

@@ -8,7 +8,8 @@ import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import { formatPercent } from '../lib/percent';
-import { BUCKETS } from '../lib/types';
+import { useBucketNames, type BucketNames } from '../lib/buckets';
+import { type Bucket } from '../lib/types';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 type Money = {
@@ -40,7 +41,7 @@ type YearReport = {
   /** 'average' when the years have a different number of recorded months */
   changeBasis: 'total' | 'average';
   change: Record<keyof Omit<Money, 'savingsRateBp'>, { amount: number; bp: number | null }>;
-  categories: (Row & { categoryId: string | null; bucket: keyof typeof BUCKETS | null })[];
+  categories: (Row & { categoryId: string | null; bucket: Bucket | null })[];
   members: (Row & { memberId: string | null })[];
   netWorth: {
     start: { date: string; amount: number } | null;
@@ -52,11 +53,13 @@ type YearReport = {
 const monthName = (month: string) =>
   new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
 
-const ALL_COLUMNS: { key: keyof Omit<Money, 'savingsRateBp'>; label: string }[] = [
+const allColumns = (
+  names: BucketNames,
+): { key: keyof Omit<Money, 'savingsRateBp'>; label: string }[] => [
   { key: 'netIncome', label: 'Net income' },
-  { key: 'essentials', label: 'Essentials' },
-  { key: 'fun', label: 'Fun' },
-  { key: 'future', label: 'Future You' },
+  { key: 'essentials', label: names.essentials },
+  { key: 'fun', label: names.fun },
+  { key: 'future', label: names.future },
   { key: 'uncategorised', label: 'Uncategorised' },
   { key: 'unused', label: 'Unused' },
 ];
@@ -80,6 +83,7 @@ function Change({ bp, upIsGood = true }: { bp: number | null; upIsGood?: boolean
 }
 
 export function ReportsPage() {
+  const names = useBucketNames();
   const [params, setParams] = useSearchParams();
   const thisYear = new Date().getFullYear();
   const year = /^\d{4}$/.test(params.get('year') ?? '') ? Number(params.get('year')) : thisYear;
@@ -91,7 +95,7 @@ export function ReportsPage() {
   });
   const r = report.data;
   // Uncategorised only when there is some, so the row always adds up to "Unused".
-  const COLUMNS = ALL_COLUMNS.filter(
+  const COLUMNS = allColumns(names).filter(
     (c) =>
       c.key !== 'uncategorised' ||
       (r && (r.totals.uncategorised !== 0 || (r.previous?.totals.uncategorised ?? 0) !== 0)),
@@ -172,7 +176,7 @@ export function ReportsPage() {
                 [
                   ['Net income', r.totals.netIncome, 'netIncome', true],
                   ['Spent', r.totals.spent, 'spent', false],
-                  ['Future You', r.totals.future, 'future', true],
+                  [names.future, r.totals.future, 'future', true],
                 ] as const
               ).map(([label, value, key, up]) => (
                 <Card key={label} className="!p-4">
@@ -306,7 +310,7 @@ export function ReportsPage() {
                 rows={r.categories.map((c) => ({
                   key: c.categoryId ?? 'none',
                   name: c.name,
-                  note: c.bucket ? BUCKETS[c.bucket] : undefined,
+                  note: c.bucket ? names[c.bucket] : undefined,
                   actual: c.actual,
                   previous: c.previous,
                   changeBp: c.changeBp,

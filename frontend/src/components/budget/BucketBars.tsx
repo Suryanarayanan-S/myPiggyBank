@@ -2,9 +2,11 @@ import { Card } from '../ui/Card';
 import { Progress } from '../ui/Progress';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
-import { BUCKETS, type MonthSummary } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { type MonthSummary } from '../../lib/types';
 
 export function BucketBars({ s, actions }: { s: MonthSummary; actions?: React.ReactNode }) {
+  const names = useBucketNames();
   return (
     <Card title="50 / 30 / 20" actions={actions}>
       <div className="space-y-5">
@@ -25,7 +27,7 @@ export function BucketBars({ s, actions }: { s: MonthSummary; actions?: React.Re
             <div key={b.bucket}>
               <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
                 <span className="font-medium">
-                  {BUCKETS[b.bucket]}{' '}
+                  {names[b.bucket]}{' '}
                   <span className="font-normal text-slate-500">· target {b.targetPct} %</span>
                 </span>
                 <span className="tabular-nums">
@@ -37,7 +39,7 @@ export function BucketBars({ s, actions }: { s: MonthSummary; actions?: React.Re
                 </span>
               </div>
               <Progress
-                label={`${BUCKETS[b.bucket]} share of income`}
+                label={`${names[b.bucket]} share of income`}
                 value={(b.actualBp ?? 0) / 10_000}
                 marker={b.targetPct / 100}
                 tone={tone}

@@ -54,7 +54,7 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await expect(page.getByText('21.0 %')).toBeVisible(); // essentials share
   await expect(page.getByText(/below its 20 % target/)).toBeVisible(); // future you 10.1 %
 
-  const essentials = page.getByRole('region', { name: 'Essentials' });
+  const essentials = page.getByRole('region', { name: 'Keep Me Alive' });
   await expect(essentials.getByText('Phone')).toBeHidden(); // nothing spent: folded away
   await essentials.getByRole('button', { name: /more with no spending/ }).click();
   await expect(essentials.getByText('Phone')).toBeVisible();

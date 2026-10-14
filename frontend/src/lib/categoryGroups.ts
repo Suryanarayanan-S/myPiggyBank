@@ -1,4 +1,4 @@
-import { BUCKETS, type Bucket, type CategorySummary } from './types';
+import { BUCKET_KEYS, type Bucket, type CategorySummary } from './types';
 
 export type GroupedCategory = CategorySummary & { shareBp: number };
 export type CategoryGroup = {
@@ -12,7 +12,7 @@ export type CategoryGroup = {
 
 /** Expense categories per bucket, in bucket order; uncategorised spending is not in any bucket. */
 export function groupCategories(categories: CategorySummary[]): CategoryGroup[] {
-  return (Object.keys(BUCKETS) as Bucket[]).map((bucket) => {
+  return BUCKET_KEYS.map((bucket) => {
     const rows = categories.filter((c) => c.kind === 'expense' && c.bucket === bucket);
     const total = rows.reduce((sum, c) => sum + c.actual, 0);
     return {

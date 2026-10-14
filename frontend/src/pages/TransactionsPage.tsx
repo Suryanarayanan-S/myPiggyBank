@@ -13,7 +13,8 @@ import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import { useAccounts, useCategories, useMembers } from '../lib/queries';
-import { BUCKETS, type Page, type Transaction } from '../lib/types';
+import { useBucketNames } from '../lib/buckets';
+import { type Page, type Transaction } from '../lib/types';
 import { isMonth, localMonth, monthEnd } from '../lib/months';
 import { MonthNav } from '../components/ui/MonthNav';
 import { useViewCurrency } from '../lib/viewCurrency';
@@ -28,6 +29,7 @@ const dayLabel = (d: string) =>
   });
 
 export function TransactionsPage() {
+  const names = useBucketNames();
   const [params, setParams] = useSearchParams();
   const month = isMonth(params.get('month')) ? params.get('month')! : localMonth();
   const filter = (k: string) => params.get(k) ?? '';
@@ -206,7 +208,7 @@ export function TransactionsPage() {
                     </span>
                     <span className="block truncate text-xs text-slate-500">
                       {t.type !== 'transfer' && (t.categoryName ?? 'Uncategorised')}
-                      {t.bucket && ` · ${BUCKETS[t.bucket]}`}
+                      {t.bucket && ` · ${names[t.bucket]}`}
                       {t.type !== 'transfer' && ` · ${t.accountName ?? 'No account'}`}
                       {` · ${t.memberName ?? 'Shared'}`}
                       {t.notes && !t.isMonthlyTotal && ` · ${t.notes}`}

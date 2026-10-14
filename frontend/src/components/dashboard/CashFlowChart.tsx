@@ -24,8 +24,10 @@ import {
 import type { Dashboard } from '../../lib/dashboardTypes';
 import { cashFlowRows } from '../../lib/cashflow';
 import { formatCompact, formatMoney } from '../../lib/money';
+import { useBucketNames } from '../../lib/buckets';
 
 export function CashFlowChart({ d }: { d: Dashboard }) {
+  const names = useBucketNames();
   const data = cashFlowRows(d.months);
   const hasUncategorised = data.some((m) => m.uncategorised > 0);
   const money = (c: number) => formatMoney(c, d.currency);
@@ -33,12 +35,12 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
   return (
     <ChartCard
       title="Income and where it went"
-      subtitle="Per month: Essentials, Fun and Future You, with net income as a line"
+      subtitle={`Per month: ${names.essentials}, ${names.fun} and ${names.future}, with net income as a line`}
       legend={[
-        { label: 'Essentials', color: BUCKET_COLOR.essentials },
+        { label: names.essentials, color: BUCKET_COLOR.essentials },
         ...(hasUncategorised ? [{ label: 'Uncategorised', color: MUTED }] : []),
-        { label: 'Fun', color: BUCKET_COLOR.fun },
-        { label: 'Future You', color: BUCKET_COLOR.future },
+        { label: names.fun, color: BUCKET_COLOR.fun },
+        { label: names.future, color: BUCKET_COLOR.future },
         { label: 'Net income', color: INK, shape: 'line' },
       ]}
       table={
@@ -46,10 +48,10 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
           head={[
             'Month',
             'Net income',
-            'Essentials',
+            names.essentials,
             ...(hasUncategorised ? ['Uncategorised'] : []),
-            'Fun',
-            'Future You',
+            names.fun,
+            names.future,
             'Unused',
           ]}
           rows={d.months.map((m) => [
@@ -98,7 +100,7 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
                         ? [
                             { label: 'Net income', value: money(p.netIncome), color: INK },
                             {
-                              label: 'Essentials',
+                              label: names.essentials,
                               value: money(p.essentials),
                               color: BUCKET_COLOR.essentials,
                             },
@@ -111,9 +113,9 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
                                   },
                                 ]
                               : []),
-                            { label: 'Fun', value: money(p.fun), color: BUCKET_COLOR.fun },
+                            { label: names.fun, value: money(p.fun), color: BUCKET_COLOR.fun },
                             {
-                              label: 'Future You',
+                              label: names.future,
                               value: money(p.future),
                               color: BUCKET_COLOR.future,
                             },
@@ -127,7 +129,7 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
             />
             <Bar
               dataKey="essentials"
-              name="Essentials"
+              name={names.essentials}
               stackId="s"
               fill={BUCKET_COLOR.essentials}
               stroke={SURFACE}
@@ -147,7 +149,7 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
             />
             <Bar
               dataKey="fun"
-              name="Fun"
+              name={names.fun}
               stackId="s"
               fill={BUCKET_COLOR.fun}
               stroke={SURFACE}
@@ -157,7 +159,7 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
             />
             <Bar
               dataKey="future"
-              name="Future You"
+              name={names.future}
               stackId="s"
               fill={BUCKET_COLOR.future}
               stroke={SURFACE}

@@ -4,7 +4,8 @@ import { ChartTooltip } from './ChartTooltip';
 import { BUCKET_COLOR, MUTED, SINGLE, axisTick } from '../../lib/chart';
 import type { Dashboard } from '../../lib/dashboardTypes';
 import { formatCompact, formatMoney } from '../../lib/money';
-import { BUCKETS, type Bucket } from '../../lib/types';
+import { BUCKET_KEYS } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
 
 type Row = { name: string; actual: number; color: string };
 const TOP = 8;
@@ -61,6 +62,7 @@ function Bars({ rows, currency, label }: { rows: Row[]; currency: string; label:
 }
 
 export function CategoryBars({ d }: { d: Dashboard }) {
+  const names = useBucketNames();
   const top = d.categories.slice(0, TOP);
   const rest = d.categories.slice(TOP).reduce((s, c) => s + c.actual, 0);
   const rows: Row[] = [
@@ -73,18 +75,18 @@ export function CategoryBars({ d }: { d: Dashboard }) {
       ? [{ name: `${d.categories.length - TOP} more`, actual: rest, color: MUTED }]
       : []),
   ];
-  const present = (Object.keys(BUCKETS) as Bucket[]).filter((b) => top.some((c) => c.bucket === b));
+  const present = BUCKET_KEYS.filter((b) => top.some((c) => c.bucket === b));
   return (
     <ChartCard
       title="Where the money went"
       subtitle="Largest categories in this period"
-      legend={present.map((b) => ({ label: BUCKETS[b], color: BUCKET_COLOR[b] }))}
+      legend={present.map((b) => ({ label: names[b], color: BUCKET_COLOR[b] }))}
       table={
         <DataTable
           head={['Category', 'Bucket', 'Amount']}
           rows={d.categories.map((c) => [
             c.name,
-            c.bucket ? BUCKETS[c.bucket] : '—',
+            c.bucket ? names[c.bucket] : '—',
             formatMoney(c.actual, d.currency),
           ])}
         />
@@ -100,11 +102,12 @@ export function CategoryBars({ d }: { d: Dashboard }) {
 }
 
 export function MemberBars({ d }: { d: Dashboard }) {
+  const names = useBucketNames();
   const rows: Row[] = d.members.map((m) => ({ name: m.name, actual: m.actual, color: SINGLE }));
   return (
     <ChartCard
       title="Spending by family member"
-      subtitle="Essentials + Fun; Future You is saving, not spending"
+      subtitle={`${names.essentials} + ${names.fun}; ${names.future} is saving, not spending`}
       table={
         <DataTable
           head={['Member', 'Spent']}

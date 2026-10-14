@@ -9,7 +9,8 @@ import { api } from '../../lib/api';
 import { groupCategories, type GroupedCategory } from '../../lib/categoryGroups';
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
-import { BUCKETS, type Bucket, type CategorySummary, type MonthSummary } from '../../lib/types';
+import { useBucketNames } from '../../lib/buckets';
+import { type Bucket, type CategorySummary, type MonthSummary } from '../../lib/types';
 
 const asInput = (cents: number | null) =>
   cents === null ? '' : (cents / 100).toFixed(2).replace('.', ',');
@@ -22,6 +23,7 @@ const BUCKET_COLOR: Record<Bucket, string> = {
 type Save = ((limit: { categoryId: string; amount: number | null }) => void) | null;
 
 export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: React.ReactNode }) {
+  const names = useBucketNames();
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: (limit: { categoryId: string; amount: number | null }) =>
@@ -44,7 +46,7 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
         {groups.map((g) => (
           <section
             key={g.bucket}
-            aria-label={BUCKETS[g.bucket]}
+            aria-label={names[g.bucket]}
             className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
           >
             <header className="mb-3 flex items-center justify-between gap-2">
@@ -54,7 +56,7 @@ export function CategoryLimits({ s, actions }: { s: MonthSummary; actions?: Reac
                   className="inline-block size-2.5 shrink-0 rounded-full"
                   style={{ background: BUCKET_COLOR[g.bucket] }}
                 />
-                {BUCKETS[g.bucket]}
+                {names[g.bucket]}
               </h3>
               <span className="text-sm font-semibold tabular-nums">
                 {formatMoney(g.total, s.currency)}

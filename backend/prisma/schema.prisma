@@ -32,6 +32,7 @@ model Family {
   snapshots        NetWorthSnapshot[]
   categoryRules    CategoryRule[]
   recurringRules   RecurringRule[]
+  goals            Goal[]
 }
 
 model User {
@@ -76,6 +77,7 @@ model FamilyMember {
   assets         Asset[]
   liabilities    Liability[]
   recurringRules RecurringRule[]
+  goals          Goal[]
 
   @@unique([familyId, name])
 }
@@ -337,4 +339,50 @@ model RecurringRule {
   transactions     Transaction[]
 
   @@index([familyId])
+}
+
+/// A savings goal. Progress = linked accounts/assets + manual entries, in the goal currency.
+model Goal {
+  id           String        @id @default(uuid())
+  familyId     String
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name         String
+  /// minor units of `currency`, > 0
+  targetAmount BigInt
+  currency     String
+  targetDate   DateTime?
+  memberId     String?
+  member       FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  note         String?
+  /// active | reached | archived
+  status       String        @default("active")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  links        GoalLink[]
+  entries      GoalEntry[]
+
+  @@index([familyId])
+}
+
+/// What a goal counts: an account's balance or an asset's latest value (holdings come later).
+model GoalLink {
+  id     String @id @default(uuid())
+  goalId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  /// account | asset
+  kind   String
+  refId  String
+
+  @@unique([goalId, kind, refId])
+}
+
+/// Money for a goal kept elsewhere (negative = taken out), in the goal currency.
+model GoalEntry {
+  id        String   @id @default(uuid())
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  date      DateTime
+  amount    BigInt
+  note      String?
+  createdAt DateTime @default(now())
 }

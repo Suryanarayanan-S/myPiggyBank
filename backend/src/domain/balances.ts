@@ -1,5 +1,6 @@
 export type BalanceTxn = {
-  accountId: string;
+  /** null: not in any account (counts nowhere) */
+  accountId: string | null;
   type: 'income' | 'expense' | 'transfer';
   amount: number;
   transferAccountId: string | null;
@@ -12,7 +13,8 @@ export function computeBalances(
   txns: BalanceTxn[],
 ): Map<string, number> {
   const balances = new Map(accounts.map((a) => [a.id, a.openingBalance]));
-  const add = (id: string, delta: number) => {
+  const add = (id: string | null, delta: number) => {
+    if (id === null) return;
     const current = balances.get(id);
     if (current !== undefined) balances.set(id, current + delta);
   };

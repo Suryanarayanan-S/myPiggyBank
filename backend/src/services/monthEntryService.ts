@@ -92,6 +92,7 @@ export async function saveMonthEntry(
             accountId,
             categoryId,
             amount,
+            currency: account.currency,
             type: kind.get(categoryId)!,
             date: start,
             notes: 'Monthly total',

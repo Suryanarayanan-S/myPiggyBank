@@ -26,15 +26,15 @@ the money in that currency instead of the default.
 
 ## Money in and out
 
-| Method                    | Path                                 | Notes                                                                                                                                      |
-| ------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET / POST / PUT / DELETE | `/accounts`, `/accounts/:id`         | currency locked once used                                                                                                                  |
-| GET                       | `/accounts/total` **(currency)**     | open accounts together; default wealth currency                                                                                            |
-| GET / POST / PUT / DELETE | `/categories`, `/categories/:id`     | expense categories have a bucket                                                                                                           |
-| GET                       | `/transactions` **(currency)**       | filters `from, to, type, accountId, categoryId, memberId, q`, `sort, order, page, pageSize`; returns `totals` per currency and `converted` |
-| POST / PUT / DELETE       | `/transactions`, `/transactions/:id` | transfers need `transferAccountId` (and `transferAmount` across currencies)                                                                |
-| GET                       | `/export/transactions.csv`           | same filters as the list (`from`, `to` required)                                                                                           |
-| GET / POST / PUT / DELETE | `/recurring`, `/recurring/:id`       | rules; `POST /recurring/run` creates what is due; `GET /recurring/upcoming?days=30`                                                        |
+| Method                    | Path                                 | Notes                                                                                                                                                                      |
+| ------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET / POST / PUT / DELETE | `/accounts`, `/accounts/:id`         | currency locked once used                                                                                                                                                  |
+| GET                       | `/accounts/total` **(currency)**     | open accounts together; default wealth currency                                                                                                                            |
+| GET / POST / PUT / DELETE | `/categories`, `/categories/:id`     | expense categories have a bucket                                                                                                                                           |
+| GET                       | `/transactions` **(currency)**       | filters `from, to, type, accountId` (`none` = without an account)`, categoryId, memberId, q`, `sort, order, page, pageSize`; returns `totals` per currency and `converted` |
+| POST / PUT / DELETE       | `/transactions`, `/transactions/:id` | transfers need `transferAccountId` (and `transferAmount` across currencies)                                                                                                |
+| GET                       | `/export/transactions.csv`           | same filters as the list (`from`, `to` required)                                                                                                                           |
+| GET / POST / PUT / DELETE | `/recurring`, `/recurring/:id`       | rules; `POST /recurring/run` creates what is due; `GET /recurring/upcoming?days=30`                                                                                        |
 
 ## Budget
 

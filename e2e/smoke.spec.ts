@@ -53,9 +53,11 @@ test('register → account → income → expense → balances → delete accoun
     amount: string,
     category: string,
     merchant: string,
+    account?: string,
   ) => {
     await page.getByRole('button', { name: 'Add transaction' }).click();
     const dialog = page.getByRole('dialog');
+    if (account) await dialog.getByLabel('Account').selectOption({ label: account });
     await dialog.getByRole('tab', { name: type.toLowerCase() }).click();
     await dialog.getByLabel(/^Amount/).fill(amount);
     await dialog.getByLabel('Category').selectOption({ label: category });
@@ -63,7 +65,11 @@ test('register → account → income → expense → balances → delete accoun
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
   };
-  await add('Income', '5416', 'Salary', 'Employer GmbH');
+  // The first transaction starts with the first account.
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Account')).not.toHaveValue('');
+  await page.getByRole('dialog').getByLabel('Close').click();
+  await add('Income', '5416', 'Salary', 'Employer GmbH', 'Sparkasse (EUR)');
   await add('Expense', '52,40', 'Groceries', 'REWE');
   await expect(page.getByText('REWE')).toBeVisible();
   await expect(page.getByText('+5.416,00 €')).toBeVisible();
@@ -77,6 +83,26 @@ test('register → account → income → expense → balances → delete accoun
     expect((await select.boundingBox())!.width).toBeGreaterThan(110);
   }
   await shot(page, '04-transactions');
+
+  // Cash without an account, in another currency: counts nowhere in the balances.
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  const cash = page.getByRole('dialog');
+  await expect(cash.getByLabel('Account')).not.toHaveValue('');
+  await cash.getByLabel('Account').selectOption({ label: 'No account' });
+  await cash.getByLabel('Currency').selectOption('INR');
+  await expect(cash.getByLabel(/^Amount/)).toHaveAccessibleName('Amount (INR)');
+  await cash.getByLabel(/^Amount/).fill('450');
+  await cash.getByLabel('Merchant').fill('Chai stall');
+  await cash.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  // "No account" is remembered for the next one.
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Account')).toHaveValue('');
+  await page.getByRole('dialog').getByLabel('Close').click();
+  await page.getByRole('combobox', { name: 'Account', exact: true }).selectOption('No account');
+  await expect(page.getByText('Chai stall')).toBeVisible();
+  await expect(page.getByText('REWE')).toBeHidden();
+  await page.getByRole('combobox', { name: 'Account', exact: true }).selectOption('All accounts');
 
   // Search
   await page.getByLabel('Search').fill('rewe');

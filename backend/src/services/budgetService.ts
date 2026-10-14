@@ -39,7 +39,7 @@ export async function getSummary(
         amount: true,
         isMonthlyTotal: true,
         categoryId: true,
-        account: { select: { currency: true } },
+        currency: true,
         category: { select: { name: true, bucket: true } },
       },
     }),
@@ -66,7 +66,7 @@ export async function getSummary(
     txns: txns.map((t): SummaryTxn => ({
       type: t.type as SummaryTxn['type'],
       amount: Number(t.amount),
-      currency: t.account.currency,
+      currency: t.currency,
       categoryId: t.categoryId,
       categoryName: t.category?.name ?? null,
       bucket: (t.category?.bucket ?? null) as Bucket | null,

@@ -222,4 +222,19 @@ describe('bank CSV import', () => {
     expect(a.rows.map((r) => r.duplicate)).toEqual([null, 'possible', 'possible', null, null]);
     expect(a.summary.duplicates).toBe(2);
   });
+
+  it('a payment entered without an account, in the same currency, is a possible duplicate', async () => {
+    const rent = { date: '2026-10-07', amount: 91_200, type: 'expense', merchant: 'Rent' };
+    await call('POST', '/api/transactions', { ...rent, accountId: null });
+    // Another currency is a different payment.
+    await call('POST', '/api/transactions', {
+      ...rent,
+      date: '2026-10-02',
+      amount: 5_240,
+      accountId: null,
+      currency: 'INR',
+    });
+    const a = await analyse((await preview()).rows);
+    expect(a.rows.map((r) => r.duplicate)).toEqual([null, null, 'possible', null, null]);
+  });
 });

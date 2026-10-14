@@ -70,7 +70,7 @@ export async function analyzeCsv(
   familyId: string,
   input: z.output<typeof AnalyzeInput>,
 ) {
-  await assertAccount(prisma, familyId, input.accountId);
+  const account = await assertAccount(prisma, familyId, input.accountId);
   const m = input.mapping;
   const parsed = input.rows.map((cells, index) => {
     const description =
@@ -99,7 +99,8 @@ export async function analyzeCsv(
     };
   });
 
-  // Duplicates: already in this account, or repeated inside the file.
+  // Duplicates: already in this account (or possibly entered without one), or repeated inside
+  // the file.
   const valid = parsed.filter((r) => !r.error);
   const dates = valid.map((r) => r.date!).sort();
   const existing = new Set<string>();
@@ -109,17 +110,20 @@ export async function analyzeCsv(
     const rows = await prisma.transaction.findMany({
       where: {
         familyId,
-        accountId: input.accountId,
+        // Payments entered by hand without an account may be this account's too.
+        OR: [{ accountId: input.accountId }, { accountId: null, currency: account.currency }],
         date: {
           gte: new Date(parseDay(dates[0]!)!.getTime() - POSSIBLE_DAYS * DAY_MS),
           lte: new Date(parseDay(dates.at(-1)!)!.getTime() + POSSIBLE_DAYS * DAY_MS),
         },
         type: { in: ['income', 'expense'] },
       },
-      select: { date: true, amount: true, type: true, merchant: true },
+      select: { date: true, amount: true, type: true, merchant: true, accountId: true },
     });
     for (const t of rows) {
-      existing.add(keyOf(formatDay(t.date), Number(t.amount), t.type, t.merchant ?? ''));
+      // Only this account's own rows can be certain duplicates.
+      if (t.accountId === input.accountId)
+        existing.add(keyOf(formatDay(t.date), Number(t.amount), t.type, t.merchant ?? ''));
       nearby.push({ day: t.date.getTime(), amount: Number(t.amount), type: t.type });
     }
   }
@@ -192,7 +196,7 @@ export async function commitCsv(
   familyId: string,
   input: z.output<typeof CommitCsvInput>,
 ) {
-  await assertAccount(prisma, familyId, input.accountId);
+  const account = await assertAccount(prisma, familyId, input.accountId);
   const ids = [
     ...new Set([
       ...input.rows.map((r) => r.categoryId).filter((x): x is string => !!x),
@@ -228,6 +232,7 @@ export async function commitCsv(
         accountId: input.accountId,
         date: parseDay(r.date)!,
         amount: r.amount,
+        currency: account.currency,
         type: r.type,
         categoryId: r.categoryId,
         merchant: merchantOf(r.description),

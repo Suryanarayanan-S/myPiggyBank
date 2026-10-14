@@ -160,7 +160,7 @@ export async function deleteRecurring(prisma: PrismaClient, familyId: string, id
 export async function generateDue(prisma: PrismaClient, asOf: string, familyId?: string) {
   const rules = await prisma.recurringRule.findMany({
     where: { active: true, ...(familyId && { familyId }) },
-    include: { account: { select: { archived: true } } },
+    include: { account: { select: { archived: true, currency: true } } },
   });
   let created = 0;
   for (const r of rules) {
@@ -197,6 +197,7 @@ export async function generateDue(prisma: PrismaClient, asOf: string, familyId?:
             accountId: r.accountId,
             date: parseDay(d)!,
             amount: r.amount,
+            currency: r.account.currency,
             type: r.type,
             categoryId: r.categoryId,
             memberId: r.memberId,

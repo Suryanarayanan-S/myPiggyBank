@@ -268,6 +268,7 @@ export async function commitImport(
           accountId: accountId!,
           date: monthRange(r.m.month).start,
           amount: r.amount,
+          currency,
           type: r.kind,
           categoryId: idFor.get(labelKey(r.kind, r.bucket, r.label))!,
           merchant: r.label,

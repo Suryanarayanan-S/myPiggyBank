@@ -146,6 +146,7 @@ export function TransactionsPage() {
           onChange={(e) => update({ accountId: e.target.value })}
         >
           <option value="">All accounts</option>
+          <option value="none">No account</option>
           {accounts.data?.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
@@ -206,7 +207,7 @@ export function TransactionsPage() {
                     <span className="block truncate text-xs text-slate-500">
                       {t.type !== 'transfer' && (t.categoryName ?? 'Uncategorised')}
                       {t.bucket && ` · ${BUCKETS[t.bucket]}`}
-                      {t.type !== 'transfer' && ` · ${t.accountName}`}
+                      {t.type !== 'transfer' && ` · ${t.accountName ?? 'No account'}`}
                       {` · ${t.memberName ?? 'Shared'}`}
                       {t.notes && !t.isMonthlyTotal && ` · ${t.notes}`}
                       {t.isMonthlyTotal && ' · monthly total'}

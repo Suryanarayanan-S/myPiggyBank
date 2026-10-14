@@ -39,7 +39,7 @@ export async function exportTransactionsCsv(
   const rows = await prisma.transaction.findMany({
     where: filterWhere(familyId, query),
     include: {
-      account: { select: { name: true, currency: true } },
+      account: { select: { name: true } },
       category: { select: { name: true, bucket: true } },
       member: { select: { name: true } },
     },
@@ -51,8 +51,8 @@ export async function exportTransactionsCsv(
       formatDay(t.date),
       t.type,
       csvAmount(t.type === 'income' ? Number(t.amount) : -Number(t.amount)),
-      t.account.currency,
-      cell(t.account.name),
+      t.currency,
+      cell(t.account?.name ?? ''),
       cell(t.category?.name ?? ''),
       BUCKET[t.category?.bucket ?? ''] ?? '',
       cell(t.member?.name ?? 'Shared'),

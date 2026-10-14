@@ -98,6 +98,7 @@ describe('insights', () => {
           accountId: acc.id,
           date: d,
           amount: 91_200,
+          currency: 'EUR',
           type: 'expense',
           merchant: 'Rent',
           categoryId: rent,

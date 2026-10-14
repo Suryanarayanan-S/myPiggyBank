@@ -39,7 +39,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
         importBatch: true,
         merchant: true,
         categoryId: true,
-        account: { select: { currency: true } },
+        currency: true,
         category: { select: { bucket: true } },
       },
     }),
@@ -55,12 +55,9 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
     // Later days of this month count for its limits (as on the budget page); the insights that
     // look at single payments only use those up to today.
     const date = t.date.toISOString().slice(0, 10);
-    const amount = convert(Number(t.amount), t.account.currency, currency, date.slice(0, 7), rates);
+    const amount = convert(Number(t.amount), t.currency, currency, date.slice(0, 7), rates);
     if (amount === null) {
-      unconverted.set(
-        t.account.currency,
-        (unconverted.get(t.account.currency) ?? 0) + Number(t.amount),
-      );
+      unconverted.set(t.currency, (unconverted.get(t.currency) ?? 0) + Number(t.amount));
       continue;
     }
     txns.push({

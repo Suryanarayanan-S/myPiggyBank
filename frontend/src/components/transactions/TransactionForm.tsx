@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { Button } from '../ui/Button';
@@ -6,11 +6,12 @@ import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
-import { selectableAccounts } from '../../lib/accounts';
+import { useMe } from '../../auth/auth';
+import { defaultAccountId, rememberAccountId, selectableAccounts } from '../../lib/accounts';
 import { localDay } from '../../lib/months';
 import { parseMoneyInput } from '../../lib/money';
 import { useAccounts, useCategories, useMembers } from '../../lib/queries';
-import { BUCKETS, type Transaction, type TransactionType } from '../../lib/types';
+import { BUCKETS, CURRENCIES, type Transaction, type TransactionType } from '../../lib/types';
 
 const asInput = (cents: number | null | undefined) =>
   cents == null ? '' : (cents / 100).toFixed(2).replace('.', ',');
@@ -20,13 +21,16 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const accounts = useAccounts();
   const categories = useCategories();
   const members = useMembers();
+  const spendingCurrency = useMe().data?.family.spendingCurrency ?? 'EUR';
   const active = selectableAccounts(accounts.data ?? [], txn);
 
   const [type, setType] = useState<TransactionType>(txn?.type ?? 'expense');
   const [form, setForm] = useState({
     date: txn?.date ?? localDay(),
     amount: asInput(txn?.amount),
-    accountId: txn?.accountId ?? active[0]?.id ?? '',
+    accountId: txn ? (txn.accountId ?? '') : defaultAccountId(active),
+    // Only used without an account; with one, the money is in the account's currency.
+    currency: txn && !txn.accountId ? txn.currency : '',
     categoryId: txn?.categoryId ?? '',
     memberId: txn?.memberId ?? '',
     merchant: txn?.merchant ?? '',
@@ -35,12 +39,23 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
     transferAccountId: txn?.transferAccountId ?? '',
     transferAmount: asInput(txn?.transferAmount),
   });
+  // A new transaction's account is chosen once the accounts have loaded (the dialog may open
+  // before they arrive), unless the user has already picked one.
+  const [accountTouched, setAccountTouched] = useState(!!txn);
+  const loaded = accounts.isSuccess;
+  useEffect(() => {
+    if (loaded && !accountTouched) {
+      setForm((f) => ({ ...f, accountId: defaultAccountId(active) }));
+      setAccountTouched(true);
+    }
+  }, [loaded, accountTouched, active]);
   const [localError, setLocalError] = useState<string | null>(null);
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const account = active.find((a) => a.id === form.accountId);
   const dest = active.find((a) => a.id === form.transferAccountId);
+  const currency = account?.currency ?? (form.currency || spendingCurrency);
   const crossCurrency =
     type === 'transfer' && account && dest && account.currency !== dest.currency;
 
@@ -55,7 +70,10 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const save = useMutation({
     mutationFn: (body: object) =>
       txn ? api.put(`/transactions/${txn.id}`, body) : api.post('/transactions', body),
-    onSuccess: done,
+    onSuccess: async () => {
+      if (!txn) rememberAccountId(form.accountId);
+      await done();
+    },
   });
   const remove = useMutation({
     mutationFn: () => api.del(`/transactions/${txn!.id}`),
@@ -66,6 +84,8 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
     const amount = parseMoneyInput(form.amount);
     if (amount === null || amount <= 0)
       return setLocalError('Enter an amount above zero, e.g. 52,40');
+    if (type === 'transfer' && !account)
+      return setLocalError('Choose the account sending the money');
     let transferAmount: number | null = null;
     if (crossCurrency) {
       transferAmount = parseMoneyInput(form.transferAmount);
@@ -77,7 +97,8 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
       date: form.date,
       amount,
       type,
-      accountId: form.accountId,
+      accountId: form.accountId || null,
+      ...(form.accountId ? {} : { currency }),
       categoryId: type === 'transfer' ? null : form.categoryId || null,
       memberId: form.memberId || null,
       merchant: form.merchant || null,
@@ -132,7 +153,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label={`Amount${account ? ` (${account.currency})` : ''}`} htmlFor="txn-amount">
+        <Field label={`Amount (${currency})`} htmlFor="txn-amount">
           <Input
             id="txn-amount"
             inputMode="decimal"
@@ -154,21 +175,47 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
         </Field>
       </div>
 
-      <Field label={type === 'transfer' ? 'From account' : 'Account'} htmlFor="txn-account">
-        <Select
-          id="txn-account"
-          required
-          value={form.accountId}
-          onChange={(e) => set('accountId')(e.target.value)}
-        >
-          {active.length === 0 && <option value="">Add an account first</option>}
-          {active.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name} ({a.currency})
+      <div className={clsx('grid gap-3', !account && type !== 'transfer' && 'grid-cols-2')}>
+        <Field label={type === 'transfer' ? 'From account' : 'Account'} htmlFor="txn-account">
+          <Select
+            id="txn-account"
+            required={type === 'transfer'}
+            value={form.accountId}
+            onChange={(e) => {
+              setAccountTouched(true);
+              set('accountId')(e.target.value);
+            }}
+          >
+            <option value="">
+              {type === 'transfer'
+                ? active.length === 0
+                  ? 'Add an account first'
+                  : 'Choose…'
+                : 'No account'}
             </option>
-          ))}
-        </Select>
-      </Field>
+            {active.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.currency})
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {!account && type !== 'transfer' && (
+          <Field label="Currency" htmlFor="txn-currency">
+            <Select
+              id="txn-currency"
+              value={currency}
+              onChange={(e) => set('currency')(e.target.value)}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+      </div>
 
       {type === 'transfer' ? (
         <>
@@ -272,7 +319,10 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
         ) : (
           <span />
         )}
-        <Button type="submit" disabled={save.isPending || active.length === 0}>
+        <Button
+          type="submit"
+          disabled={save.isPending || !loaded || (type === 'transfer' && active.length === 0)}
+        >
           {save.isPending ? 'Saving…' : 'Save'}
         </Button>
       </div>

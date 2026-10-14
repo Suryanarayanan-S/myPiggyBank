@@ -15,7 +15,13 @@ export const TransactionInput = z
     date: day,
     amount: cents.refine(Number.isSafeInteger, 'Amount is too large'),
     type: z.enum(TYPES),
-    accountId: z.uuid(),
+    /**
+     * null: money spent or received outside the tracked accounts (cash, someone else's card).
+     * Always sent, so an edit that leaves it out never detaches the account by accident.
+     */
+    accountId: z.uuid().nullable(),
+    /** Only for a transaction without an account (default: the spending currency). */
+    currency: CurrencySchema.optional(),
     categoryId: z.uuid().nullable().optional(),
     memberId: z.uuid().nullable().optional(),
     merchant: z.string().trim().max(100).nullable().optional(),
@@ -28,6 +34,7 @@ export const TransactionInput = z
     const issue = (path: string, message: string) =>
       ctx.addIssue({ code: 'custom', path: [path], message });
     if (t.type === 'transfer') {
+      if (!t.accountId) issue('accountId', 'Choose the account sending the money');
       if (!t.transferAccountId)
         issue('transferAccountId', 'Choose the account receiving the money');
       else if (t.transferAccountId === t.accountId)
@@ -43,7 +50,8 @@ export const ListQuery = z.object({
   from: day.optional(),
   to: day.optional(),
   type: z.enum(TYPES).optional(),
-  accountId: z.uuid().optional(),
+  /** An account's id, or "none" for transactions without one. */
+  accountId: z.union([z.uuid(), z.literal('none')]).optional(),
   categoryId: z.uuid().optional(),
   memberId: z.union([z.uuid(), z.literal('shared')]).optional(),
   q: z.string().trim().max(100).optional(),
@@ -69,10 +77,10 @@ function toDto(t: Row) {
     id: t.id,
     date: formatDay(t.date),
     amount: Number(t.amount),
-    currency: t.account.currency,
+    currency: t.currency,
     type: t.type,
     accountId: t.accountId,
-    accountName: t.account.name,
+    accountName: t.account?.name ?? null,
     categoryId: t.categoryId,
     categoryName: t.category?.name ?? null,
     bucket: t.category?.bucket ?? null,
@@ -98,7 +106,16 @@ const normalizeTags = (tags: string[] = []) => {
 
 /** Validates references against the family and builds the row data. */
 async function toData(prisma: PrismaClient, familyId: string, input: Input) {
-  const account = await assertAccount(prisma, familyId, input.accountId);
+  const account = input.accountId ? await assertAccount(prisma, familyId, input.accountId) : null;
+  if (account && input.currency && input.currency !== account.currency) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid request', [
+      { path: 'currency', message: `${account.name} is in ${account.currency}` },
+    ]);
+  }
+  const currency =
+    account?.currency ??
+    input.currency ??
+    (await prisma.family.findUniqueOrThrow({ where: { id: familyId } })).spendingCurrency;
   if (input.categoryId) {
     const category = await assertCategory(prisma, familyId, input.categoryId);
     if (category.kind !== input.type) {
@@ -110,7 +127,7 @@ async function toData(prisma: PrismaClient, familyId: string, input: Input) {
   if (input.memberId) await assertMember(prisma, familyId, input.memberId);
 
   let transferAmount: number | null = null;
-  if (input.type === 'transfer' && input.transferAccountId) {
+  if (input.type === 'transfer' && account && input.transferAccountId) {
     const dest = await assertAccount(prisma, familyId, input.transferAccountId);
     if (dest.currency === account.currency) transferAmount = input.amount;
     else if (input.transferAmount) transferAmount = input.transferAmount;
@@ -125,9 +142,10 @@ async function toData(prisma: PrismaClient, familyId: string, input: Input) {
 
   return {
     familyId,
-    accountId: account.id,
+    accountId: account?.id ?? null,
     date: parseDay(input.date)!,
     amount: input.amount,
+    currency,
     type: input.type,
     categoryId: input.type === 'transfer' ? null : (input.categoryId ?? null),
     memberId: input.memberId ?? null,
@@ -194,7 +212,8 @@ export function filterWhere(
   if (q.from) and.push({ date: { gte: parseDay(q.from)! } });
   if (q.to) and.push({ date: { lt: new Date(parseDay(q.to)!.getTime() + 86_400_000) } });
   if (q.type) and.push({ type: q.type });
-  if (q.accountId)
+  if (q.accountId === 'none') and.push({ accountId: null });
+  else if (q.accountId)
     and.push({ OR: [{ accountId: q.accountId }, { transferAccountId: q.accountId }] });
   if (q.categoryId) and.push({ categoryId: q.categoryId });
   if (q.memberId) and.push({ memberId: q.memberId === 'shared' ? null : q.memberId });
@@ -237,7 +256,7 @@ export async function listTransactions(
   };
 }
 
-/** Income/expense sums per account currency over the whole filtered set (transfers excluded). */
+/** Income/expense sums per currency over the whole filtered set (transfers excluded). */
 async function totalsFor(
   prisma: PrismaClient,
   familyId: string,
@@ -246,11 +265,11 @@ async function totalsFor(
 ) {
   const rows = await prisma.transaction.findMany({
     where: { AND: [where, { type: { in: ['income', 'expense'] } }] },
-    select: { type: true, amount: true, date: true, account: { select: { currency: true } } },
+    select: { type: true, amount: true, date: true, currency: true },
   });
   const sums = new Map<string, { currency: string; income: number; expense: number }>();
   for (const r of rows) {
-    const currency = r.account.currency;
+    const currency = r.currency;
     const entry = sums.get(currency) ?? { currency, income: 0, expense: 0 };
     entry[r.type as 'income' | 'expense'] += Number(r.amount);
     sums.set(currency, entry);
@@ -265,7 +284,7 @@ async function totalsFor(
         .filter((r) => r.type === type)
         .map((r) => ({
           amount: Number(r.amount),
-          currency: r.account.currency,
+          currency: r.currency,
           month: r.date.toISOString().slice(0, 7),
         })),
       view,

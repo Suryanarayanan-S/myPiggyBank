@@ -69,8 +69,8 @@ export type Transaction = {
   amount: number;
   currency: string;
   type: TransactionType;
-  accountId: string;
-  accountName: string;
+  accountId: string | null;
+  accountName: string | null;
   categoryId: string | null;
   categoryName: string | null;
   bucket: Bucket | null;

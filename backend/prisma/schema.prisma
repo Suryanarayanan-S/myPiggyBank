@@ -164,11 +164,13 @@ model Transaction {
   id                String         @id @default(uuid())
   familyId          String
   family            Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  accountId         String
-  account           Account        @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  accountId         String?
+  account           Account?       @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
   date              DateTime
-  /// > 0, minor units of the account currency
+  /// > 0, minor units of `currency`
   amount            BigInt
+  /// ISO code: the account's currency, or the one chosen for a transaction without an account
+  currency          String
   /// income | expense | transfer
   type              String
   categoryId        String?

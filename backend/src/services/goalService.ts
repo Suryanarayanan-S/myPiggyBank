@@ -4,7 +4,7 @@ import { computeBalances, type BalanceTxn } from '../domain/balances.js';
 import { CurrencySchema, convert, type Rate } from '../domain/currency.js';
 import { goalProgress } from '../domain/goals.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
-import { notFound } from '../lib/errors.js';
+import { AppError, notFound } from '../lib/errors.js';
 import { assertMember } from './ownership.js';
 import { loadRates } from './rateService.js';
 
@@ -29,7 +29,7 @@ const fields = {
 export const GoalCreate = z.object(fields);
 export const GoalUpdate = z.object(fields).partial();
 export const EntryInput = z.object({
-  date: day,
+  date: day.refine((d) => d <= todayLocal(), 'Entries cannot be in the future'),
   amount: cents.refine((n) => n !== 0, 'Enter an amount (negative = taken out)'),
   note: z.string().trim().max(200).nullable().optional(),
 });
@@ -92,7 +92,19 @@ export async function updateGoal(
   id: string,
   input: z.output<typeof GoalUpdate>,
 ) {
-  await owned(prisma, familyId, id);
+  const existing = await owned(prisma, familyId, id);
+  // Entries are amounts in the goal currency: switching would re-read them 1:1.
+  if (
+    input.currency &&
+    input.currency !== existing.currency &&
+    (await prisma.goalEntry.count({ where: { goalId: id } }))
+  ) {
+    throw new AppError(
+      409,
+      'CURRENCY_LOCKED',
+      'The currency cannot be changed once the goal has entries',
+    );
+  }
   if (input.memberId) await assertMember(prisma, familyId, input.memberId);
   const { links, targetDate, ...rest } = input;
   if (links) await checkLinks(prisma, familyId, dedupe(links));
@@ -170,11 +182,13 @@ const STATUS_ORDER: Record<string, number> = { active: 0, reached: 1, archived: 
 
 /** All goals with what they count, what is saved and how they are doing. */
 export async function listGoals(prisma: PrismaClient, familyId: string) {
-  const [goals, accounts, txns, assets, rates] = await Promise.all([
-    prisma.goal.findMany({
-      where: { familyId },
-      include: { links: true, entries: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
-    }),
+  const goals = await prisma.goal.findMany({
+    where: { familyId },
+    include: { links: true, entries: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
+  });
+  // The dashboard asks on every visit; without goals there is nothing else to load.
+  if (goals.length === 0) return [];
+  const [accounts, txns, assets, rates] = await Promise.all([
     prisma.account.findMany({ where: { familyId } }),
     prisma.transaction.findMany({
       where: { familyId },
@@ -214,7 +228,10 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   const assetById = new Map(assets.map((a) => [a.id, a]));
   const assetValueOn = (assetId: string, date: string) => {
-    const v = assetById.get(assetId)?.valuations.find((x) => formatDay(x.date) <= date);
+    const valuations = assetById.get(assetId)?.valuations ?? [];
+    // Before its first valuation an asset counts with that first value (like an account's
+    // opening balance), so entering an existing asset today is not "saved" money.
+    const v = valuations.find((x) => formatDay(x.date) <= date) ?? valuations.at(-1);
     return v ? Number(v.value) : null;
   };
 
@@ -254,18 +271,20 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
         amount: Number(e.amount),
         note: e.note,
       }));
-      const savedOn = (date: string, pick: 'amount' | 'before', rates: Rate[]) => {
+      const savedOn = (date: string, pick: 'amount' | 'before', rates: Rate[], rateDay = date) => {
         let total = entries.filter((e) => e.date <= date).reduce((s, e) => s + e.amount, 0);
         const unconverted = new Map<string, number>();
         for (const l of links) {
-          const v = convert(l[pick], l.currency, g.currency, date.slice(0, 7), rates);
+          const v = convert(l[pick], l.currency, g.currency, rateDay.slice(0, 7), rates);
           if (v === null) unconverted.set(l.currency, (unconverted.get(l.currency) ?? 0) + l[pick]);
           else total += v;
         }
         return { total, unconverted };
       };
       const now = savedOn(today, 'amount', rates);
-      const then = savedOn(before, 'before', rates);
+      // For the pace, both dates use today's rates: only real saving moves it, never a rate that
+      // is missing (or different) for the earlier month. Unconvertible links are left out of both.
+      const then = savedOn(before, 'before', rates, today);
       const targetDate = g.targetDate ? formatDay(g.targetDate) : null;
       return {
         id: g.id,

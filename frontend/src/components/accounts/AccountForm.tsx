@@ -34,7 +34,9 @@ export function AccountForm({
     setForm((f) => ({ ...f, [key]: value }));
 
   const done = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    await Promise.all(
+      ['accounts', 'goals'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+    );
     onDone();
   };
   const save = useMutation({

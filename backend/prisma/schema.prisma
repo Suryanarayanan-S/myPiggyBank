@@ -385,4 +385,6 @@ model GoalEntry {
   amount    BigInt
   note      String?
   createdAt DateTime @default(now())
+
+  @@index([goalId])
 }

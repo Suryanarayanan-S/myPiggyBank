@@ -22,7 +22,7 @@ const monthYear = (day: string) =>
   });
 
 export function StatusBadge({ goal }: { goal: Goal }) {
-  const s = goalStatus(goal.progress);
+  const s = goalStatus(goal.progress, goal.status);
   return (
     <span className={clsx('rounded px-1.5 py-0.5 text-xs font-medium', BADGE[s.tone])}>
       {s.label}
@@ -64,14 +64,14 @@ export function GoalCard({
       <p className="mt-3 text-sm">
         <span className="text-xl font-semibold tabular-nums">{money(goal.saved)}</span>{' '}
         <span className="text-slate-500">
-          of {money(goal.targetAmount)} · {Math.floor(p.pctBp / 100)} %
+          of {money(goal.targetAmount)} · {Math.max(0, Math.floor(p.pctBp / 100))} %
         </span>
       </p>
       <div className="mt-2">
         <Progress
           label={`${goal.name} saved of target`}
-          value={p.pctBp / 10_000}
-          tone={BAR[goalStatus(p).tone]}
+          value={Math.max(0, p.pctBp) / 10_000}
+          tone={BAR[goalStatus(p, goal.status).tone]}
         />
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">

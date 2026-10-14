@@ -12,7 +12,7 @@ import { useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 import { CLASSES, LIABILITY_TYPES, type Asset, type Liability } from '../../lib/wealthTypes';
 
-const refreshKeys = ['assets', 'liabilities', 'net-worth'];
+const refreshKeys = ['assets', 'liabilities', 'net-worth', 'goals'];
 function useRefresh() {
   const queryClient = useQueryClient();
   return () =>

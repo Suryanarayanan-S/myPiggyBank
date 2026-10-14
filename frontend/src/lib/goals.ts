@@ -34,7 +34,13 @@ export type Goal = {
 export type Tone = 'good' | 'warn' | 'bad' | 'neutral';
 
 /** A word for how the goal is doing (shown next to its colour, never colour alone). */
-export function goalStatus(p: GoalProgress): { label: string; tone: Tone } {
+export function goalStatus(
+  p: GoalProgress,
+  status: Goal['status'] = 'active',
+): { label: string; tone: Tone } {
+  // What the family decided wins over the numbers (money may have been spent since).
+  if (status === 'reached') return { label: 'Reached', tone: 'good' };
+  if (status === 'archived') return { label: 'Archived', tone: 'neutral' };
   if (p.reached) return { label: 'Reached', tone: 'good' };
   if (p.overdue) return { label: 'Past its date', tone: 'bad' };
   if (p.onTrack === null) return { label: 'No date', tone: 'neutral' };

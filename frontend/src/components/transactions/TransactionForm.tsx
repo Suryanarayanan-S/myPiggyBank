@@ -46,7 +46,9 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
 
   const done = async () => {
     await Promise.all(
-      ['transactions', 'accounts'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+      ['transactions', 'accounts', 'goals'].map((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      ),
     );
     onDone();
   };

@@ -27,4 +27,12 @@ describe('goalStatus', () => {
       tone: 'neutral',
     });
   });
+
+  it('a goal marked reached or archived says so, whatever its numbers', () => {
+    expect(goalStatus(p({ overdue: true }), 'reached')).toEqual({ label: 'Reached', tone: 'good' });
+    expect(goalStatus(p({ overdue: true }), 'archived')).toEqual({
+      label: 'Archived',
+      tone: 'neutral',
+    });
+  });
 });

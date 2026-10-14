@@ -12,13 +12,13 @@ export type GoalProgress = {
   overdue: boolean;
 };
 
-/** Whole months from `from` to `to` (YYYY-MM-DD); a later day-of-month counts the month. */
+/** Months from `from` to `to` (YYYY-MM-DD), a started month counting as one (each is a chance
+ *  to put money aside); at least 1. */
 export function monthsUntil(from: string, to: string): number {
   const [fy, fm, fd] = from.split('-').map(Number) as [number, number, number];
   const [ty, tm, td] = to.split('-').map(Number) as [number, number, number];
   let months = (ty - fy) * 12 + (tm - fm);
-  const lastDayOfTo = new Date(Date.UTC(ty, tm, 0)).getUTCDate();
-  if (td < fd && td < lastDayOfTo) months -= 1; // not a full month yet (month ends excepted)
+  if (td > fd) months += 1; // part of one more month
   return Math.max(1, months);
 }
 

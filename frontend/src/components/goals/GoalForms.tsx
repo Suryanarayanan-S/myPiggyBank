@@ -111,6 +111,8 @@ export function GoalForm({
         <Field label="Currency" htmlFor="goal-currency">
           <Select
             id="goal-currency"
+            // entries are amounts in this currency, so it is fixed once there are some
+            disabled={!!goal?.entries.length}
             value={f.currency}
             onChange={(e) => setF({ ...f, currency: e.target.value })}
           >
@@ -155,7 +157,8 @@ export function GoalForm({
         </p>
         <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
           {accounts.data
-            ?.filter((a) => !a.archived)
+            // archived accounts only while linked, so they can still be unticked
+            ?.filter((a) => !a.archived || f.links.has(`account:${a.id}`))
             .map((a) => (
               <label key={a.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2">
@@ -165,6 +168,7 @@ export function GoalForm({
                     onChange={() => toggle(`account:${a.id}`)}
                   />
                   {a.name}
+                  {a.archived && <span className="text-xs text-slate-400">archived</span>}
                 </span>
                 <span className="text-xs text-slate-500 tabular-nums">
                   {formatMoney(a.balance, a.currency)}
@@ -252,8 +256,9 @@ export function EntriesForm({ goal, onDone }: { goal: Goal; onDone: () => void }
     mutationFn: (id: string) => api.del(`/goals/${goal.id}/entries/${id}`),
     onSuccess: refresh,
   });
-  const negative = f.amount.trim().startsWith('-') || f.amount.trim().startsWith('−');
-  const parsed = parseAmountInput(f.amount.trim().replace(/^[-−]\s*/, ''));
+  const negative = /^[-−]/.test(f.amount.trim());
+  const rest = f.amount.trim().replace(/^[-−]\s*/, '');
+  const parsed = /^[-−+]/.test(rest) ? null : parseAmountInput(rest); // one sign only
   const amount = parsed === null ? null : negative ? -parsed : parsed;
 
   return (

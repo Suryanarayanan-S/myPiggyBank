@@ -200,7 +200,10 @@ function GoalsSummary() {
                 {formatMoney(g.saved, g.currency)} of {formatMoney(g.targetAmount, g.currency)}
               </span>
             </div>
-            <Progress label={`${g.name} saved of target`} value={g.progress.pctBp / 10_000} />
+            <Progress
+              label={`${g.name} saved of target`}
+              value={Math.max(0, g.progress.pctBp) / 10_000}
+            />
           </li>
         ))}
       </ul>

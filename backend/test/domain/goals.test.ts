@@ -4,10 +4,12 @@ import { goalProgress, monthsUntil } from '../../src/domain/goals.js';
 const base = { target: 1_000_000, today: '2026-10-14' };
 
 describe('monthsUntil', () => {
-  it('counts whole months, at least one', () => {
+  it('counts a started month as a month (each month is a chance to save), at least one', () => {
     expect(monthsUntil('2026-10-14', '2027-10-14')).toBe(12);
-    expect(monthsUntil('2026-10-14', '2027-10-13')).toBe(11);
+    expect(monthsUntil('2026-10-14', '2027-10-13')).toBe(12);
+    expect(monthsUntil('2026-10-14', '2026-12-13')).toBe(2);
     expect(monthsUntil('2026-10-14', '2026-10-20')).toBe(1);
+    expect(monthsUntil('2026-10-14', '2026-10-14')).toBe(1);
     expect(monthsUntil('2026-01-31', '2026-02-28')).toBe(1);
   });
 });

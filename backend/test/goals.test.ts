@@ -5,6 +5,8 @@ import { client, makeApp, resetDb, signUp } from './helpers.js';
 
 const today = todayLocal();
 const thisMonth = today.slice(0, 7);
+/** The same day next year (exactly 12 months away). */
+const inAYear = `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`;
 
 async function family(app: FastifyInstance) {
   const call = client(app, (await signUp(app)).cookie);
@@ -100,7 +102,7 @@ describe('savings goals', () => {
     });
     await create({
       links: [{ kind: 'account', id: f.tagesgeld.id }],
-      targetDate: addDays(today, 366),
+      targetDate: inAYear,
     });
     const { progress } = (await list())[0];
     expect(progress.pace).toBe(100_000); // +€3,000 within 3 months
@@ -163,5 +165,52 @@ describe('savings goals', () => {
     ).toBe(404);
     expect((await f.call('DELETE', `/api/goals/${id}`)).statusCode).toBe(200);
     expect(await list()).toEqual([]);
+  });
+
+  it('does not invent progress from a rate that exists only for this month', async () => {
+    await f.call('PUT', '/api/exchange-rates', {
+      month: thisMonth,
+      base: 'EUR',
+      quote: 'INR',
+      rate: '100',
+    });
+    await create({ links: [{ kind: 'asset', id: f.gold.id }], targetDate: inAYear });
+    const g = (await list())[0];
+    expect(g.saved).toBe(50_000);
+    expect(g.progress.pace).toBe(0); // the gold did not change
+  });
+
+  it('does not count an asset entered today as saved in the last 3 months', async () => {
+    const car = (
+      await f.call('POST', '/api/assets', {
+        name: 'Car fund',
+        assetClass: 'other',
+        currency: 'EUR',
+        value: 300_000,
+        date: today,
+      })
+    ).json().data;
+    await create({ links: [{ kind: 'asset', id: car.id }], targetDate: inAYear });
+    const g = (await list())[0];
+    expect(g.progress.pace).toBe(0);
+    expect(g.progress.onTrack).toBe(false);
+  });
+
+  it('refuses to change the currency once there are entries (no 1:1 re-reading)', async () => {
+    const id = (await create({})).json().data.id;
+    expect((await f.call('PUT', `/api/goals/${id}`, { currency: 'INR' })).statusCode).toBe(200);
+    await f.call('POST', `/api/goals/${id}/entries`, { date: today, amount: 100 });
+    const res = await f.call('PUT', `/api/goals/${id}`, { currency: 'EUR' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('CURRENCY_LOCKED');
+  });
+
+  it('refuses entries dated in the future', async () => {
+    const id = (await create({})).json().data.id;
+    const res = await f.call('POST', `/api/goals/${id}/entries`, {
+      date: addDays(today, 30),
+      amount: 5_000,
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

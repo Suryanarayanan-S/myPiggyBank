@@ -7,6 +7,7 @@ import { Field, FormError } from '../components/ui/Field';
 import { Input } from '../components/ui/Input';
 import { AuthLayout } from '../layout/AuthLayout';
 import { api } from '../lib/api';
+import { forgetUserData } from '../lib/session';
 
 export function LoginPage() {
   const me = useMe();
@@ -17,6 +18,7 @@ export function LoginPage() {
   const login = useMutation({
     mutationFn: () => api.post('/auth/login', { email, password }),
     onSuccess: async () => {
+      forgetUserData(queryClient); // nothing of a previous user may linger
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       navigate('/', { replace: true });
     },

@@ -4,10 +4,11 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import './index.css';
 import { App } from './App';
 import { ApiError } from './lib/api';
+import { forgetUserData } from './lib/session';
 
 // Any 401 outside of /auth/me means the session expired: drop to logged-out state.
 const onError = (error: unknown) => {
-  if (error instanceof ApiError && error.status === 401) queryClient.setQueryData(['me'], null);
+  if (error instanceof ApiError && error.status === 401) forgetUserData(queryClient);
 };
 
 const queryClient: QueryClient = new QueryClient({

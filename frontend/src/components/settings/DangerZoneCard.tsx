@@ -6,6 +6,7 @@ import { Card } from '../ui/Card';
 import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { api } from '../../lib/api';
+import { forgetUserData } from '../../lib/session';
 
 export function DangerZoneCard() {
   const queryClient = useQueryClient();
@@ -15,8 +16,7 @@ export function DangerZoneCard() {
   const remove = useMutation({
     mutationFn: () => api.del('/auth/account', { password, confirm }),
     onSuccess: () => {
-      queryClient.clear();
-      queryClient.setQueryData(['me'], null);
+      forgetUserData(queryClient);
       navigate('/login', { replace: true });
     },
   });

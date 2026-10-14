@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync, FastifyReply } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
 import { SESSION_COOKIE, createSession, deleteSession } from '../auth/sessions.js';
@@ -18,19 +18,27 @@ export interface AuthRoutesOptions {
 }
 
 export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opts) => {
-  const startSession = async (reply: FastifyReply, userId: string) => {
+  const cookieOptions = () => ({
+    path: '/',
+    httpOnly: true,
+    sameSite: 'strict' as const,
+    secure: app.appConfig.COOKIE_SECURE,
+  });
+  const endSession = async (req: FastifyRequest, reply: FastifyReply) => {
+    const token = req.cookies[SESSION_COOKIE];
+    if (token) await deleteSession(app.prisma, token);
+    reply.clearCookie(SESSION_COOKIE, cookieOptions());
+  };
+  const startSession = async (req: FastifyRequest, reply: FastifyReply, userId: string) => {
+    // A new login replaces whatever session this browser had.
+    const old = req.cookies[SESSION_COOKIE];
+    if (old) await deleteSession(app.prisma, old);
     const { token, expiresAt } = await createSession(
       app.prisma,
       userId,
       app.appConfig.SESSION_DAYS,
     );
-    reply.setCookie(SESSION_COOKIE, token, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: app.appConfig.COOKIE_SECURE,
-      expires: expiresAt,
-    });
+    reply.setCookie(SESSION_COOKIE, token, { ...cookieOptions(), expires: expiresAt });
   };
   const limited = { rateLimit: opts.loginRateLimit };
 
@@ -39,27 +47,26 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
       throw new AppError(403, 'REGISTRATION_DISABLED', 'Registration is disabled');
     }
     const user = await registerUser(app.prisma, parse(RegisterInput, req.body));
-    await startSession(reply, user.id);
+    await startSession(req, reply, user.id);
     return reply.status(201).send({ data: { user } });
   });
 
   app.post('/auth/login', { config: limited }, async (req, reply) => {
     const user = await loginUser(app.prisma, parse(LoginInput, req.body));
-    await startSession(reply, user.id);
+    await startSession(req, reply, user.id);
     return { data: { user } };
   });
 
   app.post('/auth/logout', async (req, reply) => {
-    const token = req.cookies[SESSION_COOKIE];
-    if (token) await deleteSession(app.prisma, token);
-    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    await endSession(req, reply);
     return { data: { ok: true } };
   });
 
-  app.delete('/auth/account', { preHandler: requireAuth }, async (req, reply) => {
+  // Deletion checks the password, so it is limited like login against guessing.
+  app.delete('/auth/account', { preHandler: requireAuth, config: limited }, async (req, reply) => {
     const input = parse(DeleteAccountInput, req.body);
     const { familyDeleted } = await deleteAccount(app.prisma, currentUser(req), input);
-    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    reply.clearCookie(SESSION_COOKIE, cookieOptions());
     return { data: { ok: true, familyDeleted } };
   });
 

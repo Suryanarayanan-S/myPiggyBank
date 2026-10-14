@@ -10,6 +10,7 @@ import { Brand } from './Brand';
 import { CurrencySwitch } from '../components/CurrencySwitch';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { navItems } from './nav';
+import { forgetUserData } from '../lib/session';
 
 export function AppShell() {
   const { data } = useMe();
@@ -18,8 +19,7 @@ export function AppShell() {
   const logout = useMutation({
     mutationFn: () => api.post('/auth/logout'),
     onSettled: () => {
-      queryClient.clear();
-      queryClient.setQueryData(['me'], null);
+      forgetUserData(queryClient);
       navigate('/login', { replace: true });
     },
   });

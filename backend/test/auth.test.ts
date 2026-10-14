@@ -171,4 +171,55 @@ describe('auth', () => {
     expect(blocked.json().error.code).toBe('RATE_LIMITED');
     await limited.close();
   });
+
+  it('logout clears the cookie with the attributes it was set with', async () => {
+    const { cookie } = await signUp(app);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: { cookie },
+      payload: {},
+    });
+    const cleared = res.cookies.find((c) => c.name === 'pb_session')!;
+    expect(cleared).toMatchObject({ path: '/', httpOnly: true, sameSite: 'Strict' });
+  });
+
+  it('logging in again ends the session the browser had before', async () => {
+    const { cookie, payload } = await signUp(app);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: { cookie },
+      payload: { email: payload.email, password: payload.password },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((await me(cookie)).statusCode).toBe(401);
+  });
+
+  it('starting a session sweeps everyone’s expired sessions', async () => {
+    const a = await signUp(app);
+    await prisma.session.updateMany({
+      where: { userId: a.user.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await signUp(app);
+    expect(await prisma.session.count({ where: { expiresAt: { lte: new Date() } } })).toBe(0);
+  });
+
+  it('rate-limits account deletion attempts', async () => {
+    const limited = await makeApp({ loginRateLimit: { max: 2, timeWindow: '1 minute' } });
+    const { cookie } = await signUp(limited);
+    const attempt = () =>
+      limited.inject({
+        method: 'DELETE',
+        url: '/api/auth/account',
+        headers: { cookie },
+        payload: { password: 'wrong-password-guess', confirm: 'DELETE' },
+      });
+    // signUp used one of the two allowed attempts of its own route; deletion has its own bucket.
+    expect((await attempt()).statusCode).toBe(401);
+    expect((await attempt()).statusCode).toBe(401);
+    expect((await attempt()).statusCode).toBe(429);
+    await limited.close();
+  });
 });

@@ -24,6 +24,8 @@ export function toAuthUser(
 export async function createSession(prisma: PrismaClient, userId: string, days: number) {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + days * 86_400_000);
+  // Logins are rare, so this is a cheap moment to forget expired sessions.
+  await prisma.session.deleteMany({ where: { expiresAt: { lte: new Date() } } });
   await prisma.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt } });
   return { token, expiresAt };
 }

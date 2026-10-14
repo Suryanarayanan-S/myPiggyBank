@@ -7,6 +7,7 @@ import { Field, FormError } from '../components/ui/Field';
 import { Input } from '../components/ui/Input';
 import { AuthLayout } from '../layout/AuthLayout';
 import { api } from '../lib/api';
+import { forgetUserData } from '../lib/session';
 
 export function RegisterPage() {
   const me = useMe();
@@ -25,6 +26,7 @@ export function RegisterPage() {
         ...(form.familyName.trim() ? { familyName: form.familyName } : {}),
       }),
     onSuccess: async () => {
+      forgetUserData(queryClient); // nothing of a previous user may linger
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       navigate('/', { replace: true });
     },

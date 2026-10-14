@@ -29,7 +29,16 @@ type YearReport = {
   totals: Money;
   recordedMonths: number;
   averages: Money;
-  previous: { totals: Money; recordedMonths: number; through: string } | null;
+  previous: {
+    totals: Money;
+    recordedMonths: number;
+    through: string;
+    /** "2025", or "Jan–Sep 2025" while this year is in progress */
+    label: string;
+    unconverted: { currency: string; amount: number }[];
+  } | null;
+  /** 'average' when the years have a different number of recorded months */
+  changeBasis: 'total' | 'average';
   change: Record<keyof Omit<Money, 'savingsRateBp'>, { amount: number; bp: number | null }>;
   categories: (Row & { categoryId: string | null; bucket: keyof typeof BUCKETS | null })[];
   members: (Row & { memberId: string | null })[];
@@ -43,17 +52,12 @@ type YearReport = {
 const monthName = (month: string) =>
   new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
 
-const shortMonth = (month: string) =>
-  new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', {
-    month: 'short',
-    timeZone: 'UTC',
-  });
-
-const COLUMNS: { key: keyof Omit<Money, 'savingsRateBp'>; label: string }[] = [
+const ALL_COLUMNS: { key: keyof Omit<Money, 'savingsRateBp'>; label: string }[] = [
   { key: 'netIncome', label: 'Net income' },
   { key: 'essentials', label: 'Essentials' },
   { key: 'fun', label: 'Fun' },
   { key: 'future', label: 'Future You' },
+  { key: 'uncategorised', label: 'Uncategorised' },
   { key: 'unused', label: 'Unused' },
 ];
 
@@ -86,14 +90,21 @@ export function ReportsPage() {
     placeholderData: keepPreviousData,
   });
   const r = report.data;
+  // Uncategorised only when there is some, so the row always adds up to "Unused".
+  const COLUMNS = ALL_COLUMNS.filter(
+    (c) =>
+      c.key !== 'uncategorised' ||
+      (r && (r.totals.uncategorised !== 0 || (r.previous?.totals.uncategorised ?? 0) !== 0)),
+  );
+  const missing = [
+    ...(r?.unconverted.map((u) => `${formatMoney(u.amount, u.currency)} in ${year}`) ?? []),
+    ...(r?.previous?.unconverted.map(
+      (u) => `${formatMoney(u.amount, u.currency)} in ${prevLabel}`,
+    ) ?? []),
+  ];
   const money = (c: number) => formatMoney(c, r?.currency);
   const go = (y: number) => setParams({ year: String(y) }, { replace: true });
-  // "2025", or "Jan–Feb 2025" while this year is still in progress (like-for-like months).
-  const prevLabel = !r?.previous
-    ? ''
-    : r.previous.through.endsWith('-12')
-      ? String(year - 1)
-      : `${r.previous.through.endsWith('-01') ? 'Jan' : `Jan–${shortMonth(r.previous.through)}`} ${year - 1}`;
+  const prevLabel = r?.previous?.label ?? '';
 
   return (
     <div className="space-y-5">
@@ -134,213 +145,224 @@ export function ReportsPage() {
         </div>
       </div>
       <FormError error={report.error} />
-
-      {r && r.recordedMonths === 0 && (
-        <Card>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Nothing recorded in {year} yet.
-          </p>
-        </Card>
+      {missing.length > 0 && (
+        <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+          Left out (no exchange rate to {r?.currency}): {missing.join(', ')}. Add rates in Settings
+          to include them.
+        </p>
       )}
 
-      {r && r.recordedMonths > 0 && (
-        <>
-          {r.unconverted.length > 0 && (
-            <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
-              Left out (no exchange rate to {r.currency}):{' '}
-              {r.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
+      <div
+        className={clsx('space-y-5 transition-opacity', report.isPlaceholderData && 'opacity-50')}
+        aria-busy={report.isPlaceholderData}
+      >
+        {r && r.recordedMonths === 0 && (
+          <Card>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Nothing recorded in {year} yet.
             </p>
-          )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {(
-              [
-                ['Net income', r.totals.netIncome, 'netIncome', true],
-                ['Spent', r.totals.spent, 'spent', false],
-                ['Future You', r.totals.future, 'future', true],
-              ] as const
-            ).map(([label, value, key, up]) => (
-              <Card key={label} className="!p-4">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{money(value)}</p>
+          </Card>
+        )}
+
+        {r && r.recordedMonths > 0 && (
+          <>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {(
+                [
+                  ['Net income', r.totals.netIncome, 'netIncome', true],
+                  ['Spent', r.totals.spent, 'spent', false],
+                  ['Future You', r.totals.future, 'future', true],
+                ] as const
+              ).map(([label, value, key, up]) => (
+                <Card key={label} className="!p-4">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{money(value)}</p>
+                  {r.previous && (
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      <Change bp={r.change[key].bp} upIsGood={up} /> vs {prevLabel}
+                    </p>
+                  )}
+                </Card>
+              ))}
+              <Card className="!p-4">
+                <p className="text-xs text-slate-500">Savings rate</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">
+                  {formatPercent(r.totals.savingsRateBp)}
+                </p>
                 {r.previous && (
                   <p className="mt-0.5 text-xs text-slate-500">
-                    <Change bp={r.change[key].bp} upIsGood={up} /> vs {prevLabel}
+                    {formatPercent(r.previous.totals.savingsRateBp)} in {prevLabel}
                   </p>
                 )}
               </Card>
-            ))}
-            <Card className="!p-4">
-              <p className="text-xs text-slate-500">Savings rate</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">
-                {formatPercent(r.totals.savingsRateBp)}
-              </p>
-              {r.previous && (
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {formatPercent(r.previous.totals.savingsRateBp)} in {prevLabel}
-                </p>
-              )}
-            </Card>
-          </div>
-          <p className="text-xs text-slate-500">
-            {r.recordedMonths} of 12 months recorded
-            {r.previous
-              ? ` · compared with ${prevLabel} (the same months), where ${r.previous.recordedMonths} ${r.previous.recordedMonths === 1 ? 'month was' : 'months were'} recorded`
-              : ` · nothing recorded in ${year - 1} to compare with`}
-            .
-          </p>
+            </div>
+            <p className="text-xs text-slate-500">
+              {r.recordedMonths} of 12 months recorded
+              {r.previous
+                ? ` · compared with ${prevLabel} (the same months), where ${r.previous.recordedMonths} ${r.previous.recordedMonths === 1 ? 'month was' : 'months were'} recorded${r.changeBasis === 'average' ? ' — so changes compare monthly averages' : ''}`
+                : ` · nothing recorded in ${year - 1} to compare with`}
+              .
+            </p>
 
-          <Card title="Month by month" className="max-w-full">
-            <div className="-mx-5 overflow-x-auto px-5">
-              <table className="w-full min-w-[40rem] text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-right text-xs text-slate-500 dark:border-slate-800">
-                    <th className="py-2 text-left font-medium">Month</th>
-                    {COLUMNS.map((c) => (
-                      <th key={c.key} className="py-2 pl-3 font-medium">
-                        {c.label}
+            <Card title="Month by month" className="max-w-full">
+              <div className="-mx-5 overflow-x-auto px-5">
+                <table className="w-full min-w-[40rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-right text-xs text-slate-500 dark:border-slate-800">
+                      <th scope="col" className="py-2 text-left font-medium">
+                        Month
                       </th>
-                    ))}
-                    <th className="py-2 pl-3 font-medium">Savings rate</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {r.months.map((m) => (
-                    <tr
-                      key={m.month}
-                      className={clsx('text-right', !m.recorded && 'text-slate-400')}
-                    >
-                      <td className="py-1.5 text-left">{monthName(m.month)}</td>
                       {COLUMNS.map((c) => (
-                        <td key={c.key} className="py-1.5 pl-3 tabular-nums">
-                          {m.recorded ? money(m[c.key]) : '—'}
-                        </td>
+                        <th key={c.key} scope="col" className="py-2 pl-3 font-medium">
+                          {c.label}
+                        </th>
                       ))}
-                      <td className="py-1.5 pl-3 tabular-nums">
-                        {m.recorded ? formatPercent(m.savingsRateBp) : '—'}
-                      </td>
+                      <th scope="col" className="py-2 pl-3 font-medium">
+                        Savings rate
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t-2 border-slate-200 text-right dark:border-slate-700">
-                  <tr className="font-semibold">
-                    <td className="py-1.5 text-left">Total</td>
-                    {COLUMNS.map((c) => (
-                      <td key={c.key} className="py-1.5 pl-3 tabular-nums">
-                        {money(r.totals[c.key])}
-                      </td>
-                    ))}
-                    <td className="py-1.5 pl-3 tabular-nums">
-                      {formatPercent(r.totals.savingsRateBp)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 text-left text-slate-500">Average month</td>
-                    {COLUMNS.map((c) => (
-                      <td key={c.key} className="py-1.5 pl-3 tabular-nums">
-                        {money(r.averages[c.key])}
-                      </td>
-                    ))}
-                    <td />
-                  </tr>
-                  {r.previous && (
-                    <>
-                      <tr>
-                        <td className="py-1.5 text-left text-slate-500">{prevLabel}</td>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {r.months.map((m) => (
+                      <tr
+                        key={m.month}
+                        className={clsx('text-right', !m.recorded && 'text-slate-400')}
+                      >
+                        <th scope="row" className="py-1.5 text-left font-normal">
+                          {monthName(m.month)}
+                        </th>
                         {COLUMNS.map((c) => (
                           <td key={c.key} className="py-1.5 pl-3 tabular-nums">
-                            {money(r.previous!.totals[c.key])}
+                            {m.recorded ? money(m[c.key]) : '—'}
                           </td>
                         ))}
                         <td className="py-1.5 pl-3 tabular-nums">
-                          {formatPercent(r.previous.totals.savingsRateBp)}
+                          {m.recorded ? formatPercent(m.savingsRateBp) : '—'}
                         </td>
                       </tr>
-                      <tr>
-                        <td className="py-1.5 text-left text-slate-500">Change</td>
-                        {COLUMNS.map((c) => (
-                          <td key={c.key} className="py-1.5 pl-3">
-                            <Change
-                              bp={r.change[c.key].bp}
-                              upIsGood={c.key !== 'essentials' && c.key !== 'fun'}
-                            />
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-200 text-right dark:border-slate-700">
+                    <tr className="font-semibold">
+                      <td className="py-1.5 text-left">Total</td>
+                      {COLUMNS.map((c) => (
+                        <td key={c.key} className="py-1.5 pl-3 tabular-nums">
+                          {money(r.totals[c.key])}
+                        </td>
+                      ))}
+                      <td className="py-1.5 pl-3 tabular-nums">
+                        {formatPercent(r.totals.savingsRateBp)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 text-left text-slate-500">Average month</td>
+                      {COLUMNS.map((c) => (
+                        <td key={c.key} className="py-1.5 pl-3 tabular-nums">
+                          {money(r.averages[c.key])}
+                        </td>
+                      ))}
+                      <td />
+                    </tr>
+                    {r.previous && (
+                      <>
+                        <tr>
+                          <td className="py-1.5 text-left text-slate-500">{prevLabel}</td>
+                          {COLUMNS.map((c) => (
+                            <td key={c.key} className="py-1.5 pl-3 tabular-nums">
+                              {money(r.previous!.totals[c.key])}
+                            </td>
+                          ))}
+                          <td className="py-1.5 pl-3 tabular-nums">
+                            {formatPercent(r.previous.totals.savingsRateBp)}
                           </td>
-                        ))}
-                        <td />
-                      </tr>
-                    </>
-                  )}
-                </tfoot>
-              </table>
-            </div>
-          </Card>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 text-left text-slate-500">Change</td>
+                          {COLUMNS.map((c) => (
+                            <td key={c.key} className="py-1.5 pl-3">
+                              <Change
+                                bp={r.change[c.key].bp}
+                                upIsGood={c.key !== 'essentials' && c.key !== 'fun'}
+                              />
+                            </td>
+                          ))}
+                          <td />
+                        </tr>
+                      </>
+                    )}
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
 
-          <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-            <CompareTable
-              title="Spending by category"
-              first="Category"
-              year={year}
-              previousLabel={prevLabel || String(year - 1)}
-              money={money}
-              rows={r.categories.map((c) => ({
-                key: c.categoryId ?? 'none',
-                name: c.name,
-                note: c.bucket ? BUCKETS[c.bucket] : undefined,
-                actual: c.actual,
-                previous: c.previous,
-                changeBp: c.changeBp,
-                upIsGood: c.bucket === 'future',
-              }))}
-            />
-            <div className="space-y-5">
+            <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
               <CompareTable
-                title="Spent by"
-                first="Person"
+                title="Spending by category"
+                first="Category"
                 year={year}
                 previousLabel={prevLabel || String(year - 1)}
                 money={money}
-                rows={r.members.map((m) => ({
-                  key: m.memberId ?? 'shared',
-                  name: m.name,
-                  actual: m.actual,
-                  previous: m.previous,
-                  changeBp: m.changeBp,
-                  upIsGood: false,
+                rows={r.categories.map((c) => ({
+                  key: c.categoryId ?? 'none',
+                  name: c.name,
+                  note: c.bucket ? BUCKETS[c.bucket] : undefined,
+                  actual: c.actual,
+                  previous: c.previous,
+                  changeBp: c.changeBp,
+                  upIsGood: c.bucket === 'future',
                 }))}
               />
-              <Card title="Net worth">
-                {r.netWorth.start || r.netWorth.end ? (
-                  <dl className="space-y-2 text-sm">
-                    {[r.netWorth.start, r.netWorth.end].map(
-                      (p, i) =>
-                        p && (
-                          <div key={i} className="flex justify-between gap-3">
-                            <dt className="text-slate-500">
-                              {i === 0 ? 'Start' : 'End'} · {p.date}
-                            </dt>
-                            <dd className="font-medium tabular-nums">{money(p.amount)}</dd>
-                          </div>
-                        ),
-                    )}
-                    {r.netWorth.start && r.netWorth.end && (
-                      <div className="flex justify-between gap-3 border-t border-slate-100 pt-2 dark:border-slate-800">
-                        <dt className="text-slate-500">Change</dt>
-                        <dd className="font-semibold tabular-nums">
-                          {money(r.netWorth.end.amount - r.netWorth.start.amount)}
-                        </dd>
-                      </div>
-                    )}
-                  </dl>
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    No net-worth snapshots for {year} in {r.currency}.
-                  </p>
-                )}
-              </Card>
+              <div className="space-y-5">
+                <CompareTable
+                  title="Spent by"
+                  first="Person"
+                  year={year}
+                  previousLabel={prevLabel || String(year - 1)}
+                  money={money}
+                  rows={r.members.map((m) => ({
+                    key: m.memberId ?? 'shared',
+                    name: m.name,
+                    actual: m.actual,
+                    previous: m.previous,
+                    changeBp: m.changeBp,
+                    upIsGood: false,
+                  }))}
+                />
+                <Card title="Net worth">
+                  {r.netWorth.start || r.netWorth.end ? (
+                    <dl className="space-y-2 text-sm">
+                      {[r.netWorth.start, r.netWorth.end].map(
+                        (p, i) =>
+                          p && (
+                            <div key={i} className="flex justify-between gap-3">
+                              <dt className="text-slate-500">
+                                {i === 0 ? 'Start' : 'End'} · {p.date}
+                              </dt>
+                              <dd className="font-medium tabular-nums">{money(p.amount)}</dd>
+                            </div>
+                          ),
+                      )}
+                      {r.netWorth.start && r.netWorth.end && (
+                        <div className="flex justify-between gap-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+                          <dt className="text-slate-500">Change</dt>
+                          <dd className="font-semibold tabular-nums">
+                            {money(r.netWorth.end.amount - r.netWorth.start.amount)}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No net-worth snapshots for {year} in {r.currency}.
+                    </p>
+                  )}
+                </Card>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -377,10 +399,18 @@ function CompareTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-right text-xs text-slate-500 dark:border-slate-800">
-                <th className="py-2 text-left font-medium">{first}</th>
-                <th className="py-2 pl-3 font-medium">{year}</th>
-                <th className="py-2 pl-3 font-medium">{previousLabel}</th>
-                <th className="py-2 pl-3 font-medium">Change</th>
+                <th scope="col" className="py-2 text-left font-medium">
+                  {first}
+                </th>
+                <th scope="col" className="py-2 pl-3 font-medium">
+                  {year}
+                </th>
+                <th scope="col" className="py-2 pl-3 font-medium">
+                  {previousLabel}
+                </th>
+                <th scope="col" className="py-2 pl-3 font-medium">
+                  Change
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

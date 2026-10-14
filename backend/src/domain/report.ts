@@ -43,23 +43,44 @@ function merge<K extends string | null, R extends { name: string; actual: number
     .sort((a, b) => b.actual - a.actual || b.previous - a.previous || a.name.localeCompare(b.name));
 }
 
-/** A year next to the year before: recorded months, averages, changes, categories and people. */
-export function yearReport(current: PeriodNumbers, previous: PeriodNumbers) {
-  const months = current.months.map((m) => ({ ...m, recorded: isRecorded(m) }));
+/**
+ * A year next to the year before: recorded months, averages, changes, categories and people.
+ * `recorded` (month keys with any entry) is better than reading the converted numbers, which
+ * are 0 for money without an exchange rate. When the two years have a different number of
+ * recorded months, changes compare monthly averages — never 2 months against 12.
+ */
+export function yearReport(
+  current: PeriodNumbers,
+  previous: PeriodNumbers,
+  opts: { recorded?: Set<string>; previousRecorded?: Set<string> } = {},
+) {
+  const months = current.months.map((m) => ({
+    ...m,
+    recorded: opts.recorded ? opts.recorded.has(m.month) : isRecorded(m),
+  }));
   const recordedMonths = months.filter((m) => m.recorded).length;
-  const previousRecorded = previous.months.filter(isRecorded).length;
+  const previousRecorded = opts.previousRecorded
+    ? previous.months.filter((m) => opts.previousRecorded!.has(m.month)).length
+    : previous.months.filter(isRecorded).length;
+  const basis: 'total' | 'average' =
+    previousRecorded && recordedMonths !== previousRecorded ? 'average' : 'total';
+  const per = (n: number, count: number) =>
+    basis === 'total' || count === 0 ? n : Math.round(n / count);
   const averages = Object.fromEntries(
     MONEY.map((k) => [k, recordedMonths ? Math.round(current.totals[k] / recordedMonths) : 0]),
   ) as Record<MoneyKey, number>;
   const change = Object.fromEntries(
-    MONEY.map((k) => [
-      k,
-      {
-        amount: current.totals[k] - previous.totals[k],
-        bp: changeBp(current.totals[k], previous.totals[k]),
-      },
-    ]),
+    MONEY.map((k) => {
+      const now = per(current.totals[k], recordedMonths);
+      const before = per(previous.totals[k], previousRecorded);
+      return [k, { amount: now - before, bp: changeBp(now, before) }];
+    }),
   ) as Record<MoneyKey, { amount: number; bp: number | null }>;
+  const rebase = <R extends { actual: number; previous: number }>(rows: R[]) =>
+    rows.map((row) => ({
+      ...row,
+      changeBp: changeBp(per(row.actual, recordedMonths), per(row.previous, previousRecorded)),
+    }));
   return {
     months,
     totals: current.totals,
@@ -68,8 +89,9 @@ export function yearReport(current: PeriodNumbers, previous: PeriodNumbers) {
     previous: previousRecorded
       ? { totals: previous.totals, recordedMonths: previousRecorded }
       : null,
+    changeBasis: basis,
     change,
-    categories: merge(current.categories, previous.categories, (c) => c.categoryId),
-    members: merge(current.members, previous.members, (m) => m.memberId),
+    categories: rebase(merge(current.categories, previous.categories, (c) => c.categoryId)),
+    members: rebase(merge(current.members, previous.members, (m) => m.memberId)),
   };
 }

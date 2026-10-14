@@ -19,7 +19,7 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
     if (!csv) return { data: report };
     return reply
       .type('text/csv; charset=utf-8')
-      .header('Content-Disposition', `attachment; filename="report-${year}.csv"`)
+      .header('Content-Disposition', `attachment; filename="report-${year}-${report.currency}.csv"`)
       .send(reportCsv(report));
   });
 };

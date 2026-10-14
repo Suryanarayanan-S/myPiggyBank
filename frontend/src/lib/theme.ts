@@ -46,7 +46,15 @@ export function useLook(): [Look, () => void] {
     const sync = () => applyLook(look, q.matches);
     sync();
     q.addEventListener('change', sync);
-    return () => q.removeEventListener('change', sync);
+    // Paper is white: print in the light colours even when the screen is dark.
+    const toLight = () => applyLook(look, false);
+    window.addEventListener('beforeprint', toLight);
+    window.addEventListener('afterprint', sync);
+    return () => {
+      q.removeEventListener('change', sync);
+      window.removeEventListener('beforeprint', toLight);
+      window.removeEventListener('afterprint', sync);
+    };
   }, [look]);
   const toggle = useCallback(() => {
     const next: Look = look === 'modern' ? 'retro' : 'modern';

@@ -58,7 +58,9 @@ describe('yearReport', () => {
       }),
     );
     expect(r.previous).toMatchObject({ recordedMonths: 2, totals: { netIncome: 800_000 } });
-    expect(r.change.netIncome).toEqual({ amount: -300_000, bp: -3750 });
+    // 1 month against 2: compared per month (500,000 vs 400,000), never 1 month vs 2 months.
+    expect(r.changeBasis).toBe('average');
+    expect(r.change.netIncome).toEqual({ amount: 100_000, bp: 2500 });
     expect(r.change.fun).toEqual({ amount: 0, bp: null });
   });
 
@@ -87,5 +89,14 @@ describe('yearReport', () => {
     expect(r.members).toEqual([
       { memberId: null, name: 'Shared', actual: 10, previous: 20, changeBp: -5000 },
     ]);
+  });
+
+  it('uses the recorded months it is given (any entry counts, even without a rate)', () => {
+    const r = yearReport(year(2026, {}), year(2025, {}), {
+      recorded: new Set(['2026-03']),
+      previousRecorded: new Set(),
+    });
+    expect(r.recordedMonths).toBe(1);
+    expect(r.months.find((m) => m.month === '2026-03')!.recorded).toBe(true);
   });
 });

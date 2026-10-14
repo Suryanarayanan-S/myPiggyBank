@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Config } from './config.js';
 import { DEFAULT_RATES_URL, type FetchRates } from './services/liveRateService.js';
 import { AppError } from './lib/errors.js';
@@ -76,6 +76,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (err instanceof AppError) {
       return reply.status(err.statusCode).send({
         error: { code: err.code, message: err.message, details: err.details },
+      });
+    }
+    // Two requests creating the same thing at once: the loser hits the unique index.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return reply.status(409).send({
+        error: { code: 'CONFLICT', message: 'This already exists — refresh and try again' },
       });
     }
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {

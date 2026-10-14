@@ -209,7 +209,8 @@ export async function listTransactions(
     prisma.transaction.findMany({
       where,
       include,
-      orderBy: [{ [q.sort]: q.order }, { date: 'desc' }, { createdAt: 'desc' }],
+      // id last: rows that tie on everything else keep one order across pages.
+      orderBy: [{ [q.sort]: q.order }, { date: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
       skip: (q.page - 1) * q.pageSize,
       take: q.pageSize,
     }),

@@ -38,6 +38,15 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('97.85', { exact: true })).toBeVisible();
   await shot(page, '03-settings');
 
+  // Members sit in the Family card; bucket names with the categories.
+  const card = (title: string) =>
+    page
+      .locator('section', { has: page.getByRole('heading', { name: title, exact: true }) })
+      .first();
+  await expect(card('Family').getByRole('heading', { name: 'Family members' })).toBeVisible();
+  await expect(card('Family').getByRole('button', { name: 'Rename Surya' })).toBeVisible();
+  await expect(card('Categories').getByLabel('Needs bucket')).toBeVisible();
+
   // Buckets carry the family's own names everywhere.
   await expect(page.getByLabel('Needs bucket')).toHaveValue('Keep Me Alive');
   await page.getByLabel('Needs bucket').fill('Bills & Burritos');

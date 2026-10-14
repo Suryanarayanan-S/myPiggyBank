@@ -6,7 +6,8 @@ import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
-import { BUCKET_KEYS, CURRENCIES, type Family } from '../../lib/types';
+import { CURRENCIES, type Family } from '../../lib/types';
+import { FamilyMembers } from './FamilyMembers';
 
 export function FamilyCard({ family, email }: { family: Family; email: string }) {
   const queryClient = useQueryClient();
@@ -14,23 +15,16 @@ export function FamilyCard({ family, email }: { family: Family; email: string })
     name: family.name,
     spendingCurrency: family.spendingCurrency,
     wealthCurrency: family.wealthCurrency,
-    bucketNames: family.bucketNames,
   });
   const save = useMutation({
     mutationFn: () => api.put<Family>('/family', form),
-    // Currencies change every converted figure (and bucket names every label): refresh all.
-    onSuccess: (saved) => {
-      // Show what was stored (names are trimmed), so the form is no longer "changed".
-      setForm((f) => ({ ...f, bucketNames: saved.bucketNames }));
-      return queryClient.invalidateQueries();
-    },
+    // Currencies change every converted figure, so refresh everything.
+    onSuccess: () => queryClient.invalidateQueries(),
   });
   const dirty =
     form.name !== family.name ||
     form.spendingCurrency !== family.spendingCurrency ||
-    form.wealthCurrency !== family.wealthCurrency ||
-    BUCKET_KEYS.some((b) => form.bucketNames[b] !== family.bucketNames[b]);
-  const LABEL = { essentials: 'Needs bucket', fun: 'Wants bucket', future: 'Saving bucket' };
+    form.wealthCurrency !== family.wealthCurrency;
 
   return (
     <Card title="Family">
@@ -72,24 +66,6 @@ export function FamilyCard({ family, email }: { family: Family; email: string })
             </Select>
           </Field>
         </div>
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium">What you call your buckets</legend>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {BUCKET_KEYS.map((b) => (
-              <Field key={b} label={LABEL[b]} htmlFor={`bucket-${b}`}>
-                <Input
-                  id={`bucket-${b}`}
-                  required
-                  maxLength={30}
-                  value={form.bucketNames[b]}
-                  onChange={(e) =>
-                    setForm({ ...form, bucketNames: { ...form.bucketNames, [b]: e.target.value } })
-                  }
-                />
-              </Field>
-            ))}
-          </div>
-        </fieldset>
         <p className="text-xs text-slate-500">Logged in as {email}</p>
         <FormError error={save.error} />
         <div className="flex justify-end">
@@ -98,6 +74,9 @@ export function FamilyCard({ family, email }: { family: Family; email: string })
           </Button>
         </div>
       </form>
+      <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+        <FamilyMembers />
+      </div>
     </Card>
   );
 }

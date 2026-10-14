@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2, UserRound } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { api } from '../../lib/api';
 import { useMembers } from '../../lib/queries';
 import type { Member } from '../../lib/types';
 
-export function MembersCard() {
+/** Family members, shown inside the Family card. */
+export function FamilyMembers() {
   const queryClient = useQueryClient();
   const members = useMembers();
   const [name, setName] = useState('');
@@ -23,8 +23,11 @@ export function MembersCard() {
   });
 
   return (
-    <Card title="Family members">
-      <p className="mb-4 text-sm text-slate-500">
+    <section aria-labelledby="members-heading">
+      <h3 id="members-heading" className="text-sm font-semibold">
+        Family members
+      </h3>
+      <p className="mt-1 mb-3 text-sm text-slate-500">
         Members let you see who spent what. Transactions without a member count as “Shared”.
       </p>
       {members.isPending ? (
@@ -56,7 +59,7 @@ export function MembersCard() {
       <div className="mt-2">
         <FormError error={add.error} />
       </div>
-    </Card>
+    </section>
   );
 }
 

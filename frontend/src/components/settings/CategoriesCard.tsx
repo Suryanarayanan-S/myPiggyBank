@@ -9,13 +9,15 @@ import { api } from '../../lib/api';
 import { useCategories } from '../../lib/queries';
 import { useMe } from '../../auth/auth';
 import { useBucketNames } from '../../lib/buckets';
+import { BucketNamesForm } from './BucketNamesForm';
 import { BUCKET_KEYS, type Bucket, type Category } from '../../lib/types';
 
 type Column = { key: string; title: string; kind: 'income' | 'expense'; bucket: Bucket | null };
 
 export function CategoriesCard() {
   const names = useBucketNames();
-  const targets = useMe().data?.family.targets;
+  const family = useMe().data?.family;
+  const targets = family?.targets;
   const title = (b: Bucket) => (targets ? `${names[b]} · ${targets[b]}%` : names[b]);
   const COLUMNS: Column[] = [
     { key: 'income', title: 'Income', kind: 'income', bucket: null },
@@ -41,9 +43,10 @@ export function CategoriesCard() {
 
   return (
     <Card title="Categories">
+      {family && <BucketNamesForm family={family} />}
       <p className="mb-4 text-sm text-slate-500">
         Every expense belongs to a bucket: {names.essentials}, {names.fun} or {names.future}{' '}
-        (savings and investments). Rename the buckets under Family.
+        (savings and investments).
       </p>
       <FormError error={error} />
       <div className="mt-2 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">

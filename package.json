@@ -22,7 +22,8 @@
     "docker:smoke": "./scripts/docker-smoke.sh",
     "e2e": "playwright test -c e2e",
     "backup": "node scripts/backup.mjs",
-    "restore": "node scripts/restore.mjs"
+    "restore": "node scripts/restore.mjs",
+    "seed:demo": "npm run seed:demo -w backend --"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",

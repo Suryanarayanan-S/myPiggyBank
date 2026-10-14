@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "prisma": "dotenv -e ../.env -- prisma",
     "db:migrate": "dotenv -e ../.env -- prisma migrate deploy",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed:demo": "tsx --env-file=../.env src/demo/cli.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

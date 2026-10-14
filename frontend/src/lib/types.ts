@@ -16,6 +16,8 @@ export type Family = {
   bucketNames: Record<Bucket, string>;
   /** Extras that can be switched off in Settings. */
   extras: { quickEntrySuggestions: boolean };
+  /** What holdings count with in net worth and goals. */
+  investmentsAt: 'value' | 'invested';
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

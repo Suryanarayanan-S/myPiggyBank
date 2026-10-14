@@ -87,3 +87,59 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await page.getByRole('button', { name: 'Switch to modern look' }).first().click();
   await page.screenshot({ path: 'e2e/screenshots/28-mobile-investments.png', fullPage: true });
 });
+
+test('a Zerodha holdings file becomes holdings and replaces the manual asset', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByLabel('Your name').fill('Surya');
+  await page.getByLabel('Email').fill(`zerodha-${Date.now()}@example.com`);
+  await page.getByLabel('Password').fill('e2e-test-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
+
+  // The demat was tracked by hand as one asset so far.
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('button', { name: 'Add asset' }).click();
+  const a = page.getByRole('dialog');
+  await a.getByLabel('Name').fill('Zerodha Surya');
+  await a.getByLabel('Type').selectOption({ label: 'Investments' });
+  await a.getByLabel('Belongs to').selectOption({ label: 'Surya' });
+  await a.getByLabel('Current value').fill('6 L');
+  await a.getByRole('button', { name: 'Save' }).click();
+  await expect(a).toBeHidden();
+
+  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page.getByRole('button', { name: 'Import from Zerodha' }).click();
+  const d = page.getByRole('dialog', { name: 'Import holdings' });
+  await expect(d.getByLabel('Whose demat is this?')).toHaveValue(/.+/); // the logged-in person
+  await d.getByLabel('Holdings file (CSV)').setInputFiles({
+    name: 'holdings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      [
+        '"Instrument","Qty.","Avg. cost","LTP","Invested","Cur. val","P&L","Net chg.","Day chg.",""',
+        '"INFY",32,1361.19,1088.9,43558.2,34844.8,-8713.4,-20,2.51,""',
+        '"GOLDBEES",5030,62.21,119.72,312899.59,602191.6,289292.01,92.46,-1.06,""',
+      ].join('\n'),
+    ),
+  });
+  await expect(d.getByText('2 holdings', { exact: true })).toBeVisible();
+  await expect(d.getByText('₹6,02,191.60')).toBeVisible();
+  // The manual asset is suggested so the money is not counted twice.
+  await expect(d.getByLabel('Already counted as a manual asset?')).not.toHaveValue('');
+  await shot(page, '29-holdings-import');
+  await d.getByRole('button', { name: 'Import 2 holdings' }).click();
+  await expect(d.getByText('Done: 2 new, 0 updated.')).toBeVisible();
+  await expect(d.getByRole('button', { name: 'Done' })).toBeFocused();
+  await d.getByRole('button', { name: 'Done' }).click();
+
+  await expect(page.getByRole('button', { name: /GOLDBEES/ }).first()).toBeVisible();
+  const value = page.locator('section', { has: page.getByText('Value', { exact: true }) }).first();
+  await expect(value).toContainText('₹6,37,036.40');
+
+  // Net worth can count the holdings at what was invested instead; the choice is kept.
+  const countAt = page.getByLabel('Count in net worth and goals at');
+  await expect(countAt).toHaveValue('value');
+  await countAt.selectOption('invested');
+  await page.reload();
+  await expect(page.getByLabel('Count in net worth and goals at')).toHaveValue('invested');
+});

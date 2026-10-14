@@ -4,7 +4,10 @@ import { ViewQuery } from '../domain/currency.js';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
+import * as hi from '../services/holdingImportService.js';
 
+// A holdings file (base64) plus the other fields.
+const bodyLimit = hi.MAX_FILE_CHARS + 64 * 1024;
 const SubParams = z.object({ id: z.uuid(), subId: z.uuid() });
 
 export const holdingRoutes: FastifyPluginAsync = async (app) => {
@@ -13,6 +16,21 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
   const id = (req: { params: unknown }) => parse(IdParams, req.params).id;
   const sub = (req: { params: unknown }) => parse(SubParams, req.params);
 
+  // A broker's holdings export (Zerodha Kite): preview, then create or update the holdings.
+  app.post('/holdings/import/preview', { bodyLimit }, async (req) => ({
+    data: await hi.previewHoldingImport(
+      app.prisma,
+      fam(req),
+      parse(hi.HoldingImportInput, req.body),
+    ),
+  }));
+  app.post('/holdings/import/commit', { bodyLimit }, async (req) => ({
+    data: await hi.commitHoldingImport(
+      app.prisma,
+      fam(req),
+      parse(hi.HoldingImportInput, req.body),
+    ),
+  }));
   app.get('/holdings', async (req) => ({
     data: await h.listHoldings(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
   }));

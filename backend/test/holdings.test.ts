@@ -110,6 +110,19 @@ describe('investments', () => {
     expect(h.value).toBe(10_100);
   });
 
+  it('net worth counts holdings at their current value or, if chosen, at what was invested', async () => {
+    await trade({ date: addDays(today, -3), type: 'buy', units: '1', amount: 10_000 });
+    await f.call('POST', `/api/holdings/${f.etf.id}/prices`, { date: today, price: '150' });
+    const investments = async () =>
+      (await f.call('GET', '/api/net-worth')).json().data.current.byClass.investment;
+    expect((await f.call('GET', '/api/family')).json().data.investmentsAt).toBe('value');
+    expect(await investments()).toBe(1_500_000);
+    const res = await f.call('PUT', '/api/family', { investmentsAt: 'invested' });
+    expect(res.json().data.investmentsAt).toBe('invested');
+    expect(await investments()).toBe(1_000_000);
+    expect((await f.call('PUT', '/api/family', { investmentsAt: 'guess' })).statusCode).toBe(400);
+  });
+
   it('counts in net worth as an investment of its owner; archived holdings do not', async () => {
     await trade({ date: addDays(today, -3), type: 'buy', units: '1', amount: 10_000 });
     let nw = (await f.call('GET', '/api/net-worth')).json().data.current;

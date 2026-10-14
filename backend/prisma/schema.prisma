@@ -24,6 +24,8 @@ model Family {
   nameFuture       String             @default("Make Me Rich")
   /// Extras that can be switched off in Settings
   quickEntryHints  Boolean            @default(true)
+  /// What holdings count with in net worth and goals: "value" (at today's price) or "invested"
+  investmentsAt    String             @default("value")
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   users            User[]

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { AlertTriangle, Pencil, Plus } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, Upload } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { HoldingActivity, HoldingForm } from '../components/investments/HoldingDialogs';
+import { HoldingsImport } from '../components/investments/HoldingsImport';
+import { CountAt } from '../components/investments/CountAt';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -38,7 +40,10 @@ export function InvestmentsPage() {
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
   const [dialog, setDialog] = useState<
-    { kind: 'form'; holding?: Holding } | { kind: 'activity'; id: string } | null
+    | { kind: 'form'; holding?: Holding }
+    | { kind: 'activity'; id: string }
+    | { kind: 'import' }
+    | null
   >(null);
   const close = () => setDialog(null);
   const owner = (id: string | null) =>
@@ -59,14 +64,20 @@ export function InvestmentsPage() {
             net worth as investments.
           </p>
         </div>
-        <Button onClick={() => setDialog({ kind: 'form' })}>
-          <Plus size={16} aria-hidden /> Add holding
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setDialog({ kind: 'import' })}>
+            <Upload size={16} aria-hidden /> Import from Zerodha
+          </Button>
+          <Button onClick={() => setDialog({ kind: 'form' })}>
+            <Plus size={16} aria-hidden /> Add holding
+          </Button>
+        </div>
       </div>
       <FormError error={data.error} />
 
       {s && open.length > 0 && (
         <>
+          <CountAt />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile label="Value" value={formatMoney(s.value, s.currency)} />
             <Tile
@@ -144,6 +155,11 @@ export function InvestmentsPage() {
             defaultCurrency={me.data?.family.spendingCurrency ?? 'EUR'}
             onDone={close}
           />
+        </Modal>
+      )}
+      {dialog?.kind === 'import' && (
+        <Modal title="Import holdings" onClose={close}>
+          <HoldingsImport onDone={close} />
         </Modal>
       )}
       {activity && (

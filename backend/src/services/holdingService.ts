@@ -202,10 +202,15 @@ export async function holdingValues(
   onDay = todayLocal(),
   opts: { includeArchived?: boolean } = {},
 ) {
-  const rows = await prisma.holding.findMany({
-    where: { familyId, ...(!opts.includeArchived && { archived: false }) },
-    include,
-  });
+  const [rows, family] = await Promise.all([
+    prisma.holding.findMany({
+      where: { familyId, ...(!opts.includeArchived && { archived: false }) },
+      include,
+    }),
+    getFamily(prisma, familyId),
+  ]);
+  // The family chooses whether holdings count at today's price or at what was paid for them.
+  const atCost = family.investmentsAt === 'invested';
   return rows.map((h) => {
     const c = computed(h, onDay);
     return {
@@ -215,7 +220,7 @@ export async function holdingValues(
       ownerMemberId: h.ownerMemberId,
       assetClass: 'investment',
       // Nothing held: nothing to count (and no exchange rate needed for it).
-      value: c.units === '0' ? null : c.value,
+      value: c.units === '0' ? null : atCost ? c.cost : c.value,
     };
   });
 }

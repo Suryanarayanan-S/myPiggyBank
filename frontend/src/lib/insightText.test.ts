@@ -105,4 +105,47 @@ describe('insightText', () => {
     ].join(' ');
     expect(all).not.toMatch(/should|must|consider|try to|recommend/i);
   });
+
+  it('keeps signs and reads well at the edges', () => {
+    expect(insightText(i('savingsTrend', { recentBp: -1000, earlierBp: 1000 }), 'EUR')).toBe(
+      'Savings rate went down: −10 % over the last 3 months, 10 % the 3 before.',
+    );
+    expect(
+      insightText(
+        i('vsAverage', {
+          category: 'Car repair',
+          month: '2026-09',
+          amount: 0,
+          usual: 36_000,
+          bp: -10_000,
+        }),
+        'EUR',
+      ),
+    ).toBe('Nothing on Car repair in September (usually 360,00 € a month).');
+    expect(
+      insightText(
+        i('goalBehind', {
+          name: 'House',
+          currency: 'EUR',
+          monthlyNeeded: 50_000,
+          pace: -5_000,
+          overdue: false,
+          left: 1,
+        }),
+        'EUR',
+      ),
+    ).toBe('House is behind: 500,00 € a month needed, nothing saved lately.');
+    expect(
+      insightText(
+        i('large', {
+          merchant: null,
+          amount: 90_000,
+          date: '2026-10-03',
+          category: 'Shopping',
+          times: 6,
+        }),
+        'EUR',
+      ),
+    ).toBe('900,00 € on 3 Oct is about 6× a usual Shopping payment.');
+  });
 });

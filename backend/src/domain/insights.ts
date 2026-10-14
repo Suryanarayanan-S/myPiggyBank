@@ -19,6 +19,8 @@ export const THRESHOLDS = {
   subscriptionSpreadBp: 1_000,
   /** at most this many regular payments are listed (the largest) */
   subscriptionMax: 5,
+  /** more payments than this in a month is shopping, not a regular payment */
+  subscriptionPerMonth: 2,
   /** savings trend: average rate of the last 3 vs the 3 before, in basis points */
   savingsTrendBp: 300,
   /** holdings: biggest gain/loss shown when at least this return */
@@ -32,6 +34,7 @@ export const THRESHOLDS = {
 const T = THRESHOLDS;
 
 export type InsightTxn = {
+  id: string;
   date: string;
   type: 'income' | 'expense';
   /** in the report currency (amounts without a rate are left out before this) */
@@ -49,6 +52,7 @@ export type InsightInput = {
   txns: InsightTxn[];
   limits: { month: string; categoryId: string; amount: number }[];
   goals: {
+    id: string;
     name: string;
     currency: string;
     status: string;
@@ -61,6 +65,7 @@ export type InsightInput = {
     };
   }[];
   holdings: {
+    id: string;
     name: string;
     currency: string;
     archived: boolean;
@@ -86,7 +91,7 @@ export type Insight = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- per kind, read by insightText
   data: Record<string, any>;
   link: string;
-  /** how big it is, for ordering within a tone */
+  /** how big it is, for ordering among insights of the same kind */
   size: number;
 };
 
@@ -101,6 +106,17 @@ const median = (xs: number[]) => {
 };
 const bp = (part: number, whole: number) => Math.round((part * 10_000) / whole);
 const TONE_ORDER: Record<Tone, number> = { warning: 0, info: 1, good: 2 };
+/** Within a tone: what matters now first (sizes of different kinds are not comparable). */
+const KIND_ORDER: Record<Insight['kind'], number> = {
+  overLimit: 0,
+  goalBehind: 1,
+  savingsTrend: 2,
+  rising: 3,
+  vsAverage: 4,
+  large: 5,
+  holding: 6,
+  subscription: 7,
+};
 
 export function findInsights(input: InsightInput): Insight[] {
   const current = input.today.slice(0, 7);
@@ -139,15 +155,13 @@ export function findInsights(input: InsightInput): Insight[] {
     }
   }
 
-  // vsAverage: the one category furthest from its usual in the last full month
+  // vsAverage: the one category furthest from its usual (average of the five months before,
+  // empty months included; at least three of them with spending) in the last full month
   let best: Insight | null = null;
   for (const cat of spent.keys()) {
-    const before = full
-      .slice(0, 5)
-      .map((m) => amountIn(cat, m))
-      .filter((x) => x > 0);
-    if (before.length < T.usualMonths) continue;
-    const usual = Math.round(before.reduce((s, x) => s + x, 0) / before.length);
+    const before = full.slice(0, 5).map((m) => amountIn(cat, m));
+    if (before.filter((x) => x > 0).length < T.usualMonths) continue;
+    const usual = Math.round(before.reduce((sum, x) => sum + x, 0) / before.length);
     const amount = amountIn(cat, last);
     const diff = amount - usual;
     if (Math.abs(diff) < T.vsAverageMin || Math.abs(bp(diff, usual)) < T.vsAverageBp) continue;
@@ -164,7 +178,7 @@ export function findInsights(input: InsightInput): Insight[] {
   }
   if (best) out.push(best);
 
-  // overLimit: this month, and how often it happened in the last six full months
+  // overLimit: this month (all of it, as on the budget page), and how often in the six before
   for (const l of input.limits.filter((x) => x.month === current)) {
     const actual = amountIn(l.categoryId, current);
     if (actual <= l.amount) continue;
@@ -184,21 +198,23 @@ export function findInsights(input: InsightInput): Insight[] {
     });
   }
 
-  // subscription: same merchant, similar amount, most months
-  const single = expenses.filter((t) => !t.isMonthlyTotal && t.merchant?.trim());
-  const byMerchant = new Map<string, { label: string; months: Map<string, number> }>();
+  // regular payments: the same merchant about once a month, for a similar amount
+  const single = expenses.filter((t) => !t.isMonthlyTotal && t.date <= input.today);
+  const byMerchant = new Map<string, { label: string; months: Map<string, number[]> }>();
   for (const t of single) {
     const month = t.date.slice(0, 7);
-    if (!full.slice(2).includes(month)) continue;
-    const key = t.merchant!.trim().toLowerCase();
-    const e = byMerchant.get(key) ?? { label: t.merchant!.trim(), months: new Map() };
-    e.months.set(month, (e.months.get(month) ?? 0) + t.amount);
+    if (!t.merchant?.trim() || !full.slice(2).includes(month)) continue;
+    const key = t.merchant.trim().toLowerCase();
+    const e = byMerchant.get(key) ?? { label: t.merchant.trim(), months: new Map() };
+    e.months.set(month, [...(e.months.get(month) ?? []), t.amount]);
     byMerchant.set(key, e);
   }
   const regular: Insight[] = [];
   for (const [key, e] of byMerchant) {
-    const amounts = [...e.months.values()];
-    if (amounts.length < T.subscriptionMonths) continue;
+    const perMonth = [...e.months.values()];
+    if (perMonth.length < T.subscriptionMonths) continue;
+    if (perMonth.some((payments) => payments.length > T.subscriptionPerMonth)) continue;
+    const amounts = perMonth.map((payments) => payments.reduce((sum, x) => sum + x, 0));
     const monthly = median(amounts);
     if (amounts.some((a) => Math.abs(bp(a - monthly, monthly)) > T.subscriptionSpreadBp)) continue;
     regular.push({
@@ -206,45 +222,47 @@ export function findInsights(input: InsightInput): Insight[] {
       kind: 'subscription',
       tone: 'info',
       data: { merchant: e.label, monthly, yearly: monthly * 12 },
-      link: `/transactions?q=${encodeURIComponent(e.label)}`,
+      link: `/transactions?month=${last}&q=${encodeURIComponent(e.label)}`,
       size: monthly * 12,
     });
   }
-
   out.push(...regular.sort((a, b) => b.size - a.size).slice(0, T.subscriptionMax));
 
-  // savingsTrend: (income − essentials − fun − uncategorised) / income, 3 months vs 3 months
-  const rate = (month: string) => {
-    const inMonth = input.txns.filter((t) => t.date.startsWith(month));
-    const income = inMonth.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  // savingsTrend: Σ(income − essentials − fun − uncategorised) / Σincome over each three
+  // months (the budget's savings rate), so a month with little income weighs little
+  const windowRate = (months: string[]) => {
+    const inWindow = input.txns.filter((t) => months.includes(t.date.slice(0, 7)));
+    const income = inWindow
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
     if (income <= 0) return null;
-    const spentNow = inMonth
+    const spentNow = inWindow
       .filter((t) => t.type === 'expense' && t.bucket !== 'future')
-      .reduce((s, t) => s + t.amount, 0);
+      .reduce((sum, t) => sum + t.amount, 0);
     return bp(income - spentNow, income);
   };
-  const rates = full.map(rate);
-  if (rates.every((r) => r !== null)) {
-    const avg = (xs: (number | null)[]) => Math.round(xs.reduce((s, x) => s! + x!, 0)! / xs.length);
-    const earlierBp = avg(rates.slice(0, 3));
-    const recentBp = avg(rates.slice(3));
-    if (Math.abs(recentBp - earlierBp) >= T.savingsTrendBp) {
-      out.push({
-        id: 'savingsTrend',
-        kind: 'savingsTrend',
-        tone: recentBp > earlierBp ? 'good' : 'warning',
-        data: { recentBp, earlierBp },
-        link: '/',
-        size: Math.abs(recentBp - earlierBp),
-      });
-    }
+  const earlierBp = windowRate(full.slice(0, 3));
+  const recentBp = windowRate(full.slice(3));
+  if (
+    earlierBp !== null &&
+    recentBp !== null &&
+    Math.abs(recentBp - earlierBp) >= T.savingsTrendBp
+  ) {
+    out.push({
+      id: 'savingsTrend',
+      kind: 'savingsTrend',
+      tone: recentBp > earlierBp ? 'good' : 'warning',
+      data: { recentBp, earlierBp },
+      link: `/reports`,
+      size: Math.abs(recentBp - earlierBp),
+    });
   }
 
   // goalBehind
   for (const g of input.goals) {
     if (g.status !== 'active' || (g.progress.onTrack !== false && !g.progress.overdue)) continue;
     out.push({
-      id: `goal:${g.name}`,
+      id: `goal:${g.id}`,
       kind: 'goalBehind',
       tone: 'warning',
       data: { name: g.name, currency: g.currency, ...g.progress },
@@ -264,7 +282,7 @@ export function findInsights(input: InsightInput): Insight[] {
   for (const h of [gain, loss]) {
     if (!h) continue;
     out.push({
-      id: `holding:${h.name}`,
+      id: `holding:${h.id}`,
       kind: 'holding',
       tone: h.returnBp! > 0 ? 'good' : 'warning',
       data: { name: h.name, currency: h.currency, returnBp: h.returnBp, unrealised: h.unrealised },
@@ -279,31 +297,38 @@ export function findInsights(input: InsightInput): Insight[] {
     d.setUTCDate(d.getUTCDate() - T.largeDays);
     return d.toISOString().slice(0, 10);
   })();
-  for (const t of single.filter((x) => x.date > recentFrom && x.date <= input.today)) {
+  for (const t of single.filter((x) => x.date > recentFrom)) {
     const earlier = single
       .filter(
         (x) =>
-          x.categoryId === t.categoryId && x.date.slice(0, 7) >= full[0]! && x.date < recentFrom,
+          x.categoryId === t.categoryId && x.date.slice(0, 7) >= full[0]! && x.date <= recentFrom,
       )
       .map((x) => x.amount);
     if (earlier.length < T.largeMinRows || t.amount < T.largeMin) continue;
     const usual = median(earlier);
     if (usual <= 0 || t.amount < usual * T.largeTimes) continue;
     out.push({
-      id: `large:${t.date}:${t.merchant}:${t.amount}`,
+      id: `large:${t.id}`,
       kind: 'large',
       tone: 'info',
       data: {
-        merchant: t.merchant,
+        merchant: t.merchant?.trim() || null,
         amount: t.amount,
         date: t.date,
         category: name.get(t.categoryId!),
         times: Math.round(t.amount / usual),
       },
-      link: `/transactions?month=${t.date.slice(0, 7)}`,
+      link: `/transactions?month=${t.date.slice(0, 7)}${
+        t.merchant?.trim() ? `&q=${encodeURIComponent(t.merchant.trim())}` : ''
+      }`,
       size: t.amount,
     });
   }
 
-  return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone] || b.size - a.size);
+  return out.sort(
+    (a, b) =>
+      TONE_ORDER[a.tone] - TONE_ORDER[b.tone] ||
+      KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+      b.size - a.size,
+  );
 }

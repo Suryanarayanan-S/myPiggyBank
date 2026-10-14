@@ -14,8 +14,17 @@ export const ICON = {
   info: { Icon: Info, className: 'text-slate-400', label: 'Info' },
 } as const;
 
-export function Insights({ items, more }: { items: InsightLine[]; more?: boolean }) {
-  if (items.length === 0) return null;
+export function Insights({
+  items,
+  more,
+  failed,
+}: {
+  items: InsightLine[];
+  more?: boolean;
+  /** the observations could not be loaded (the period insights still show) */
+  failed?: boolean;
+}) {
+  if (items.length === 0 && !failed) return null;
   return (
     <Card
       title="Financial insights"
@@ -28,10 +37,10 @@ export function Insights({ items, more }: { items: InsightLine[]; more?: boolean
       }
     >
       <ul className="space-y-2">
-        {items.map((i) => {
+        {items.map((i, index) => {
           const { Icon, className, label } = ICON[i.tone];
           return (
-            <li key={i.text} className="flex items-start gap-2 text-sm">
+            <li key={index} className="flex items-start gap-2 text-sm">
               <Icon size={18} className={`mt-0.5 shrink-0 ${className}`} aria-label={label} />
               <span>
                 {i.text}
@@ -45,6 +54,11 @@ export function Insights({ items, more }: { items: InsightLine[]; more?: boolean
           );
         })}
       </ul>
+      {failed && (
+        <p role="alert" className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+          Could not load all insights right now.
+        </p>
+      )}
       <p className="mt-3 text-xs text-slate-400">
         Calculated from your own numbers. Not financial advice.
       </p>

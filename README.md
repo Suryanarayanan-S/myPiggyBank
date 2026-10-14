@@ -2,7 +2,7 @@
 
 A simple, private family-finance app: income, expenses, budgets, accounts and net worth — running on your own machine.
 
-> Status: v1 complete — login, family, accounts, transactions, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, eight currencies with live or own exchange rates, modern and retro looks, backup/restore, demo data. See `docs/superpowers/specs/` for the design.
+> Status: v1 complete — login, family, accounts, transactions, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, eight currencies with live or own exchange rates, savings goals, investments, year reports, insights, modern and retro looks, backup/restore, demo data. See `docs/superpowers/specs/` for the design.
 
 **Docs:** [how it works (pictures)](docs/how-it-works.html) · [architecture](docs/architecture.md) · [API](docs/api.md) · [database](docs/database.md) · [moving and restoring](docs/moving-and-restoring.md)
 

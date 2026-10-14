@@ -128,6 +128,7 @@ export function DashboardPage() {
           ) : null}
           <Insights
             more
+            failed={observations.isError}
             items={[
               // the three most important observations of the last months, then this period's
               ...(observations.data?.insights.slice(0, 3).map((i) => ({

@@ -57,6 +57,30 @@ the money in that currency instead of the default.
 | GET                       | `/net-worth` **(currency)**                                     | current split by member and class, snapshots, month/year comparison |
 | POST / PUT / DELETE       | `/net-worth/snapshots`, `/net-worth/snapshots/:id`              | `{}` = today; `{ date, netWorth }` = a past entry                   |
 
+## Goals
+
+| Method                    | Path                                                | Notes                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET / POST / PUT / DELETE | `/goals`, `/goals/:id`                              | target, currency, date, member, `links: [{ kind: account \| asset \| holding, id }]`, status; list includes `saved`, `progress` (pace, monthly need, on track) |
+| POST / DELETE             | `/goals/:id/entries`, `/goals/:id/entries/:entryId` | money kept elsewhere (negative = taken out); currency locked once there are entries                                                                            |
+
+## Investments
+
+| Method              | Path                                                  | Notes                                                                                                                   |
+| ------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| GET                 | `/holdings` **(currency)**                            | holdings with units, average cost, price, value, gain/loss, realised, dividends; `summary` by kind and person           |
+| POST / PUT / DELETE | `/holdings`, `/holdings/:id`                          | currency locked once there are trades                                                                                   |
+| POST / DELETE       | `/holdings/:id/trades`, `/holdings/:id/trades/:subId` | `{ date, type: buy \| sell \| dividend, units: "12.5", amount, fees }`; selling more than held → 409 `NOT_ENOUGH_UNITS` |
+| POST / DELETE       | `/holdings/:id/prices`, `/holdings/:id/prices/:subId` | `{ date, price: "98.45" }` per unit; same date replaces                                                                 |
+
+## Reports and insights
+
+| Method | Path                                     | Notes                                                                                               |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| GET    | `/reports/year/:year` **(currency)**     | months, totals, averages, last year (same months, `label`), categories, people, net worth start/end |
+| GET    | `/reports/year/:year.csv` **(currency)** | the same as a spreadsheet                                                                           |
+| GET    | `/insights` **(currency)**               | observations `{ id, kind, tone, data, link }` for this month and the six before                     |
+
 ## Exchange rates
 
 | Method    | Path                           | Notes                                               |

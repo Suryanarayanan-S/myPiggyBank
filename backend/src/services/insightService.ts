@@ -31,6 +31,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
         date: { gte: monthRange(first).start, lt: monthRange(current).end },
       },
       select: {
+        id: true,
         date: true,
         type: true,
         amount: true,
@@ -49,9 +50,11 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
   const currency = view ?? family.spendingCurrency;
   const unconverted = new Map<string, number>();
   const txns: InsightTxn[] = [];
+  let unconvertedLimits = 0;
   for (const t of rows) {
+    // Later days of this month count for its limits (as on the budget page); the insights that
+    // look at single payments only use those up to today.
     const date = t.date.toISOString().slice(0, 10);
-    if (date > today) continue;
     const amount = convert(Number(t.amount), t.account.currency, currency, date.slice(0, 7), rates);
     if (amount === null) {
       unconverted.set(
@@ -61,6 +64,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
       continue;
     }
     txns.push({
+      id: t.id,
       date,
       type: t.type as InsightTxn['type'],
       amount,
@@ -77,6 +81,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
     txns,
     limits: limits.flatMap((l) => {
       const amount = convert(Number(l.amount), l.currency, currency, l.month, rates);
+      if (amount === null) unconvertedLimits++;
       return amount === null ? [] : [{ month: l.month, categoryId: l.categoryId, amount }];
     }),
     goals,
@@ -86,5 +91,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
     currency,
     insights,
     unconverted: [...unconverted].map(([c, amount]) => ({ currency: c, amount })),
+    /** budget limits that could not be compared (no exchange rate) */
+    unconvertedLimits,
   };
 }

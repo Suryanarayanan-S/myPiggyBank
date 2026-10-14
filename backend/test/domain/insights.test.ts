@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findInsights, type InsightInput, type InsightTxn } from '../../src/domain/insights.js';
 
+let seq = 0;
 const TODAY = '2026-10-14'; // full months: 2026-04 … 2026-09, current: 2026-10
 const cats = [
   { id: 'groc', name: 'Groceries', bucket: 'essentials' as const },
@@ -25,8 +26,10 @@ const exp = (
   merchant: null,
   isMonthlyTotal: true,
   ...extra,
+  id: extra.id ?? `x${seq++}`,
 });
 const inc = (date: string, amount: number): InsightTxn => ({
+  id: `x${seq++}`,
   date,
   type: 'income',
   amount,
@@ -162,6 +165,7 @@ describe('findInsights', () => {
       input([], {
         goals: [
           {
+            id: 'house',
             name: 'House',
             currency: 'EUR',
             status: 'active',
@@ -174,6 +178,7 @@ describe('findInsights', () => {
             },
           },
           {
+            id: 'car',
             name: 'Car',
             currency: 'EUR',
             status: 'active',
@@ -182,6 +187,7 @@ describe('findInsights', () => {
         ],
         holdings: [
           {
+            id: 'etf',
             name: 'ETF',
             currency: 'EUR',
             archived: false,
@@ -190,6 +196,7 @@ describe('findInsights', () => {
             returnBp: 2000,
           },
           {
+            id: 'gold',
             name: 'Gold',
             currency: 'EUR',
             archived: false,
@@ -198,6 +205,7 @@ describe('findInsights', () => {
             returnBp: -1000,
           },
           {
+            id: 'tiny',
             name: 'Tiny',
             currency: 'EUR',
             archived: false,
@@ -242,6 +250,7 @@ describe('findInsights', () => {
       input([], {
         holdings: [
           {
+            id: 'etf',
             name: 'ETF',
             currency: 'EUR',
             archived: false,
@@ -250,6 +259,7 @@ describe('findInsights', () => {
             returnBp: 2000,
           },
           {
+            id: 'gold',
             name: 'Gold',
             currency: 'EUR',
             archived: false,
@@ -281,5 +291,136 @@ describe('findInsights', () => {
       'D',
       'C',
     ]);
+  });
+
+  it('savings trend weighs months by income (a month with almost no income does not wreck it)', () => {
+    const txns = ['04', '05', '06', '07', '08'].flatMap((m) => [
+      inc(`2026-${m}-01`, 300_000),
+      exp(`2026-${m}-02`, 'groc', 200_000),
+    ]);
+    txns.push(inc('2026-09-01', 500), exp('2026-09-02', 'groc', 200_000));
+    const t = findInsights(input(txns)).find((i) => i.kind === 'savingsTrend');
+    // last 3 months: (2 × 100,000 + 500 − 200,000) / 600,500 ≈ 0.1 %; before: 33.3 %
+    expect(t?.data).toEqual({ recentBp: 8, earlierBp: 3333 });
+  });
+
+  it('ranks by kind first: this month’s over-limit before a goal, before the trend', () => {
+    const r = findInsights(
+      input(
+        [
+          exp('2026-10-05', 'groc', 30_000),
+          ...['04', '05', '06'].flatMap((m) => [
+            inc(`2026-${m}-01`, 100_000),
+            exp(`2026-${m}-02`, 'rest', 50_000),
+          ]),
+          ...['07', '08', '09'].flatMap((m) => [
+            inc(`2026-${m}-01`, 100_000),
+            exp(`2026-${m}-02`, 'rest', 90_000),
+          ]),
+        ],
+        {
+          limits: [{ month: '2026-10', categoryId: 'groc', amount: 25_000 }],
+          goals: [
+            {
+              id: 'g1',
+              name: 'House',
+              currency: 'INR',
+              status: 'active',
+              progress: {
+                onTrack: false,
+                overdue: false,
+                monthlyNeeded: 1,
+                pace: 0,
+                left: 300_000_000,
+              },
+            },
+          ],
+        },
+      ),
+    );
+    expect(
+      r
+        .filter((i) => i.tone === 'warning')
+        .map((i) => i.kind)
+        .slice(0, 3),
+    ).toEqual(['overLimit', 'goalBehind', 'savingsTrend']);
+  });
+
+  it('a merchant paid several times a month is not a regular payment', () => {
+    const rewe = ['07', '08', '09'].flatMap((m) =>
+      [3, 10, 17, 24].map((d) =>
+        exp(`2026-${m}-${d}`, 'groc', 9_000, { merchant: 'REWE', isMonthlyTotal: false }),
+      ),
+    );
+    expect(kinds(findInsights(input(rewe)))).not.toContain('subscription');
+  });
+
+  it('ids are unique even for same names (goals, holdings) and same payments', () => {
+    const goal = (id: string) => ({
+      id,
+      name: 'House',
+      currency: 'EUR',
+      status: 'active',
+      progress: { onTrack: false, overdue: false, monthlyNeeded: 1, pace: 0, left: 1 },
+    });
+    const usual = ['04', '05', '06', '07', '08'].map((m, k) =>
+      exp(`2026-${m}-12`, 'shop', 4_000, { isMonthlyTotal: false, id: `u${k}` }),
+    );
+    const r = findInsights(
+      input(
+        [
+          ...usual,
+          exp('2026-10-03', 'shop', 20_000, { isMonthlyTotal: false, id: 't1' }),
+          exp('2026-10-03', 'shop', 20_000, { isMonthlyTotal: false, id: 't2' }),
+        ],
+        {
+          goals: [goal('g1'), goal('g2')],
+          holdings: [
+            {
+              id: 'h1',
+              name: 'ETF',
+              currency: 'EUR',
+              archived: false,
+              value: 1,
+              unrealised: 1,
+              returnBp: 900,
+            },
+            {
+              id: 'h2',
+              name: 'ETF',
+              currency: 'EUR',
+              archived: false,
+              value: 1,
+              unrealised: -1,
+              returnBp: -900,
+            },
+          ],
+        },
+      ),
+    );
+    const ids = r.map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(r.filter((i) => i.kind === 'large')).toHaveLength(2); // also without a merchant
+  });
+
+  it('usual is the average of all five months; a category that stopped says so', () => {
+    const r = findInsights(
+      input(['04', '06', '08'].map((m) => exp(`2026-${m}-10`, 'rest', 60_000))),
+    );
+    expect(r.find((i) => i.kind === 'vsAverage')?.data).toMatchObject({ amount: 0, usual: 36_000 });
+  });
+
+  it('a payment exactly 30 days ago counts as an earlier one', () => {
+    const earlier = ['04', '05', '06', '07', '08'].map((m, k) =>
+      exp(`2026-${m}-12`, 'shop', 4_000, { isMonthlyTotal: false, id: `e${k}` }),
+    );
+    const r = findInsights(
+      input([
+        ...earlier.slice(1),
+        exp('2026-09-14', 'shop', 4_000, { isMonthlyTotal: false, id: 'edge' }),
+        exp('2026-10-03', 'shop', 20_000, { isMonthlyTotal: false, id: 'big' }),
+      ]),
+    );
+    expect(kinds(r)).toContain('large'); // the 14 Sep payment makes the 5 earlier rows
   });
 });

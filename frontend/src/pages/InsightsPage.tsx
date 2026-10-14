@@ -33,6 +33,14 @@ export function InsightsPage() {
           {data.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
         </p>
       )}
+      {data && data.unconvertedLimits > 0 && (
+        <p className="text-sm text-amber-800 dark:text-amber-300">
+          {data.unconvertedLimits === 1
+            ? 'One budget limit'
+            : `${data.unconvertedLimits} budget limits`}{' '}
+          could not be compared (no exchange rate to {data.currency}).
+        </p>
+      )}
       {data && (
         <Card>
           {data.insights.length === 0 ? (

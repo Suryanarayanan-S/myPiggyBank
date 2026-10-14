@@ -14,3 +14,15 @@ describe('forgetUserData', () => {
     expect(qc.getQueryData(['me'])).toBeNull();
   });
 });
+
+describe('isSessionExpired', () => {
+  it('is only the server saying the login is gone, not a wrong password', async () => {
+    const { ApiError } = await import('./api');
+    const { isSessionExpired } = await import('./session');
+    expect(isSessionExpired(new ApiError(401, 'UNAUTHENTICATED', 'Please log in'))).toBe(true);
+    expect(isSessionExpired(new ApiError(401, 'INVALID_CREDENTIALS', 'Wrong password'))).toBe(
+      false,
+    );
+    expect(isSessionExpired(new Error('network'))).toBe(false);
+  });
+});

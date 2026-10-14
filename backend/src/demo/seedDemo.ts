@@ -62,6 +62,12 @@ export async function seedDemo(
   const existing = await prisma.user.findUnique({ where: { email: DEMO.email } });
   if (existing) {
     if (!opts.reset) throw new Error('The demo family already exists. Use --reset to recreate it.');
+    const family = await prisma.family.findUniqueOrThrow({ where: { id: existing.familyId } });
+    if (family.name !== DEMO.familyName) {
+      throw new Error(
+        `${DEMO.email} belongs to a family that is not the demo family. Nothing was changed.`,
+      );
+    }
     await prisma.family.delete({ where: { id: existing.familyId } });
   }
 

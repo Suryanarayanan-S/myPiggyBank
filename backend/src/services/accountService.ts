@@ -4,10 +4,9 @@ import { CurrencySchema, sumConverted } from '../domain/currency.js';
 import { getFamily } from './familyService.js';
 import { loadRates } from './rateService.js';
 import { computeBalances, type BalanceTxn } from '../domain/balances.js';
-import { monthBounds } from '../lib/dates.js';
+import { monthRange, todayLocal } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
 import { assertAccount, assertMember } from './ownership.js';
-import { todayLocal } from '../lib/dates.js';
 
 export const ACCOUNT_TYPES = [
   'current',
@@ -80,7 +79,7 @@ async function withBalances(prisma: PrismaClient, familyId: string, accounts: Ac
     amount: Number(t.amount),
     transferAmount: t.transferAmount === null ? null : Number(t.transferAmount),
   }));
-  const { start, end } = monthBounds(new Date());
+  const { start, end } = monthRange(todayLocal().slice(0, 7));
   const opening = accounts.map((a) => ({ id: a.id, openingBalance: Number(a.openingBalance) }));
   const balances = computeBalances(opening, txns);
   const changes = computeBalances(

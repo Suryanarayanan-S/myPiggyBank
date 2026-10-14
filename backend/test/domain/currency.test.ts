@@ -154,3 +154,14 @@ describe('rates that cannot be right', () => {
     ).toBeNull();
   });
 });
+
+describe('both directions stored for one month', () => {
+  it('uses the stored direction, whichever row comes first', () => {
+    const both: Rate[] = [
+      { month: '2026-09', base: 'INR', quote: 'EUR', rateMicros: 10_000 }, // ⇒ 100 if inverted
+      { month: '2026-09', base: 'EUR', quote: 'INR', rateMicros: 98_000_000 },
+    ];
+    expect(findRate(both, '2026-09', 'EUR', 'INR')).toBe(98_000_000);
+    expect(findRate(both, '2026-09', 'INR', 'EUR')).toBe(10_000);
+  });
+});

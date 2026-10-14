@@ -61,3 +61,16 @@ describe('demo data', { timeout: 60_000 }, () => {
     await loginDemo();
   });
 });
+
+describe('demo reset', { timeout: 60_000 }, () => {
+  it('refuses to delete a real family that happens to use the demo email', async () => {
+    await resetDb();
+    const app = await makeApp();
+    await signUp(app, { email: DEMO.email, name: 'Someone real' });
+    await expect(seedDemo(prisma, { today: '2026-10-14', reset: true })).rejects.toThrow(
+      /not the demo family/,
+    );
+    expect(await prisma.family.count()).toBe(1);
+    await app.close();
+  });
+});

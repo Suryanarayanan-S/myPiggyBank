@@ -15,6 +15,7 @@ import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import type { Dashboard } from '../lib/dashboardTypes';
 import { insightsFor } from '../lib/insights';
+import { insightText, type InsightsResponse } from '../lib/insightText';
 import { formatMoney } from '../lib/money';
 import { isMonth, localMonth, monthTitle } from '../lib/months';
 import { PRESETS, periodRange, type Preset } from '../lib/periods';
@@ -50,6 +51,10 @@ export function DashboardPage() {
     enabled: preset !== 'all' || first.isSuccess,
   });
   const d = dash.data;
+  const observations = useQuery({
+    queryKey: ['insights', view],
+    queryFn: () => api.get<InsightsResponse>(withView('/insights', view)),
+  });
 
   const change = (p: Preset, c?: { from: string; to: string }) =>
     setParams(p === 'custom' && c ? { period: p, from: c.from, to: c.to } : { period: p }, {
@@ -122,7 +127,16 @@ export function DashboardPage() {
             </p>
           ) : null}
           <Insights
-            items={insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories)}
+            more
+            items={[
+              // the three most important observations of the last months, then this period's
+              ...(observations.data?.insights.slice(0, 3).map((i) => ({
+                tone: i.tone,
+                text: insightText(i, observations.data!.currency),
+                link: i.link,
+              })) ?? []),
+              ...insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories),
+            ]}
           />
           <CashFlowChart d={d} />
           <div className="grid gap-5 lg:grid-cols-2">

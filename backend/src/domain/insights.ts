@@ -17,6 +17,8 @@ export const THRESHOLDS = {
   /** subscription: in this many of the last 4 full months, amounts within this share of the median */
   subscriptionMonths: 3,
   subscriptionSpreadBp: 1_000,
+  /** at most this many regular payments are listed (the largest) */
+  subscriptionMax: 5,
   /** savings trend: average rate of the last 3 vs the 3 before, in basis points */
   savingsTrendBp: 300,
   /** holdings: biggest gain/loss shown when at least this return */
@@ -193,12 +195,13 @@ export function findInsights(input: InsightInput): Insight[] {
     e.months.set(month, (e.months.get(month) ?? 0) + t.amount);
     byMerchant.set(key, e);
   }
+  const regular: Insight[] = [];
   for (const [key, e] of byMerchant) {
     const amounts = [...e.months.values()];
     if (amounts.length < T.subscriptionMonths) continue;
     const monthly = median(amounts);
     if (amounts.some((a) => Math.abs(bp(a - monthly, monthly)) > T.subscriptionSpreadBp)) continue;
-    out.push({
+    regular.push({
       id: `subscription:${key}`,
       kind: 'subscription',
       tone: 'info',
@@ -207,6 +210,8 @@ export function findInsights(input: InsightInput): Insight[] {
       size: monthly * 12,
     });
   }
+
+  out.push(...regular.sort((a, b) => b.size - a.size).slice(0, T.subscriptionMax));
 
   // savingsTrend: (income − essentials − fun − uncategorised) / income, 3 months vs 3 months
   const rate = (month: string) => {

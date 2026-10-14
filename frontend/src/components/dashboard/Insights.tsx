@@ -1,8 +1,10 @@
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { Link } from 'react-router';
 import { Card } from '../ui/Card';
-import type { Insight } from '../../lib/insights';
+/** A line to show: its tone (icon + word, never colour alone), the sentence and where it comes from. */
+export type InsightLine = { tone: 'good' | 'warning' | 'info'; text: string; link?: string };
 
-const ICON = {
+export const ICON = {
   good: { Icon: CheckCircle2, className: 'text-emerald-600 dark:text-emerald-400', label: 'Good' },
   warning: {
     Icon: AlertTriangle,
@@ -12,17 +14,33 @@ const ICON = {
   info: { Icon: Info, className: 'text-slate-400', label: 'Info' },
 } as const;
 
-export function Insights({ items }: { items: Insight[] }) {
+export function Insights({ items, more }: { items: InsightLine[]; more?: boolean }) {
   if (items.length === 0) return null;
   return (
-    <Card title="Financial insights">
+    <Card
+      title="Financial insights"
+      actions={
+        more && (
+          <Link to="/insights" className="text-sm text-indigo-600 hover:underline">
+            All insights
+          </Link>
+        )
+      }
+    >
       <ul className="space-y-2">
         {items.map((i) => {
           const { Icon, className, label } = ICON[i.tone];
           return (
             <li key={i.text} className="flex items-start gap-2 text-sm">
               <Icon size={18} className={`mt-0.5 shrink-0 ${className}`} aria-label={label} />
-              <span>{i.text}</span>
+              <span>
+                {i.text}
+                {i.link && (
+                  <Link to={i.link} className="ml-1 text-indigo-600 hover:underline">
+                    See
+                  </Link>
+                )}
+              </span>
             </li>
           );
         })}

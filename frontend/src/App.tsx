@@ -17,6 +17,7 @@ import { WealthPage } from './pages/WealthPage';
 import { GoalsPage } from './pages/GoalsPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { InsightsPage } from './pages/InsightsPage';
 import { RecurringPage } from './pages/RecurringPage';
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
           <Route path="investments" element={<InvestmentsPage />} />
           <Route path="goals" element={<GoalsPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="insights" element={<InsightsPage />} />
           <Route path="recurring" element={<RecurringPage />} />
           <Route path="import" element={<ImportPage />} />
           <Route path="settings" element={<SettingsPage />} />

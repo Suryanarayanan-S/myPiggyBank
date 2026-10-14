@@ -10,19 +10,20 @@ names its numbers and links to where they come from.
 Months: the **current** month (in progress) and the six **full** months before it. Amounts in
 the spending currency (or `?currency=`); unconvertible amounts are left out and said so.
 
-| Kind | When | Example text |
-| --- | --- | --- |
-| `rising` | a category grew three full months in a row, each step ≥ 5 % and ≥ €10 | "Groceries rose three months in a row: €310 → €355 → €402." |
-| `vsAverage` | last full month is ≥ 30 % and ≥ €50 above or below the category's average of the five months before it (only the biggest one) | "In September, Restaurants was 48 % above its usual (€310 vs €209)." |
-| `overLimit` | this month over its limit; plus how many of the last six full months were over | "Groceries is €46 over its limit this month — also over in 3 of the last 6 months." |
-| `subscription` | same merchant in ≥ 3 of the last 4 full months, amounts within 10 % of their median | "Netflix looks like a subscription: about €13.99 a month, €168 a year." |
-| `savingsTrend` | average savings rate of the last 3 full months differs from the 3 before by ≥ 3 points | "Savings rate went up: 31 % over the last 3 months, 24 % the 3 before." |
-| `goalBehind` | active goal behind or past its date | "House deposit is behind: €310 a month needed, €120 a month saved lately." |
-| `holding` | the biggest gain and biggest loss among open holdings, if ≥ 5 % | "MSCI World ETF is up 16 % (+€212)." |
-| `large` | a transaction in the last 30 days ≥ 3× its category's median over six months (≥ 5 earlier rows) and ≥ €50 | "€840 at MediaMarkt on 3 Oct is about 6× a usual Shopping payment." |
+| Kind           | When                                                                                                                          | Example text                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `rising`       | a category grew three full months in a row, each step ≥ 5 % and ≥ €10                                                         | "Groceries rose three months in a row: €310 → €355 → €402."                         |
+| `vsAverage`    | last full month is ≥ 30 % and ≥ €50 above or below the category's average of the five months before it (only the biggest one) | "In September, Restaurants was 48 % above its usual (€310 vs €209)."                |
+| `overLimit`    | this month over its limit; plus how many of the last six full months were over                                                | "Groceries is €46 over its limit this month — also over in 3 of the last 6 months." |
+| `subscription` | same merchant in ≥ 3 of the last 4 full months, amounts within 10 % of their median                                           | "Netflix looks like a subscription: about €13.99 a month, €168 a year."             |
+| `savingsTrend` | average savings rate of the last 3 full months differs from the 3 before by ≥ 3 points                                        | "Savings rate went up: 31 % over the last 3 months, 24 % the 3 before."             |
+| `goalBehind`   | active goal behind or past its date                                                                                           | "House deposit is behind: €310 a month needed, €120 a month saved lately."          |
+| `holding`      | the biggest gain and biggest loss among open holdings, if ≥ 5 %                                                               | "MSCI World ETF is up 16 % (+€212)."                                                |
+| `large`        | a transaction in the last 30 days ≥ 3× its category's median over six months (≥ 5 earlier rows) and ≥ €50                     | "€840 at MediaMarkt on 3 Oct is about 6× a usual Shopping payment."                 |
 
-Quick-entry / spreadsheet monthly totals count for categories and trends but not for
-subscriptions or single large payments (they are not single payments).
+Quick-entry and spreadsheet-imported rows (monthly totals) count for categories and trends but not
+for regular or single large payments. Ruling (checked on real data): "subscription" is worded
+"regular payment" (rent, insurance and Netflix alike) and at most the 5 largest are listed.
 
 Each insight: `{ id, kind, tone: 'good' | 'warning' | 'info', data, link, size }` — the server finds
 what to say and the numbers; the frontend writes the sentence (`lib/insightText.ts`, tested) so money

@@ -262,4 +262,24 @@ describe('findInsights', () => {
     );
     expect(r.map((i) => i.tone)).toEqual(['warning', 'good']);
   });
+
+  it('shows at most five regular payments, the largest first', () => {
+    const merchants = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const r = findInsights(
+      input(
+        merchants.flatMap((m, k) =>
+          ['2026-07-03', '2026-08-03', '2026-09-03'].map((d) =>
+            exp(d, 'subs', 1_000 * (k + 1), { merchant: m, isMonthlyTotal: false }),
+          ),
+        ),
+      ),
+    );
+    expect(r.filter((i) => i.kind === 'subscription').map((i) => i.data.merchant)).toEqual([
+      'G',
+      'F',
+      'E',
+      'D',
+      'C',
+    ]);
+  });
 });

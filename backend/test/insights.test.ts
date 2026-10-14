@@ -80,4 +80,32 @@ describe('insights', () => {
   it('refuses an unknown currency', async () => {
     expect((await call('GET', '/api/insights?currency=XYZ')).statusCode).toBe(400);
   });
+
+  it('spreadsheet rows are monthly totals, not regular single payments', async () => {
+    const acc = (
+      await call('POST', '/api/accounts', { name: 'Giro', type: 'current', currency: 'EUR' })
+    ).json().data;
+    const { prisma } = await import('./helpers.js');
+    const fam = (await call('GET', '/api/family')).json().data.id;
+    const cats: { id: string; name: string }[] = (await call('GET', '/api/categories')).json().data;
+    const rent = cats.find((c) => c.name === 'Rent')!.id;
+    for (const m of [1, 2, 3, 4]) {
+      const d = new Date(`${today.slice(0, 4)}-${month.slice(5)}-01T00:00:00Z`);
+      d.setUTCMonth(d.getUTCMonth() - m);
+      await prisma.transaction.create({
+        data: {
+          familyId: fam,
+          accountId: acc.id,
+          date: d,
+          amount: 91_200,
+          type: 'expense',
+          merchant: 'Rent',
+          categoryId: rent,
+          importBatch: `xlsx:${d.toISOString().slice(0, 7)}`,
+        },
+      });
+    }
+    const { insights } = (await call('GET', '/api/insights')).json().data;
+    expect(insights.map((i: { kind: string }) => i.kind)).not.toContain('subscription');
+  });
 });

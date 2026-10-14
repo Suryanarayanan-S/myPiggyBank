@@ -35,6 +35,7 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
         type: true,
         amount: true,
         isMonthlyTotal: true,
+        importBatch: true,
         merchant: true,
         categoryId: true,
         account: { select: { currency: true } },
@@ -66,7 +67,8 @@ export async function getInsights(prisma: PrismaClient, familyId: string, view?:
       categoryId: t.categoryId,
       bucket: (t.category?.bucket ?? null) as Bucket | null,
       merchant: t.merchant,
-      isMonthlyTotal: t.isMonthlyTotal,
+      // Spreadsheet rows are monthly totals too (one per category and month), not payments.
+      isMonthlyTotal: t.isMonthlyTotal || (t.importBatch?.startsWith('xlsx:') ?? false),
     });
   }
   const insights = findInsights({

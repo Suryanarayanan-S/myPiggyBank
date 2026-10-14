@@ -180,11 +180,16 @@ export async function deleteTransaction(prisma: PrismaClient, familyId: string, 
   await prisma.transaction.delete({ where: { id } });
 }
 
-export async function listTransactions(
-  prisma: PrismaClient,
+/** The list filters as a query (also used by the CSV export, so it exports what is shown). */
+export function filterWhere(
   familyId: string,
-  q: z.output<typeof ListQuery>,
-) {
+  q: Partial<
+    Pick<
+      z.output<typeof ListQuery>,
+      'from' | 'to' | 'type' | 'accountId' | 'categoryId' | 'memberId' | 'q'
+    >
+  >,
+): Prisma.TransactionWhereInput {
   const and: Prisma.TransactionWhereInput[] = [{ familyId }];
   if (q.from) and.push({ date: { gte: parseDay(q.from)! } });
   if (q.to) and.push({ date: { lt: new Date(parseDay(q.to)!.getTime() + 86_400_000) } });
@@ -203,7 +208,15 @@ export async function listTransactions(
       ],
     });
   }
-  const where = { AND: and };
+  return { AND: and };
+}
+
+export async function listTransactions(
+  prisma: PrismaClient,
+  familyId: string,
+  q: z.output<typeof ListQuery>,
+) {
+  const where = filterWhere(familyId, q);
   const [total, rows] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({

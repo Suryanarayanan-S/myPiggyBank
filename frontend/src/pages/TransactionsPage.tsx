@@ -59,6 +59,9 @@ export function TransactionsPage() {
   // Totals are also given in one currency: the chosen one, else the spending currency.
   const totalIn = view === 'default' ? me.data?.family.spendingCurrency : view;
   if (totalIn) query.set('currency', totalIn);
+  // The export holds exactly what the filters show (all pages).
+  const exportQuery = new URLSearchParams(query);
+  for (const k of ['page', 'pageSize', 'currency']) exportQuery.delete(k);
   const txns = useQuery({
     queryKey: ['transactions', query.toString()],
     queryFn: () => api.get<Page<Transaction>>(`/transactions?${query}`),
@@ -72,7 +75,7 @@ export function TransactionsPage() {
         <MonthNav month={month} onChange={(m) => update({ month: m })} />
         <div className="flex gap-2">
           <a
-            href={`/api/export/transactions.csv?from=${month}-01&to=${monthEnd(month)}`}
+            href={`/api/export/transactions.csv?${exportQuery}`}
             download
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >

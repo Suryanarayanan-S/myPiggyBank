@@ -20,15 +20,21 @@ const COLUMNS: Column[] = [
 export function CategoriesCard() {
   const categories = useCategories();
   const queryClient = useQueryClient();
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['categories'] });
+  // Category names appear on many pages (transactions, budget, dashboard): refresh them all.
+  const refresh = () => queryClient.invalidateQueries();
   const [error, setError] = useState<unknown>(null);
-  const run = (fn: () => Promise<unknown>) =>
+  /** Resolves to whether it worked, so callers keep what was typed when it did not. */
+  const run = (fn: () => Promise<unknown>): Promise<boolean> =>
     fn()
-      .then(() => {
+      .then(async () => {
         setError(null);
-        return refresh();
+        await refresh();
+        return true;
       })
-      .catch(setError);
+      .catch((e: unknown) => {
+        setError(e);
+        return false;
+      });
 
   return (
     <Card title="Categories">
@@ -59,7 +65,7 @@ function CategoryColumn({
 }: {
   column: Column;
   items: Category[];
-  run: (fn: () => Promise<unknown>) => Promise<unknown>;
+  run: (fn: () => Promise<unknown>) => Promise<boolean>;
 }) {
   const [name, setName] = useState('');
   const add = useMutation({
@@ -70,7 +76,7 @@ function CategoryColumn({
           kind: column.kind,
           ...(column.bucket ? { bucket: column.bucket } : {}),
         }),
-      ).then(() => setName('')),
+      ).then((ok) => ok && setName('')),
   });
 
   return (

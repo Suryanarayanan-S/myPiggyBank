@@ -70,4 +70,14 @@ describe('CSV export', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.slice(1).trim().split('\r\n')).toHaveLength(1);
   });
+
+  it('honours the same filters as the transaction list', async () => {
+    const res = await call(
+      'GET',
+      '/api/export/transactions.csv?from=2026-10-01&to=2026-10-31&q=REWE&type=expense',
+    );
+    const lines = res.body.slice(1).trim().split('\r\n');
+    expect(lines).toHaveLength(2); // header + REWE
+    expect(lines[1]).toContain('REWE');
+  });
 });

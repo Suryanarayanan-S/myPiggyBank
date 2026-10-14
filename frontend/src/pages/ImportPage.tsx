@@ -127,7 +127,12 @@ function SpreadsheetImport() {
 
       {preview && (
         <>
-          <MappingCard preview={preview} mapping={mapping} setMapping={setMapping} />
+          <MappingCard
+            preview={preview}
+            mapping={mapping}
+            setMapping={setMapping}
+            currency={currency}
+          />
           <Card title="3 · Months">
             {preview.skippedSheets.length > 0 && (
               <p className="mb-3 text-xs text-slate-500">
@@ -251,10 +256,13 @@ function MappingCard({
   preview,
   mapping,
   setMapping,
+  currency,
 }: {
   preview: ImportPreview;
   mapping: Record<string, string>;
   setMapping: (m: Record<string, string>) => void;
+  /** The spreadsheet's amounts are imported in the spending currency. */
+  currency: string;
 }) {
   const categories = useCategories();
   const groups = useMemo(
@@ -323,7 +331,7 @@ function MappingCard({
                         </span>
                       </span>
                       <span className="text-sm tabular-nums text-slate-500">
-                        {formatMoney(l.total, 'EUR')}
+                        {formatMoney(l.total, currency)}
                       </span>
                       <Select
                         aria-label={`Category for ${l.label}`}

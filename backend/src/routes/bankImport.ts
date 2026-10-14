@@ -27,8 +27,9 @@ export const bankImportRoutes: FastifyPluginAsync = async (app) => {
   }));
 
   app.get('/export/transactions.csv', async (req, reply) => {
-    const { from, to } = parse(ExportQuery, req.query);
-    const csv = await exportTransactionsCsv(app.prisma, currentUser(req).familyId, from, to);
+    const query = parse(ExportQuery, req.query);
+    const { from, to } = query;
+    const csv = await exportTransactionsCsv(app.prisma, currentUser(req).familyId, query);
     return reply
       .type('text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="transactions-${from}-to-${to}.csv"`)

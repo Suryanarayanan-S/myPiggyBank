@@ -1,9 +1,16 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { formatDay, parseDay } from '../lib/dates.js';
+import { ListQuery, filterWhere } from './transactionService.js';
 
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
-export const ExportQuery = z.object({ from: day, to: day });
+export const ExportQuery = ListQuery.pick({
+  type: true,
+  accountId: true,
+  categoryId: true,
+  memberId: true,
+  q: true,
+}).extend({ from: day, to: day });
 
 /** Byte-order mark so Excel opens the file as UTF-8. */
 const BOM = String.fromCharCode(0xfeff);
@@ -27,14 +34,10 @@ const amount = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
 export async function exportTransactionsCsv(
   prisma: PrismaClient,
   familyId: string,
-  from: string,
-  to: string,
+  query: z.output<typeof ExportQuery>,
 ) {
   const rows = await prisma.transaction.findMany({
-    where: {
-      familyId,
-      date: { gte: parseDay(from)!, lt: new Date(parseDay(to)!.getTime() + 86_400_000) },
-    },
+    where: filterWhere(familyId, query),
     include: {
       account: { select: { name: true, currency: true } },
       category: { select: { name: true, bucket: true } },

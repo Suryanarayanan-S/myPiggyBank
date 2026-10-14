@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { IdParams, parse } from '../lib/validate.js';
-import { formatDay } from '../lib/dates.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as r from '../services/recurringService.js';
+import { todayLocal } from '../lib/dates.js';
 
 export const recurringRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -31,6 +31,6 @@ export const recurringRoutes: FastifyPluginAsync = async (app) => {
     return { data: { ok: true } };
   });
   app.post('/recurring/run', async (req) => ({
-    data: await r.generateDue(app.prisma, formatDay(new Date()), fam(req)),
+    data: await r.generateDue(app.prisma, todayLocal(), fam(req)),
   }));
 };

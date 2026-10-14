@@ -5,6 +5,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { generateDue } from './services/recurringService.js';
+import { todayLocal } from './lib/dates.js';
 
 const config = loadConfig();
 const prisma = new PrismaClient();
@@ -36,7 +37,7 @@ await app.listen({ host: config.HOST, port: config.PORT });
 
 // Recurring transactions: create everything due now, then check again every hour.
 const runRecurring = () =>
-  generateDue(prisma, new Date().toISOString().slice(0, 10))
+  generateDue(prisma, todayLocal())
     .then(({ created }) => created && app.log.info({ created }, 'recurring transactions created'))
     .catch((err) => app.log.error(err, 'recurring generation failed'));
 await runRecurring();
@@ -48,7 +49,7 @@ const runRates = async () => {
   const status = await refreshLiveRates(
     prisma,
     app.liveRates.fetch,
-    new Date().toISOString().slice(0, 10),
+    todayLocal(),
     app.liveRates.url,
   );
   if (status.lastError) app.log.warn({ error: status.lastError }, 'live rate download failed');

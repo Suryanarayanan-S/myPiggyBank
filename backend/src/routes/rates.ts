@@ -4,6 +4,7 @@ import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import { AppError } from '../lib/errors.js';
 import { liveStatus, refreshLiveRates } from '../services/liveRateService.js';
 import { RateInput, deleteRate, listRates, upsertRate } from '../services/rateService.js';
+import { todayLocal } from '../lib/dates.js';
 
 export const rateRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -23,7 +24,7 @@ export const rateRoutes: FastifyPluginAsync = async (app) => {
     if (!app.liveRates) {
       throw new AppError(503, 'LIVE_RATES_OFF', 'This server is not set up to download rates');
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     return {
       data: await refreshLiveRates(app.prisma, app.liveRates.fetch, today, app.liveRates.url),
     };

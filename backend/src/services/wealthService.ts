@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { loadRates } from './rateService.js';
 import { CurrencySchema } from '../domain/currency.js';
 import { ASSET_CLASSES, computeNetWorth } from '../domain/networth.js';
-import { formatDay, parseDay } from '../lib/dates.js';
+import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { listAccounts } from './accountService.js';
 import { getFamily } from './familyService.js';
@@ -19,7 +19,7 @@ const amount = z
   .refine(Number.isSafeInteger);
 const name = z.string().trim().min(1, 'Name is required').max(80);
 const note = z.string().trim().max(200).nullable().optional();
-const today = () => formatDay(new Date());
+const today = () => todayLocal();
 // Values are stored in the item's currency; switching it would silently rescale the history.
 const currencyLocked = () =>
   new AppError(400, 'CURRENCY_LOCKED', 'The currency cannot be changed once values are recorded');
@@ -389,7 +389,7 @@ export async function getNetWorth(prisma: PrismaClient, familyId: string, view?:
     };
   });
   const latestBefore = (days: number) => {
-    const cutoff = formatDay(new Date(Date.now() - days * 86_400_000));
+    const cutoff = addDays(today(), -days);
     return [...snapshots].reverse().find((s) => s.date <= cutoff && s.currency === to) ?? null;
   };
   return { current, snapshots, previousMonth: latestBefore(28), previousYear: latestBefore(365) };

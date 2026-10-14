@@ -1,7 +1,7 @@
 import { Prisma, type PrismaClient, type RecurringRule } from '@prisma/client';
 import { z } from 'zod';
 import { nextOccurrence, occurrences, type Frequency } from '../domain/recurring.js';
-import { formatDay, parseDay } from '../lib/dates.js';
+import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertAccount, assertCategory, assertMember } from './ownership.js';
 
@@ -12,7 +12,7 @@ const amount = z
   .positive()
   .refine(Number.isSafeInteger);
 const FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
-const today = () => formatDay(new Date());
+const today = () => todayLocal();
 
 export const RecurringCreate = z.object({
   name: z.string().trim().min(1).max(80),
@@ -220,8 +220,8 @@ export const UpcomingQuery = z.object({
 });
 
 export async function upcoming(prisma: PrismaClient, familyId: string, days: number) {
-  const from = formatDay(new Date(Date.now() + 86_400_000));
-  const to = formatDay(new Date(Date.now() + days * 86_400_000));
+  const from = addDays(today(), 1);
+  const to = addDays(today(), days);
   const rules = await prisma.recurringRule.findMany({ where: { familyId, active: true }, include });
   return rules
     .flatMap((r) =>

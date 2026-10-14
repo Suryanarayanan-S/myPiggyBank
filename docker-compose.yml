@@ -12,5 +12,8 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
       SESSION_DAYS: ${SESSION_DAYS:-30}
+      # "Today" for recurring transactions and snapshots (the container clock is UTC otherwise).
+      TZ: ${TZ:-Europe/Berlin}
+      RATES_URL: ${RATES_URL:-https://api.frankfurter.dev/v1}
     volumes:
       - ${DATA_DIR:-./data}:/app/data

@@ -7,6 +7,7 @@ import { computeBalances, type BalanceTxn } from '../domain/balances.js';
 import { monthBounds } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
 import { assertAccount, assertMember } from './ownership.js';
+import { todayLocal } from '../lib/dates.js';
 
 export const ACCOUNT_TYPES = [
   'current',
@@ -173,7 +174,7 @@ export async function accountsTotal(prisma: PrismaClient, familyId: string, view
     loadRates(prisma, familyId),
   ]);
   const currency = view ?? family.wealthCurrency;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = todayLocal().slice(0, 7);
   const items = accounts
     .filter((a) => !a.archived)
     .map((a) => ({ amount: a.balance, currency: a.currency, month }));

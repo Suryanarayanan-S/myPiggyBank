@@ -28,3 +28,19 @@ export function previousMonth(month: string): string {
   start.setUTCMonth(start.getUTCMonth() - 1);
   return start.toISOString().slice(0, 7);
 }
+
+/**
+ * Today's date (YYYY-MM-DD) in the server's time zone (`TZ`, e.g. Europe/Berlin), so that just
+ * after midnight it is already the new day — not still yesterday as in UTC.
+ */
+export function todayLocal(now = new Date(), timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+export const addDays = (day: string, n: number) =>
+  formatDay(new Date(parseDay(day)!.getTime() + n * 86_400_000));

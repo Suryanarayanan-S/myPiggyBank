@@ -197,4 +197,25 @@ describe('live exchange rates', () => {
     expect(res.statusCode).toBe(503);
     await offline.close();
   });
+
+  it('overlapping refreshes share one download', async () => {
+    await inrGroceries('2026-09-15');
+    await Promise.all([
+      refreshLiveRates(prisma, provider.fetchRates, '2026-10-07'),
+      refreshLiveRates(prisma, provider.fetchRates, '2026-10-07'),
+    ]);
+    expect(provider.urls).toHaveLength(2); // September's month end + latest, once
+  });
+
+  it('a month fetched right after it ended is not final yet', async () => {
+    await inrGroceries('2026-09-15');
+    await refreshLiveRates(prisma, provider.fetchRates, '2026-10-01');
+    const sep = await prisma.liveRate.findFirstOrThrow({
+      where: { month: '2026-09', quote: 'INR' },
+    });
+    expect(sep.final).toBe(false);
+    provider.urls.length = 0;
+    await refreshLiveRates(prisma, provider.fetchRates, '2026-10-05');
+    expect(provider.urls.filter((u) => u.includes('/2026-09-30?'))).toHaveLength(1);
+  });
 });

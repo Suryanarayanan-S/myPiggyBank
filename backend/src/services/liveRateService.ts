@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { CURRENCIES } from '../domain/currency.js';
+import { addDays } from '../lib/dates.js';
 
 /** The slice of `fetch` the rate download needs (injected so tests never touch the network). */
 export type FetchRates = (
@@ -84,11 +85,28 @@ async function store(
  * Downloads month-end rates for every finished month since the first transaction that is not
  * stored yet, then the latest rate for the current month. Old rates are kept on any failure.
  */
-export async function refreshLiveRates(
+export function refreshLiveRates(
   prisma: PrismaClient,
   fetchRates: FetchRates,
   today: string,
   baseUrl = DEFAULT_RATES_URL,
+): Promise<LiveStatus> {
+  // Startup, the 6-hour timer and "Update now" can overlap: they share one run.
+  running ??= runRefresh(prisma, fetchRates, today, baseUrl).finally(() => {
+    running = null;
+  });
+  return running;
+}
+let running: Promise<LiveStatus> | null = null;
+
+/** The provider may not have the last day of a month yet right after it; wait a few days. */
+const settled = (month: string, today: string) => today >= addDays(lastDayOf(month), 3);
+
+async function runRefresh(
+  prisma: PrismaClient,
+  fetchRates: FetchRates,
+  today: string,
+  baseUrl: string,
 ): Promise<LiveStatus> {
   const current = today.slice(0, 7);
   try {
@@ -111,12 +129,13 @@ export async function refreshLiveRates(
     if (month < oldest) month = oldest;
     for (; month < current; month = addMonths(month, 1)) {
       if (done.has(month)) continue;
-      await store(prisma, month, await download(fetchRates, baseUrl, lastDayOf(month)), true);
+      const answer = await download(fetchRates, baseUrl, lastDayOf(month));
+      await store(prisma, month, answer, settled(month, today));
     }
     const latest = await download(fetchRates, baseUrl, 'latest');
     // Early in a month the latest ECB day can still be in the previous month: that is its end rate.
     const latestMonth = latest.date.slice(0, 7);
-    await store(prisma, latestMonth, latest, latestMonth < current);
+    await store(prisma, latestMonth, latest, latestMonth < current && settled(latestMonth, today));
     lastError = null;
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);

@@ -1,14 +1,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { loadRates } from './rateService.js';
-import { CurrencySchema } from '../domain/currency.js';
+import { CurrencySchema, convert, type Rate } from '../domain/currency.js';
 import { ASSET_CLASSES, computeNetWorth } from '../domain/networth.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { listAccounts } from './accountService.js';
 import { getFamily } from './familyService.js';
 import { assertMember } from './ownership.js';
-import { convert } from '../domain/currency.js';
 
 const LIABILITY_TYPES = ['mortgage', 'car_loan', 'personal_loan', 'credit_card', 'other'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
@@ -325,10 +324,15 @@ export async function deleteBalance(
 }
 
 // ---------- net worth + snapshots ----------
-async function currentNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
+async function currentNetWorth(
+  prisma: PrismaClient,
+  familyId: string,
+  view?: string,
+  loaded?: Rate[],
+) {
   const [family, rates, members, accounts, assets, liabilities] = await Promise.all([
     getFamily(prisma, familyId),
-    loadRates(prisma, familyId),
+    loaded ?? loadRates(prisma, familyId),
     prisma.familyMember.findMany({
       where: { familyId },
       orderBy: { createdAt: 'asc' },
@@ -364,13 +368,13 @@ const snapshotDto = (s: SnapshotRow) => ({
 /** Net worth in `view` (default: the wealth currency). Snapshots are converted with the rate of
  *  their month; one that cannot be converted keeps its own currency. */
 export async function getNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
-  const [current, rows, rates] = await Promise.all([
-    currentNetWorth(prisma, familyId, view),
+  const rates = await loadRates(prisma, familyId);
+  const [current, rows] = await Promise.all([
+    currentNetWorth(prisma, familyId, view, rates),
     prisma.netWorthSnapshot.findMany({
       where: { familyId },
       orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
     }),
-    loadRates(prisma, familyId),
   ]);
   const to = current.currency;
   const snapshots = rows.map(snapshotDto).map((s) => {
@@ -390,7 +394,10 @@ export async function getNetWorth(prisma: PrismaClient, familyId: string, view?:
   });
   const latestBefore = (days: number) => {
     const cutoff = addDays(today(), -days);
-    return [...snapshots].reverse().find((s) => s.date <= cutoff && s.currency === to) ?? null;
+    // The nearest one counts; if it cannot be shown in this currency there is no comparison
+    // (rather than quietly comparing with an older one).
+    const nearest = [...snapshots].reverse().find((s) => s.date <= cutoff);
+    return nearest?.currency === to ? nearest : null;
   };
   return { current, snapshots, previousMonth: latestBefore(28), previousYear: latestBefore(365) };
 }

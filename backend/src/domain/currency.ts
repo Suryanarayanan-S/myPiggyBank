@@ -33,16 +33,54 @@ export type Rate = { month: string; base: string; quote: string; rateMicros: num
  */
 export function findRate(rates: Rate[], month: string, from: string, to: string): number | null {
   if (from === to) return MICROS;
-  let best: { month: string; micros: number } | null = null;
-  for (const r of rates) {
-    if (r.month > month || !(r.rateMicros > 0) || !Number.isFinite(r.rateMicros)) continue;
-    let micros: number | null = null;
-    if (r.base === from && r.quote === to) micros = r.rateMicros;
-    else if (r.base === to && r.quote === from)
-      micros = Math.round((MICROS * MICROS) / r.rateMicros);
-    if (micros !== null && (!best || r.month > best.month)) best = { month: r.month, micros };
+  const list = indexOf(rates).get(`${from}>${to}`);
+  if (!list) return null;
+  // Latest entry with entry.month <= month (binary search over months in ascending order).
+  let lo = 0;
+  let hi = list.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid]!.month <= month) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
   }
-  return best?.micros ?? null;
+  return found === -1 ? null : list[found]!.micros;
+}
+
+type Entry = { month: string; micros: number };
+// Rate lists are built once per request and never changed, so their index can be cached.
+const indexes = new WeakMap<Rate[], Map<string, Entry[]>>();
+
+/** Per direction "FROM>TO": one entry per month (first rate listed for a month wins; a stored
+ *  rate beats an inverted one), sorted by month. */
+function indexOf(rates: Rate[]): Map<string, Entry[]> {
+  let index = indexes.get(rates);
+  if (index) return index;
+  const direct = new Map<string, Map<string, number>>();
+  const inverted = new Map<string, Map<string, number>>();
+  for (const r of rates) {
+    if (!(r.rateMicros > 0) || !Number.isFinite(r.rateMicros)) continue;
+    const d = direct.get(`${r.base}>${r.quote}`) ?? new Map<string, number>();
+    if (!d.has(r.month)) d.set(r.month, r.rateMicros);
+    direct.set(`${r.base}>${r.quote}`, d);
+    const i = inverted.get(`${r.quote}>${r.base}`) ?? new Map<string, number>();
+    if (!i.has(r.month)) i.set(r.month, Math.round((MICROS * MICROS) / r.rateMicros));
+    inverted.set(`${r.quote}>${r.base}`, i);
+  }
+  index = new Map();
+  for (const key of new Set([...direct.keys(), ...inverted.keys()])) {
+    const months = new Map([...(inverted.get(key) ?? []), ...(direct.get(key) ?? [])]);
+    index.set(
+      key,
+      [...months]
+        .map(([month, micros]) => ({ month, micros }))
+        .sort((a, b) => a.month.localeCompare(b.month)),
+    );
+  }
+  indexes.set(rates, index);
+  return index;
 }
 
 /** Converts minor units, rounding half away from zero. Null when no rate is available. */

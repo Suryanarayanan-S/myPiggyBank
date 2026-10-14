@@ -5,6 +5,9 @@ const LOCALES: Record<string, string> = {
   GBP: 'en-GB',
 };
 
+/** How numbers are usually written for a currency (₹ amounts in Indian style, € in German). */
+export const localeFor = (currency: string) => LOCALES[currency] ?? 'en-US';
+
 export function formatMoney(cents: number, currency = 'EUR', locale?: string): string {
   return new Intl.NumberFormat(locale ?? LOCALES[currency] ?? 'en-US', {
     style: 'currency',

@@ -30,7 +30,13 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await form.getByRole('button', { name: 'Save' }).click();
   await expect(form).toBeHidden();
 
-  await page.getByRole('button', { name: 'Trades' }).click();
+  // A new holding is shown in the Holdings list (no trades yet); its name opens the trades.
+  await expect(page.getByRole('tab', { name: 'Holdings (1)' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByRole('row', { name: /MSCI World ETF/ })).toContainText('—');
+  await page.getByRole('button', { name: 'MSCI World ETF', exact: true }).click();
   const d = page.getByRole('dialog', { name: /Trades/ });
   const addTrade = async (date: string, type: string, units: string, amount: string, fees = '') => {
     await d.getByLabel('Date').first().fill(date);
@@ -65,7 +71,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   const row = page.getByRole('row', { name: /MSCI World ETF/ });
   await expect(row).toContainText('12,5'); // 10 + 5,5 − 3 units
   await expect(row).toContainText('1.506,25 €'); // 12,5 × 120,50
-  await expect(row).toContainText('120,5 EUR');
+  await expect(row).toContainText('120,50'); // the price, written like € amounts
 
   // Totals follow "Show in"; without an EUR→INR rate the INR default lists them separately.
   await expect(page.getByText(/Not in the totals/)).toBeVisible();
@@ -132,7 +138,41 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(d.getByRole('button', { name: 'Done' })).toBeFocused();
   await d.getByRole('button', { name: 'Done' }).click();
 
-  await expect(page.getByRole('button', { name: /GOLDBEES/ }).first()).toBeVisible();
+  // Overview: what weighs most, and what moved most.
+  const biggest = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Biggest holdings' }),
+  });
+  await expect(biggest.getByRole('listitem').first()).toContainText('GOLDBEES');
+  await expect(biggest.getByRole('listitem').first()).toContainText('94.5 %');
+  const gainers = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Top gainers' }),
+  });
+  await expect(gainers).toContainText('GOLDBEES');
+  await expect(gainers).toContainText('92.5 %');
+  const losers = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Top losers' }),
+  });
+  await expect(losers).toContainText('INFY');
+  await expect(page.getByText('1 in profit · 1 in loss')).toBeVisible();
+  await shot(page, '30-investments-overview');
+
+  // Holdings: a broker-style table, sortable and searchable.
+  await page.getByRole('tab', { name: 'Holdings (2)' }).click();
+  const rows = page.getByRole('table').getByRole('row');
+  await expect(rows.nth(1)).toContainText('GOLDBEES'); // largest first
+  await page.getByRole('button', { name: 'Net chg.' }).click(); // highest return first
+  await page.getByRole('button', { name: 'Net chg.' }).click(); // then lowest first
+  await expect(rows.nth(1)).toContainText('INFY');
+  await expect(page.getByRole('columnheader', { name: /Net chg/ })).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  );
+  await expect(page.getByRole('table')).toContainText('Total');
+  await expect(rows.nth(1)).toContainText('1,361.19'); // Indian style, to the paisa
+  await page.getByLabel('Search holdings').fill('gold');
+  await expect(page.getByText('1 of 2 holdings')).toBeVisible();
+  await page.getByLabel('Search holdings').fill('');
+  await shot(page, '31-investments-holdings');
   const value = page.locator('section', { has: page.getByText('Value', { exact: true }) }).first();
   await expect(value).toContainText('₹6,37,036.40');
 

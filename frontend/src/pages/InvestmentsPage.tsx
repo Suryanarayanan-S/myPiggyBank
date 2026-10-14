@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { AlertTriangle, Pencil, Plus, Upload } from 'lucide-react';
@@ -6,6 +7,9 @@ import { useMe } from '../auth/auth';
 import { HoldingActivity, HoldingForm } from '../components/investments/HoldingDialogs';
 import { HoldingsImport } from '../components/investments/HoldingsImport';
 import { CountAt } from '../components/investments/CountAt';
+import { HoldingsList } from '../components/investments/HoldingsList';
+import { PortfolioOverview } from '../components/investments/PortfolioOverview';
+import { isSoldOut, listed, profitSplit } from '../lib/portfolio';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -13,7 +17,10 @@ import { Modal } from '../components/ui/Modal';
 import { api } from '../lib/api';
 import {
   HOLDING_KINDS,
+  formatPrice,
   formatUnits,
+  gainClass,
+  signed,
   type Holding,
   type HoldingsResponse,
 } from '../lib/investments';
@@ -21,15 +28,6 @@ import { formatMoney } from '../lib/money';
 import { formatPercent } from '../lib/percent';
 import { useMembers } from '../lib/queries';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
-
-const signed = (cents: number, currency: string) =>
-  `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${formatMoney(Math.abs(cents), currency)}`;
-const gainClass = (n: number | null) =>
-  n === null || n === 0
-    ? 'text-slate-600 dark:text-slate-300'
-    : n > 0
-      ? 'text-emerald-700 dark:text-emerald-400'
-      : 'text-rose-700 dark:text-rose-400';
 
 export function InvestmentsPage() {
   const me = useMe();
@@ -49,8 +47,13 @@ export function InvestmentsPage() {
   const owner = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? 'Shared') : 'Shared';
   const s = data.data?.summary;
-  const open = data.data?.holdings.filter((h) => !h.archived) ?? [];
+  // Memoised so the overview's value chart is only worked out again when the data changes.
+  const open = useMemo(() => data.data?.holdings.filter((h) => !h.archived) ?? [], [data.data]);
   const archived = data.data?.holdings.filter((h) => h.archived) ?? [];
+  const soldOut = open.filter(isSoldOut);
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'holdings' ? 'holdings' : 'overview';
+  const split = profitSplit(open);
   const activity =
     dialog?.kind === 'activity' ? data.data?.holdings.find((h) => h.id === dialog.id) : undefined;
 
@@ -88,11 +91,14 @@ export function InvestmentsPage() {
             <Tile
               label="Gain / loss"
               value={signed(s.unrealised, s.currency)}
-              hint={
+              hint={[
                 s.invested > 0
                   ? formatPercent(Math.round((s.unrealised * 10_000) / s.invested))
-                  : undefined
-              }
+                  : null,
+                `${split.profit} in profit · ${split.loss} in loss`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
               tone={s.unrealised}
             />
             <Tile
@@ -113,17 +119,79 @@ export function InvestmentsPage() {
               {s.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
             </p>
           )}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Shares
-              title="By kind"
+          <div
+            role="tablist"
+            aria-label="Investments view"
+            className="flex gap-1 border-b border-slate-200 dark:border-slate-800"
+          >
+            {(
+              [
+                ['overview', 'Overview'],
+                ['holdings', `Holdings (${listed(open, s.currency).length})`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                id={`tab-${key}`}
+                aria-selected={tab === key}
+                aria-controls={`panel-${key}`}
+                onClick={() => setParams(key === 'overview' ? {} : { tab: key }, { replace: true })}
+                className={clsx(
+                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
+                  tab === key
+                    ? 'border-indigo-600 text-indigo-700 dark:text-indigo-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* Both panels exist (each tab points at one); the other one is hidden. */}
+          <div
+            role="tabpanel"
+            id="panel-overview"
+            aria-labelledby="tab-overview"
+            hidden={tab !== 'overview'}
+            className="space-y-5"
+          >
+            <PortfolioOverview
+              holdings={open}
               currency={s.currency}
-              rows={s.byKind.map((k) => ({ label: HOLDING_KINDS[k.kind], value: k.value }))}
+              onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            <Shares
-              title="By person"
-              currency={s.currency}
-              rows={s.byMember.map((m) => ({ label: m.name, value: m.value }))}
-            />
+            <div className="grid gap-5 lg:grid-cols-2">
+              <Shares
+                title="By kind"
+                currency={s.currency}
+                rows={s.byKind.map((k) => ({ label: HOLDING_KINDS[k.kind], value: k.value }))}
+              />
+              <Shares
+                title="By person"
+                currency={s.currency}
+                rows={s.byMember.map((m) => ({ label: m.name, value: m.value }))}
+              />
+            </div>
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-holdings"
+            aria-labelledby="tab-holdings"
+            hidden={tab !== 'holdings'}
+            className="space-y-5"
+          >
+            <HoldingsList holdings={open} currency={s.currency} owner={owner} onOpen={setDialog} />
+            {/* Sold out: kept for their history (sales and dividends), out of the totals. */}
+            {soldOut.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+                  Sold
+                </h2>
+                <HoldingsTable list={soldOut} owner={owner} onOpen={setDialog} />
+              </section>
+            )}
           </div>
         </>
       )}
@@ -137,7 +205,6 @@ export function InvestmentsPage() {
           </p>
         </Card>
       )}
-      {open.length > 0 && <HoldingsTable list={open} owner={owner} onOpen={setDialog} />}
       {archived.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Archived</h2>
@@ -153,7 +220,11 @@ export function InvestmentsPage() {
           <HoldingForm
             holding={dialog.holding}
             defaultCurrency={me.data?.family.spendingCurrency ?? 'EUR'}
-            onDone={close}
+            onDone={() => {
+              // A new holding has no trades yet: show it in the list, where trades are added.
+              if (!dialog.holding) setParams({ tab: 'holdings' }, { replace: true });
+              close();
+            }}
           />
         </Modal>
       )}
@@ -263,7 +334,7 @@ function HoldingsTable({
                 >
                   <span className="block font-medium break-words">{h.name}</span>
                   <span className="block text-xs text-slate-500">
-                    {HOLDING_KINDS[h.kind]} · {formatUnits(h.units)} units ·{' '}
+                    {HOLDING_KINDS[h.kind]} · {formatUnits(h.units, h.currency)} units ·{' '}
                     {owner(h.ownerMemberId)}
                   </span>
                 </button>
@@ -286,7 +357,7 @@ function HoldingsTable({
               </div>
               <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                 <span>
-                  {h.price ? `${formatUnits(h.price)} ${h.currency}` : 'no price yet'}
+                  {h.price ? `${formatPrice(h.price, h.currency)} ${h.currency}` : 'no price yet'}
                   {h.priceDate &&
                     ` · ${h.priceSource === 'trade' ? 'last trade ' : ''}${h.priceDate}`}
                 </span>
@@ -334,12 +405,14 @@ function HoldingsTable({
                       {h.symbol && ` · ${h.symbol}`} · {owner(h.ownerMemberId)}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatUnits(h.units)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {h.avgCost ? `${formatUnits(h.avgCost)} ${h.currency}` : '—'}
+                    {formatUnits(h.units, h.currency)}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {h.price ? `${formatUnits(h.price)} ${h.currency}` : '—'}
+                    {h.avgCost ? `${formatPrice(h.avgCost, h.currency)} ${h.currency}` : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {h.price ? `${formatPrice(h.price, h.currency)} ${h.currency}` : '—'}
                     {h.priceDate && (
                       <span className="block text-xs text-slate-500">
                         {h.priceSource === 'trade' ? 'last trade ' : ''}

@@ -1,3 +1,5 @@
+import { formatMoney, localeFor } from './money';
+
 export const HOLDING_KINDS = {
   stock: 'Stock',
   etf: 'ETF',
@@ -40,6 +42,8 @@ export type Holding = {
   dividends: number;
   trades: HoldingTrade[];
   prices: { id: string; date: string; price: string }[];
+  /** Value and cost in the summary currency; null without an exchange rate. */
+  inView: { value: number; cost: number } | null;
 };
 export type HoldingsResponse = {
   holdings: Holding[];
@@ -66,5 +70,23 @@ export function normaliseDecimal(input: string): string | null {
 }
 
 /** A decimal string as German-style number with only the decimals needed. */
-export const formatUnits = (units: string) =>
-  new Intl.NumberFormat('de-DE', { maximumFractionDigits: 6 }).format(Number(units));
+export const formatUnits = (units: string, currency = 'EUR') =>
+  new Intl.NumberFormat(localeFor(currency), { maximumFractionDigits: 6 }).format(Number(units));
+
+/** A price or average cost for lists, to the cent like a broker shows it (exact in the trades). */
+export const formatPrice = (price: string, currency: string) =>
+  new Intl.NumberFormat(localeFor(currency), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(price));
+
+/** "+₹1,234.00" / "−€5.00" for gains and losses. */
+export const signed = (cents: number, currency: string) =>
+  `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${formatMoney(Math.abs(cents), currency)}`;
+/** Green for a gain, red for a loss, plain for none. */
+export const gainClass = (n: number | null) =>
+  n === null || n === 0
+    ? 'text-slate-600 dark:text-slate-300'
+    : n > 0
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : 'text-rose-700 dark:text-rose-400';

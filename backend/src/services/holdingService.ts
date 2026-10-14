@@ -173,8 +173,15 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
       byMember.set(owner, (byMember.get(owner) ?? 0) + value);
     }
   }
+  // Each holding's value and cost in the summary currency (null without a rate), for weights.
+  const inView = (h: (typeof holdings)[number]) => {
+    if (h.value === null) return null;
+    const value = h.value === 0 ? 0 : convert(h.value, h.currency, currency, month, rates);
+    const cost = h.cost === 0 ? 0 : convert(h.cost, h.currency, currency, month, rates);
+    return value === null || cost === null ? null : { value, cost };
+  };
   return {
-    holdings,
+    holdings: holdings.map((h) => ({ ...h, inView: inView(h) })),
     summary: {
       currency,
       ...sum,

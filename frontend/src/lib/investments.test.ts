@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatUnits, normaliseDecimal } from './investments';
+import { formatPrice, formatUnits, normaliseDecimal } from './investments';
 
 describe('normaliseDecimal', () => {
   it('accepts up to 6 decimals with a comma or a point', () => {
@@ -18,5 +18,14 @@ describe('formatUnits', () => {
     expect(formatUnits('12.5')).toBe('12,5');
     expect(formatUnits('1500')).toBe('1.500');
     expect(formatUnits('0.000001')).toBe('0,000001');
+  });
+});
+
+describe('numbers in the holding’s own style', () => {
+  it('writes units and prices the way the currency is usually written', () => {
+    expect(formatUnits('5030', 'INR')).toBe('5,030');
+    expect(formatUnits('12.5', 'EUR')).toBe('12,5');
+    expect(formatPrice('62.206678', 'INR')).toBe('62.21');
+    expect(formatPrice('120.5', 'EUR')).toBe('120,50');
   });
 });

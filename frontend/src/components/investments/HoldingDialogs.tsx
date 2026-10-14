@@ -358,7 +358,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
               <span>
                 <span className="inline-block w-24 text-slate-500">{x.date}</span>
                 {TYPE_LABEL[x.type]}
-                {x.units && ` ${formatUnits(x.units)} units`}
+                {x.units && ` ${formatUnits(x.units, holding.currency)} units`}
                 {x.fees > 0 && <span className="text-slate-500"> · fees {money(x.fees)}</span>}
               </span>
               <span className="flex items-center gap-1">
@@ -430,7 +430,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
               <span className="text-slate-500">{x.date}</span>
               <span className="flex items-center gap-1">
                 <span className="tabular-nums">
-                  {formatUnits(x.price)} {holding.currency}
+                  {formatUnits(x.price, holding.currency)} {holding.currency}
                 </span>
                 <Button
                   variant="ghost"

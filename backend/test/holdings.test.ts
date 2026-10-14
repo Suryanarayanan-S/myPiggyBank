@@ -79,6 +79,13 @@ describe('investments', () => {
     expect(summary.byKind).toEqual([{ kind: 'etf', value: 12_050_000 }]);
     expect(summary.byMember).toEqual([{ memberId: f.me.id, name: 'Surya', value: 12_050_000 }]);
     expect((await list('?currency=EUR')).summary.value).toBe(120_500);
+    // Each holding also in the summary currency, so weights compare like with like.
+    expect(holdings[0].inView).toEqual({ value: 12_050_000, cost: 10_050_000 });
+    expect((await list('?currency=EUR')).holdings[0].inView).toEqual({
+      value: 120_500,
+      cost: 100_500,
+    });
+    expect((await list('?currency=USD')).holdings[0].inView).toBeNull(); // no EUR→USD rate
   });
 
   it('refuses to sell more than is held, also by deleting an earlier buy', async () => {

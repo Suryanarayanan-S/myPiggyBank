@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 # Like a fresh clone: the data dir does not exist yet, so Docker creates it (root-owned).
 TMP_ROOT=$(mktemp -d)
 export DATA_DIR="$TMP_ROOT/data"
-export APP_PORT=18080
+export APP_PORT="${SMOKE_PORT:-18080}"  # SMOKE_PORT=… if 18080 is taken
 PROJECT=pbsmoke
 BASE="http://127.0.0.1:${APP_PORT}"
 cleanup() {

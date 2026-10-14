@@ -51,7 +51,8 @@ export async function getSummary(
   const converted = limits.map((l) => ({
     categoryId: l.categoryId,
     stored: Number(l.amount),
-    amount: convert(Number(l.amount), family.spendingCurrency, currency, month, rates),
+    currency: l.currency,
+    amount: convert(Number(l.amount), l.currency, currency, month, rates),
   }));
   const summary = summarizeMonth({
     month,
@@ -59,7 +60,9 @@ export async function getSummary(
     targets: family.targets,
     rates,
     categories,
-    limits: converted.flatMap((l) => (l.amount === null ? [] : [{ ...l, amount: l.amount }])),
+    limits: converted.flatMap((l) =>
+      l.amount === null ? [] : [{ categoryId: l.categoryId, amount: l.amount }],
+    ),
     txns: txns.map((t): SummaryTxn => ({
       type: t.type as SummaryTxn['type'],
       amount: Number(t.amount),
@@ -79,7 +82,7 @@ export async function getSummary(
       .map((l) => ({
         categoryId: l.categoryId,
         amount: l.stored,
-        currency: family.spendingCurrency,
+        currency: l.currency,
       })),
   };
 }
@@ -98,14 +101,15 @@ export async function setLimits(
       { path: 'limits', message: 'Limits apply to expense categories only' },
     ]);
   }
+  const { spendingCurrency: currency } = await getFamily(prisma, familyId);
   await prisma.$transaction(
     limits.map(({ categoryId, amount }) =>
       amount === null
         ? prisma.categoryLimit.deleteMany({ where: { familyId, month, categoryId } })
         : prisma.categoryLimit.upsert({
             where: { familyId_month_categoryId: { familyId, month, categoryId } },
-            create: { familyId, month, categoryId, amount },
-            update: { amount },
+            create: { familyId, month, categoryId, amount, currency },
+            update: { amount, currency },
           }),
     ),
   );
@@ -122,7 +126,13 @@ export async function copyPreviousLimits(prisma: PrismaClient, familyId: string,
   await prisma.$transaction([
     prisma.categoryLimit.deleteMany({ where: { familyId, month } }),
     prisma.categoryLimit.createMany({
-      data: previous.map((l) => ({ familyId, month, categoryId: l.categoryId, amount: l.amount })),
+      data: previous.map((l) => ({
+        familyId,
+        month,
+        categoryId: l.categoryId,
+        amount: l.amount,
+        currency: l.currency,
+      })),
     }),
   ]);
   return getSummary(prisma, familyId, month);

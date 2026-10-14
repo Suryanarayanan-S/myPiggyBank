@@ -130,3 +130,32 @@ describe('budget limits without a rate', () => {
     expect(eur.unconvertedLimits).toEqual([]);
   });
 });
+
+describe('budget limits keep their currency', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDb();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('a €250 limit stays €250 (₹25,000) after the spending currency changes to INR', async () => {
+    const f = await family(app);
+    await f.call('PUT', '/api/budget/2026-09/limits', {
+      limits: [{ categoryId: f.cat('Groceries'), amount: 25_000 }],
+    });
+    await f.call('PUT', '/api/family', { spendingCurrency: 'INR' });
+    const s = (await f.call('GET', '/api/budget/2026-09')).json().data;
+    const groceries = s.categories.find((c: { name: string }) => c.name === 'Groceries');
+    expect(s.currency).toBe('INR');
+    expect(groceries.limit).toBe(2_500_000);
+    expect(s.limitsEditable).toBe(true);
+
+    // A limit set now is in INR.
+    await f.call('PUT', '/api/budget/2026-09/limits', {
+      limits: [{ categoryId: f.cat('Rent'), amount: 9_000_000 }],
+    });
+    const eur = (await f.call('GET', '/api/budget/2026-09?currency=EUR')).json().data;
+    expect(eur.categories.find((c: { name: string }) => c.name === 'Rent').limit).toBe(90_000);
+  });
+});

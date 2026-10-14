@@ -202,8 +202,10 @@ model CategoryLimit {
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   /// YYYY-MM
   month      String
-  /// spending currency, minor units, > 0
+  /// minor units of `currency`, > 0
   amount     BigInt
+  /// the spending currency when the limit was set
+  currency   String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -8,7 +8,9 @@ import { PeriodFilter } from '../components/dashboard/PeriodFilter';
 import { CategoryBars, MemberBars } from '../components/dashboard/RankBars';
 import { StatTiles } from '../components/dashboard/StatTiles';
 import { SavingsRateChart, ShareChart } from '../components/dashboard/TrendCharts';
+import { StatusBadge } from '../components/goals/GoalCard';
 import { Card } from '../components/ui/Card';
+import { Progress } from '../components/ui/Progress';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import type { Dashboard } from '../lib/dashboardTypes';
@@ -16,6 +18,7 @@ import { insightsFor } from '../lib/insights';
 import { formatMoney } from '../lib/money';
 import { isMonth, localMonth, monthTitle } from '../lib/months';
 import { PRESETS, periodRange, type Preset } from '../lib/periods';
+import { useGoals } from '../lib/queries';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 export function DashboardPage() {
@@ -130,6 +133,7 @@ export function DashboardPage() {
             <CategoryBars d={d} />
             <MemberBars d={d} />
           </div>
+          <GoalsSummary />
           {d.accounts.length > 0 && (
             <Card title="Account balances today">
               <dl className="flex flex-wrap gap-x-8 gap-y-2">
@@ -168,5 +172,38 @@ export function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Up to three active goals, nearest date first; hidden when there are none. */
+function GoalsSummary() {
+  const goals = useGoals();
+  const active = (goals.data ?? []).filter((g) => g.status === 'active').slice(0, 3);
+  if (active.length === 0) return null;
+  return (
+    <Card
+      title="Goals"
+      actions={
+        <Link to="/goals" className="text-sm text-indigo-600 hover:underline">
+          All goals
+        </Link>
+      }
+    >
+      <ul className="space-y-4">
+        {active.map((g) => (
+          <li key={g.id}>
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+              <span className="flex items-center gap-2 font-medium">
+                {g.name} <StatusBadge goal={g} />
+              </span>
+              <span className="text-slate-500 tabular-nums">
+                {formatMoney(g.saved, g.currency)} of {formatMoney(g.targetAmount, g.currency)}
+              </span>
+            </div>
+            <Progress label={`${g.name} saved of target`} value={g.progress.pctBp / 10_000} />
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

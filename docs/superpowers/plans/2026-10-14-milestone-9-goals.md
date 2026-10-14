@@ -14,8 +14,8 @@
 ## Rules
 
 - **Saved at a date** = Σ linked account balances on that date (opening + transactions up to it)
-  + Σ linked assets' latest valuation on or before it + Σ entries up to it — each converted into
-  the goal currency with the rate of that date's month. Unconvertible parts are listed, not added.
+  - Σ linked assets' latest valuation on or before it + Σ entries up to it — each converted into
+    the goal currency with the rate of that date's month. Unconvertible parts are listed, not added.
 - **Progress** (domain `goalProgress`, pure): `pctBp` (capped display, raw kept), `left`
   (≥ 0), with a target date: `monthsLeft` (whole months from today to the date, at least 1),
   `monthlyNeeded = ceil(left / monthsLeft)`, `pace` = (saved today − saved 3 months ago) / 3,

@@ -27,8 +27,10 @@ describe('year report', () => {
     await resetDb();
     app = await makeApp();
     f = await family(app);
-    await f.txn('2025-11-01', 'income', 400_000, 'Salary');
-    await f.txn('2025-11-05', 'expense', 100_000, 'Rent');
+    await f.txn('2025-01-01', 'income', 400_000, 'Salary');
+    await f.txn('2025-01-05', 'expense', 100_000, 'Rent');
+    // Later in 2025 than anything recorded in 2026: not part of the like-for-like comparison.
+    await f.txn('2025-11-01', 'income', 999_000, 'Salary');
     await f.txn('2026-01-01', 'income', 500_000, 'Salary');
     await f.txn('2026-01-05', 'expense', 110_000, 'Rent');
     await f.txn('2026-02-01', 'income', 500_000, 'Salary');
@@ -44,7 +46,7 @@ describe('year report', () => {
       recordedMonths: 2,
       totals: { netIncome: 1_000_000, essentials: 110_000, fun: 20_000 },
       averages: { netIncome: 500_000 },
-      previous: { recordedMonths: 1, totals: { netIncome: 400_000 } },
+      previous: { recordedMonths: 1, through: '2025-02', totals: { netIncome: 400_000 } },
       change: { netIncome: { amount: 600_000, bp: 15_000 } },
     });
     expect(r.months).toHaveLength(12);
@@ -53,7 +55,7 @@ describe('year report', () => {
   });
 
   it('converts into the chosen currency', async () => {
-    for (const month of ['2025-11', '2026-01']) {
+    for (const month of ['2025-01', '2026-01']) {
       await f.call('PUT', '/api/exchange-rates', { month, base: 'EUR', quote: 'INR', rate: '100' });
     }
     const r = (await f.call('GET', '/api/reports/year/2026?currency=INR')).json().data;
@@ -93,5 +95,12 @@ describe('year report', () => {
     const r = (await other.call('GET', '/api/reports/year/2026')).json().data;
     expect(r.totals.netIncome).toBe(0);
     expect(r.categories).toEqual([]);
+  });
+
+  it('a finished year is compared with the whole year before', async () => {
+    const r = (await f.call('GET', '/api/reports/year/2025')).json().data;
+    expect(r.recordedMonths).toBe(2);
+    expect(r.totals.netIncome).toBe(1_399_000);
+    expect(r.previous).toBeNull();
   });
 });

@@ -23,10 +23,15 @@ export async function getYearReport(
   year: number,
   view?: string,
 ) {
-  const [current, previous] = await Promise.all([
-    getDashboard(prisma, familyId, `${year}-01`, `${year}-12`, view),
-    getDashboard(prisma, familyId, `${year - 1}-01`, `${year - 1}-12`, view),
-  ]);
+  const current = await getDashboard(prisma, familyId, `${year}-01`, `${year}-12`, view);
+  // Like for like: last year up to the same month as the last one recorded this year, so a
+  // year in progress is never compared with a whole year.
+  const lastRecorded = yearReport(current, current)
+    .months.filter((m) => m.recorded)
+    .at(-1);
+  const through = `${year - 1}-${lastRecorded ? lastRecorded.month.slice(5) : '12'}`;
+  const previous = await getDashboard(prisma, familyId, `${year - 1}-01`, through, view);
+  const report = yearReport(current, previous);
   const currency = current.currency;
   const { snapshots } = await getNetWorth(prisma, familyId, currency);
   const first = `${year}-01-01`;
@@ -42,7 +47,8 @@ export async function getYearReport(
   return {
     year,
     currency,
-    ...yearReport(current, previous),
+    ...report,
+    previous: report.previous && { ...report.previous, through },
     netWorth: { start: point(startSnap), end: point(endSnap) },
     unconverted: current.unconverted,
   };
@@ -71,7 +77,16 @@ export function reportCsv(r: Awaited<ReturnType<typeof getYearReport>>) {
     row(['Month', 'Net income', 'Essentials', 'Fun', 'Future You', 'Unused', 'Savings rate']),
     ...r.months.filter((m) => m.recorded).map((m) => row([m.month, ...money(m)])),
     row([`Total ${r.year}`, ...money(r.totals)]),
-    ...(r.previous ? [row([`Total ${r.year - 1}`, ...money(r.previous.totals)])] : []),
+    ...(r.previous
+      ? [
+          row([
+            r.previous.through.endsWith('-12')
+              ? `Total ${r.year - 1}`
+              : `${r.year - 1} until ${r.previous.through}`,
+            ...money(r.previous.totals),
+          ]),
+        ]
+      : []),
     '',
     row(['Category', 'Bucket', String(r.year), String(r.year - 1), 'Change']),
     ...r.categories.map((c) =>

@@ -15,6 +15,7 @@ import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import type { Dashboard } from '../lib/dashboardTypes';
 import { insightsFor } from '../lib/insights';
+import { MoneyStory } from '../components/dashboard/MoneyStory';
 import { useBucketNames } from '../lib/buckets';
 import { insightText, type InsightsResponse } from '../lib/insightText';
 import { formatMoney } from '../lib/money';
@@ -118,6 +119,7 @@ export function DashboardPage() {
             </Card>
           )}
           <StatTiles d={d} />
+          {me.data?.family.extras.moneyStory && <MoneyStory />}
           {(!d.previous && d.previousCoverage.recorded > 0) || range.to === today ? (
             <p className="-mt-2 text-xs text-slate-500">
               {!d.previous && d.previousCoverage.recorded > 0

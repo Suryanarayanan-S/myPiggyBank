@@ -64,6 +64,20 @@ export function MonthEntryPage() {
   );
   const dirty = changed.length > 0;
 
+  // Suggestions fill only empty boxes of categories without individual transactions this month
+  // (those already count on top); nothing is saved until Save.
+  const hints = !!me.data?.family.extras.quickEntrySuggestions;
+  const fillable = (pick: 'lastMonth' | 'usual') =>
+    rows.filter(
+      (r) =>
+        r.otherTransactions === 0 && r[pick] !== null && (values[r.categoryId] ?? '').trim() === '',
+    );
+  const fill = (pick: 'lastMonth' | 'usual') =>
+    setValues((v) => ({
+      ...v,
+      ...Object.fromEntries(fillable(pick).map((r) => [r.categoryId, asInput(r[pick])])),
+    }));
+
   const sum = (pred: (r: MonthEntry['rows'][number]) => boolean) =>
     rows.filter(pred).reduce((s, r) => s + (parsed[r.categoryId] ?? 0), 0);
   const income = sum((r) => r.kind === 'income');
@@ -139,6 +153,34 @@ export function MonthEntryPage() {
 
       <FormError error={entry.error} />
 
+      {entry.data &&
+        hints &&
+        (fillable('lastMonth').length > 0 || fillable('usual').length > 0) && (
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Fill the empty boxes, then check and save:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={fillable('lastMonth').length === 0}
+                  onClick={() => fill('lastMonth')}
+                >
+                  Like last month
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={fillable('usual').length === 0}
+                  onClick={() => fill('usual')}
+                >
+                  Usual amounts (3-month average)
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
       {entry.data && (
         <form
           onSubmit={(e) => {
@@ -166,15 +208,31 @@ export function MonthEntryPage() {
                         key={r.categoryId}
                         className="grid grid-cols-[1fr_9rem] items-center gap-3"
                       >
-                        <label htmlFor={`amt-${r.categoryId}`} className="min-w-0 text-sm">
-                          <span className="block truncate">{r.name}</span>
-                          {r.otherTransactions > 0 && (
-                            <span className="block text-xs text-slate-400">
-                              + {r.otherTransactions} individual transaction
-                              {r.otherTransactions > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </label>
+                        <div className="min-w-0 text-sm">
+                          <label htmlFor={`amt-${r.categoryId}`} className="block truncate">
+                            {r.name}
+                          </label>
+                          {/* Extra lines describe the box without becoming part of its name. */}
+                          <span id={`amt-note-${r.categoryId}`} className="text-xs text-slate-400">
+                            {hints && (r.usual !== null || r.lastMonth !== null) && (
+                              <span className="block">
+                                {[
+                                  r.lastMonth !== null &&
+                                    `last month ${formatMoney(r.lastMonth, currency)}`,
+                                  r.usual !== null && `usually ${formatMoney(r.usual, currency)}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </span>
+                            )}
+                            {r.otherTransactions > 0 && (
+                              <span className="block">
+                                + {r.otherTransactions} individual transaction
+                                {r.otherTransactions > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </span>
+                        </div>
                         <input
                           id={`amt-${r.categoryId}`}
                           inputMode="decimal"
@@ -182,6 +240,7 @@ export function MonthEntryPage() {
                           value={values[r.categoryId] ?? ''}
                           onChange={(e) => setValues({ ...values, [r.categoryId]: e.target.value })}
                           aria-invalid={invalid.includes(r)}
+                          aria-describedby={`amt-note-${r.categoryId}`}
                           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-right text-sm tabular-nums placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-[invalid=true]:border-rose-500 dark:border-slate-700 dark:bg-slate-900"
                         />
                       </li>

@@ -25,6 +25,13 @@ export const FamilyInput = z.object({
     .object({ essentials: pct, fun: pct, future: pct })
     .refine((t) => t.essentials + t.fun + t.future === 100, 'Targets must add up to 100 %')
     .optional(),
+  extras: z
+    .strictObject({
+      moneyStory: z.boolean().optional(),
+      quickEntrySuggestions: z.boolean().optional(),
+    })
+    .refine((o) => Object.keys(o).length > 0, 'Choose a setting to change')
+    .optional(),
   bucketNames: z
     .object({ essentials: bucketName, fun: bucketName, future: bucketName })
     .refine(
@@ -46,6 +53,8 @@ const select = {
   nameEssentials: true,
   nameFun: true,
   nameFuture: true,
+  showMoneyStory: true,
+  quickEntryHints: true,
 } as const;
 
 type Row = {
@@ -55,7 +64,8 @@ type Row = {
   wealthCurrency: string;
   rateMode: string;
 } & Record<'targetEssentials' | 'targetFun' | 'targetFuture', number> &
-  Record<'nameEssentials' | 'nameFun' | 'nameFuture', string>;
+  Record<'nameEssentials' | 'nameFun' | 'nameFuture', string> &
+  Record<'showMoneyStory' | 'quickEntryHints', boolean>;
 
 const toDto = (f: Row) => ({
   id: f.id,
@@ -65,6 +75,7 @@ const toDto = (f: Row) => ({
   rateMode: f.rateMode as 'manual' | 'live',
   targets: { essentials: f.targetEssentials, fun: f.targetFun, future: f.targetFuture },
   bucketNames: { essentials: f.nameEssentials, fun: f.nameFun, future: f.nameFuture },
+  extras: { moneyStory: f.showMoneyStory, quickEntrySuggestions: f.quickEntryHints },
 });
 export type FamilyDto = ReturnType<typeof toDto>;
 
@@ -75,7 +86,7 @@ export async function getFamily(prisma: Db, familyId: string) {
 export async function updateFamily(
   prisma: PrismaClient,
   familyId: string,
-  { targets, bucketNames, ...rest }: z.output<typeof FamilyInput>,
+  { targets, bucketNames, extras, ...rest }: z.output<typeof FamilyInput>,
 ) {
   const data = {
     ...rest,
@@ -83,6 +94,10 @@ export async function updateFamily(
       targetEssentials: targets.essentials,
       targetFun: targets.fun,
       targetFuture: targets.future,
+    }),
+    ...(extras?.moneyStory !== undefined && { showMoneyStory: extras.moneyStory }),
+    ...(extras?.quickEntrySuggestions !== undefined && {
+      quickEntryHints: extras.quickEntrySuggestions,
     }),
     ...(bucketNames && {
       nameEssentials: bucketNames.essentials,

@@ -70,4 +70,14 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
 
   await page.setViewportSize({ width: 390, height: 844 });
   await shot(page, '09-mobile-budget');
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  // Next month starts from this one: empty boxes are filled, nothing saved until Save.
+  await page.getByRole('link', { name: 'Quick entry' }).click();
+  await page.getByRole('button', { name: 'Next month' }).click();
+  await expect(page.getByText(/^last month 912,00\s€/)).toBeVisible();
+  await page.getByRole('button', { name: 'Like last month' }).click();
+  await expect(page.getByLabel('Rent', { exact: true })).toHaveValue('912,00');
+  await expect(page.getByLabel('Phone', { exact: true })).toHaveValue('');
+  await expect(page.getByText('Unused').locator('..')).toContainText('3.790,00 €');
 });

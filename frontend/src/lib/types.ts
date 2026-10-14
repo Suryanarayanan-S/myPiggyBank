@@ -14,6 +14,8 @@ export type Family = {
   rateMode: 'manual' | 'live';
   targets: { essentials: number; fun: number; future: number };
   bucketNames: Record<Bucket, string>;
+  /** Extras that can be switched off in Settings. */
+  extras: { moneyStory: boolean; quickEntrySuggestions: boolean };
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };
@@ -154,6 +156,9 @@ export type MonthEntry = {
     bucket: Bucket | null;
     amount: number | null;
     otherTransactions: number;
+    /** Suggestions in this account's currency: last month, and the average of the 3 before. */
+    lastMonth: number | null;
+    usual: number | null;
   }[];
 };
 

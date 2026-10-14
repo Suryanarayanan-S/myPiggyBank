@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { monthRange } from '../lib/dates.js';
+import { monthRange, previousMonth } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { listCategories } from './categoryService.js';
 import { assertAccount } from './ownership.js';
@@ -25,7 +25,10 @@ export async function getMonthEntry(
   const account = await assertAccount(prisma, familyId, accountId);
   const { start, end } = monthRange(month);
   const inMonth = { familyId, date: { gte: start, lt: end } };
-  const [categories, totals, individual] = await Promise.all([
+  // The three months before, for "last month" and "usual" suggestions.
+  const before = [previousMonth(month)];
+  before.push(previousMonth(before[0]!), previousMonth(previousMonth(before[0]!)));
+  const [categories, totals, individual, history] = await Promise.all([
     listCategories(prisma, familyId),
     prisma.transaction.findMany({
       where: { ...inMonth, accountId, isMonthlyTotal: true },
@@ -36,7 +39,50 @@ export async function getMonthEntry(
       where: { ...inMonth, isMonthlyTotal: false },
       _count: { _all: true },
     }),
+    prisma.transaction.findMany({
+      where: {
+        familyId,
+        type: { in: ['income', 'expense'] },
+        date: { gte: monthRange(before[2]!).start, lt: start },
+      },
+      select: {
+        date: true,
+        categoryId: true,
+        amount: true,
+        currency: true,
+        accountId: true,
+        isMonthlyTotal: true,
+        recurringRuleId: true,
+      },
+    }),
   ]);
+  // What this grid could have held: money in this account's currency, but not other accounts'
+  // own grids (each keeps its totals) and not recurring payments (they are added by themselves).
+  const relevant = history.filter(
+    (t) =>
+      t.currency === account.currency &&
+      !(t.isMonthlyTotal && t.accountId !== accountId) &&
+      t.recurringRuleId === null,
+  );
+  // A month counts towards the usual once any of that money was recorded in it.
+  const recorded = new Set(relevant.map((t) => t.date.toISOString().slice(0, 7)));
+  const past = new Map<string, number>(); // "month|categoryId" → total
+  for (const t of relevant) {
+    if (!t.categoryId) continue;
+    const key = `${t.date.toISOString().slice(0, 7)}|${t.categoryId}`;
+    past.set(key, (past.get(key) ?? 0) + Number(t.amount));
+  }
+  const usualMonths = before.filter((m) => recorded.has(m));
+  const suggest = (categoryId: string) => {
+    const last = past.get(`${before[0]}|${categoryId}`) ?? 0;
+    const usual = usualMonths.length
+      ? Math.round(
+          usualMonths.reduce((s, m) => s + (past.get(`${m}|${categoryId}`) ?? 0), 0) /
+            usualMonths.length,
+        )
+      : 0;
+    return { lastMonth: last > 0 ? last : null, usual: usual > 0 ? usual : null };
+  };
   const amount = new Map(totals.map((t) => [t.categoryId, Number(t.amount)]));
   const count = new Map(individual.map((g) => [g.categoryId, g._count._all]));
   return {
@@ -50,6 +96,7 @@ export async function getMonthEntry(
       bucket: c.bucket,
       amount: amount.get(c.id) ?? null,
       otherTransactions: count.get(c.id) ?? 0,
+      ...suggest(c.id),
     })),
   };
 }

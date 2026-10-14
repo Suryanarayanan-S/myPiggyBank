@@ -14,15 +14,15 @@ the money in that currency instead of the default.
 
 ## Auth and family
 
-| Method                    | Path                       | Notes                                                                                                |
-| ------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| POST                      | `/auth/register`           | `{ name, email, password, familyName? }` — first user creates the family. Rate-limited.              |
-| POST                      | `/auth/login`              | `{ email, password }`. Rate-limited.                                                                 |
-| POST                      | `/auth/logout`             |                                                                                                      |
-| GET                       | `/auth/me`                 | `{ user, family }`                                                                                   |
-| DELETE                    | `/auth/account`            | `{ password, confirm: "DELETE" }`; deletes the family if you were the last user. Rate-limited.       |
-| GET / PUT                 | `/family`                  | name, `spendingCurrency`, `wealthCurrency`, `rateMode` (`manual` / `live`), `targets`, `bucketNames` |
-| GET / POST / PUT / DELETE | `/members`, `/members/:id` | family members (labels for transactions)                                                             |
+| Method                    | Path                       | Notes                                                                                                                                                  |
+| ------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST                      | `/auth/register`           | `{ name, email, password, familyName? }` — first user creates the family. Rate-limited.                                                                |
+| POST                      | `/auth/login`              | `{ email, password }`. Rate-limited.                                                                                                                   |
+| POST                      | `/auth/logout`             |                                                                                                                                                        |
+| GET                       | `/auth/me`                 | `{ user, family }`                                                                                                                                     |
+| DELETE                    | `/auth/account`            | `{ password, confirm: "DELETE" }`; deletes the family if you were the last user. Rate-limited.                                                         |
+| GET / PUT                 | `/family`                  | name, `spendingCurrency`, `wealthCurrency`, `rateMode` (`manual` / `live`), `targets`, `bucketNames`, `extras` (`moneyStory`, `quickEntrySuggestions`) |
+| GET / POST / PUT / DELETE | `/members`, `/members/:id` | family members (labels for transactions)                                                                                                               |
 
 ## Money in and out
 
@@ -38,13 +38,13 @@ the money in that currency instead of the default.
 
 ## Budget
 
-| Method    | Path                                  | Notes                                                              |
-| --------- | ------------------------------------- | ------------------------------------------------------------------ |
-| GET       | `/budget/:month` **(currency)**       | buckets, categories, limits, `limitsEditable`, `unconvertedLimits` |
-| PUT       | `/budget/:month/limits`               | `{ limits: [{ categoryId, amount \| null }] }` (spending currency) |
-| POST      | `/budget/:month/copy-previous`        | copy last month's limits                                           |
-| GET / PUT | `/month-entry/:month?accountId=`      | the quick-entry grid (one amount per category)                     |
-| GET       | `/dashboard?from=&to=` **(currency)** | period totals, months, categories, members, `accountsTotal`        |
+| Method    | Path                                  | Notes                                                                                          |
+| --------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| GET       | `/budget/:month` **(currency)**       | buckets, categories, limits, `limitsEditable`, `unconvertedLimits`                             |
+| PUT       | `/budget/:month/limits`               | `{ limits: [{ categoryId, amount \| null }] }` (spending currency)                             |
+| POST      | `/budget/:month/copy-previous`        | copy last month's limits                                                                       |
+| GET / PUT | `/month-entry/:month?accountId=`      | the quick-entry grid (one amount per category; rows carry `lastMonth` and `usual` suggestions) |
+| GET       | `/dashboard?from=&to=` **(currency)** | period totals, months, categories, members, `accountsTotal`                                    |
 
 ## Wealth
 

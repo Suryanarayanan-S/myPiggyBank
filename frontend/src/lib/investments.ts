@@ -36,6 +36,7 @@ export type Holding = {
   unrealised: number | null;
   returnBp: number | null;
   realised: number;
+  realisedBp: number | null;
   dividends: number;
   trades: HoldingTrade[];
   prices: { id: string; date: string; price: string }[];

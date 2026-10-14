@@ -22,8 +22,11 @@ Units and prices use micros so fractional ETF shares and 4-decimal prices are ex
   - sell: share = u / units; costOut = round(cost × share); realised += amount − fees − costOut;
     cost −= costOut; units −= u. Selling more than held is refused by the API.
   - dividend: dividends += amount.
-- Price: the latest `HoldingPrice` on or before today; if none, the latest buy/sell price
-  (amount / units) — reported with `priceSource: 'trade'`. No price and no trades → value null.
+- Price: the newer of the latest `HoldingPrice` on or before today and the latest buy/sell price
+  (amount / units); on the same day the entered price wins. A trade price is reported with
+  `priceSource: 'trade'`. No price and no trades → value null; nothing held → no net-worth item.
+- Ruling (review): archived holdings keep counting towards goals, like archived accounts; a buy
+  inside the pace window counts as saving (money moved in), unlike an asset first entered today.
 - value = round(units × price); unrealised = value − cost; returnBp = unrealised / cost.
 - Net worth: each non-archived holding with a value counts in the _investment_ class for its
   owner, in its currency (converted like other holdings). Ruling: no "depot" flag — an account

@@ -14,6 +14,7 @@ import {
   type HoldingKind,
 } from '../../lib/investments';
 import { formatMoney, parseMoneyInput } from '../../lib/money';
+import { formatPercent } from '../../lib/percent';
 import { localDay } from '../../lib/months';
 import { useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
@@ -211,6 +212,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
   });
   const [p, setP] = useState({ date: localDay(), price: '' });
   const [err, setErr] = useState<string | null>(null);
+  const [priceErr, setPriceErr] = useState<string | null>(null);
   const addTrade = useMutation({
     mutationFn: (body: object) => api.post(`/holdings/${holding.id}/trades`, body),
     onSuccess: async () => {
@@ -240,6 +242,32 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
 
   return (
     <div className="space-y-6">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-3 text-sm sm:grid-cols-4 dark:bg-slate-800/60">
+        <div>
+          <dt className="text-xs text-slate-500">Value</dt>
+          <dd className="font-medium tabular-nums">
+            {holding.value === null ? '—' : money(holding.value)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Gain / loss now</dt>
+          <dd className="tabular-nums">
+            {holding.unrealised === null ? '—' : money(holding.unrealised)}
+            {holding.returnBp !== null && ` · ${formatPercent(holding.returnBp)}`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">From sales</dt>
+          <dd className="tabular-nums">
+            {money(holding.realised)}
+            {holding.realisedBp !== null && ` · ${formatPercent(holding.realisedBp)}`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Dividends</dt>
+          <dd className="tabular-nums">{money(holding.dividends)}</dd>
+        </div>
+      </dl>
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Add a trade</h3>
         <form
@@ -318,7 +346,11 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
             Add trade
           </Button>
         </form>
-        {err && <p className="text-sm text-rose-600">{err}</p>}
+        {err && (
+          <p role="alert" className="text-sm text-rose-600">
+            {err}
+          </p>
+        )}
         <FormError error={addTrade.error ?? delTrade.error} />
         <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
           {holding.trades.map((x) => (
@@ -359,8 +391,8 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
           className="grid grid-cols-[1fr_1fr_auto] items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!price) return setErr('Enter the price per unit, e.g. 98,45');
-            setErr(null);
+            if (!price) return setPriceErr('Enter the price per unit, e.g. 98,45');
+            setPriceErr(null);
             addPrice.mutate({ date: p.date, price });
           }}
         >
@@ -386,6 +418,11 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
             Save price
           </Button>
         </form>
+        {priceErr && (
+          <p role="alert" className="text-sm text-rose-600">
+            {priceErr}
+          </p>
+        )}
         <FormError error={addPrice.error ?? delPrice.error} />
         <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
           {holding.prices.map((x) => (

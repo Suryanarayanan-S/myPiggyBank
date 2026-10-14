@@ -211,8 +211,9 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
       include: { valuations: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
     }),
     loadRates(prisma, familyId),
-    holdingValues(prisma, familyId, today),
-    holdingValues(prisma, familyId, before),
+    // Archived holdings keep counting towards goals, like archived accounts.
+    holdingValues(prisma, familyId, today, { includeArchived: true }),
+    holdingValues(prisma, familyId, before, { includeArchived: true }),
   ]);
   const holdingBefore = new Map(holdingsBefore.map((h) => [h.id, h.value ?? 0]));
   const balanceTxns = txns.map((t) => ({

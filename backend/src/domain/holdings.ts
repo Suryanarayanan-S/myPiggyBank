@@ -28,6 +28,7 @@ export function computeHolding(trades: Trade[], prices: PricePoint[], today: str
   let cost = 0;
   let realised = 0;
   let dividends = 0;
+  let soldCost = 0;
   let last: { date: string; price: number } | null = null;
   // Stable sort keeps the given order for trades on the same day.
   for (const tr of [...trades]
@@ -45,6 +46,7 @@ export function computeHolding(trades: Trade[], prices: PricePoint[], today: str
       const sold = Math.min(tr.units, units);
       const costOut = units === 0 ? 0 : div(B(cost) * B(sold), B(units));
       realised += tr.amount - tr.fees - costOut;
+      soldCost += costOut;
       cost -= costOut;
       units -= sold;
     }
@@ -52,7 +54,8 @@ export function computeHolding(trades: Trade[], prices: PricePoint[], today: str
   const latest = prices
     .filter((p) => p.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
-  const point = latest ?? last;
+  // The newer of the last entered price and the last trade price (a price wins on the same day).
+  const point = latest && (!last || latest.date >= last.date) ? latest : last;
   const price = point?.price ?? null;
   const value =
     price === null ? (units === 0 && trades.length > 0 ? 0 : null) : valueOf(units, price);
@@ -63,11 +66,14 @@ export function computeHolding(trades: Trade[], prices: PricePoint[], today: str
     avgCost: units === 0 ? null : perUnit(cost, units),
     price,
     priceDate: point?.date ?? null,
-    priceSource: latest ? ('price' as const) : last ? ('trade' as const) : null,
+    priceSource: !point ? null : point === latest ? ('price' as const) : ('trade' as const),
     value,
     unrealised,
     returnBp: cost > 0 && unrealised !== null ? Math.round((unrealised * 10_000) / cost) : null,
     realised,
+    /** cost of everything sold, for the realised % */
+    soldCost,
+    realisedBp: soldCost > 0 ? Math.round((realised * 10_000) / soldCost) : null,
     dividends,
   };
 }

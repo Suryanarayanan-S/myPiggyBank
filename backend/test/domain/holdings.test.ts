@@ -49,6 +49,8 @@ describe('computeHolding', () => {
       '2026-10-14',
     );
     expect(h).toMatchObject({ units: 6 * U, cost: 60_000, realised: 50_000 - 300 - 40_000 });
+    expect(h.soldCost).toBe(40_000);
+    expect(h.realisedBp).toBe(Math.round((9_700 * 10_000) / 40_000));
     expect(h.value).toBe(72_000);
   });
 
@@ -119,5 +121,22 @@ describe('oversold', () => {
     expect(oversold([t('2026-01-01', 'buy', 1, 1), t('2026-02-01', 'sell', 1.000001, 1)])).toBe(
       true,
     );
+  });
+});
+
+describe('price choice', () => {
+  it('a newer trade price beats an older manual price; on the same day the manual price wins', () => {
+    const h = computeHolding(
+      [t('2026-09-01', 'buy', 10, 100_000)],
+      [{ date: '2025-01-01', price: 5_000_000 }],
+      '2026-10-14',
+    );
+    expect(h).toMatchObject({ price: 100_000_000, priceSource: 'trade', value: 100_000 });
+    const same = computeHolding(
+      [t('2026-09-01', 'buy', 10, 100_000)],
+      [{ date: '2026-09-01', price: 101_000_000 }],
+      '2026-10-14',
+    );
+    expect(same).toMatchObject({ priceSource: 'price', value: 101_000 });
   });
 });

@@ -90,6 +90,11 @@ export function InvestmentsPage() {
               hint={`sold: ${signed(s.realised, s.currency)}`}
             />
           </div>
+          {open.some((h) => h.currency !== s.currency) && (
+            <p className="text-xs text-slate-500">
+              Totals in {s.currency} use today’s exchange rates, also for past sales and dividends.
+            </p>
+          )}
           {s.unconverted.length > 0 && (
             <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />

@@ -59,6 +59,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await d.getByLabel('Price per unit (EUR)').fill('120,50');
   await d.getByRole('button', { name: 'Save price' }).click();
   await expect(d.getByText('120,5 EUR')).toBeVisible();
+  await expect(d.locator('dl')).toContainText('49,35 €'); // sold 3 for 360 − cost 310,65
   await d.getByRole('button', { name: 'Done' }).click();
 
   const row = page.getByRole('row', { name: /MSCI World ETF/ });

@@ -194,4 +194,46 @@ describe('investments', () => {
     expect((await f.call('DELETE', `/api/holdings/${f.etf.id}`)).statusCode).toBe(200);
     expect((await list()).holdings).toEqual([]);
   });
+
+  it('archiving a holding keeps it in goals (like an archived account)', async () => {
+    await trade({ date: addDays(today, -3), type: 'buy', units: '5', amount: 50_000 });
+    await f.call('POST', '/api/goals', {
+      name: 'Car',
+      targetAmount: 100_000,
+      currency: 'EUR',
+      links: [{ kind: 'holding', id: f.etf.id }],
+    });
+    await f.call('PUT', `/api/holdings/${f.etf.id}`, { archived: true });
+    const goal = (await f.call('GET', '/api/goals')).json().data[0];
+    expect(goal).toMatchObject({ saved: 50_000, links: [{ kind: 'holding', id: f.etf.id }] });
+  });
+
+  it('a sold-out holding without a rate neither blocks snapshots nor hides its result', async () => {
+    const usd = (
+      await f.call('POST', '/api/holdings', { name: 'Apple', kind: 'stock', currency: 'USD' })
+    ).json().data;
+    await trade({ date: addDays(today, -20), type: 'buy', units: '2', amount: 30_000 }, usd.id);
+    await trade({ date: addDays(today, -10), type: 'sell', units: '2', amount: 30_200 }, usd.id);
+    const nw = (await f.call('GET', '/api/net-worth')).json().data.current;
+    expect(nw.unconverted).toEqual([]);
+    expect((await f.call('POST', '/api/net-worth/snapshots', {})).statusCode).toBe(201);
+    const { summary } = await list();
+    expect(summary.unconverted).toEqual([{ currency: 'USD', amount: 200 }]); // the realised gain
+  });
+
+  it('summary gain is value minus invested, never off by a rounding cent', async () => {
+    await trade({ date: addDays(today, -3), type: 'buy', units: '3', amount: 10_001 });
+    await f.call('POST', `/api/holdings/${f.etf.id}/prices`, { date: today, price: '33.335' });
+    const { summary } = await list();
+    expect(summary.unrealised).toBe(summary.value - summary.invested);
+  });
+
+  it('dividends take no fees and ignore units', async () => {
+    expect((await trade({ date: today, type: 'dividend', amount: 100, fees: 5 })).statusCode).toBe(
+      400,
+    );
+    expect(
+      (await trade({ date: today, type: 'dividend', amount: 100, units: 'n/a' })).statusCode,
+    ).toBe(200);
+  });
 });

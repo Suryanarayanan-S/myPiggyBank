@@ -212,9 +212,11 @@ export function GoalForm({
                 </span>
               </label>
             ))}
-          {accounts.data?.length === 0 && assets.data?.length === 0 && (
-            <p className="text-sm text-slate-500">No accounts or assets yet.</p>
-          )}
+          {accounts.data?.length === 0 &&
+            assets.data?.length === 0 &&
+            holdings.data?.holdings.length === 0 && (
+              <p className="text-sm text-slate-500">No accounts, assets or investments yet.</p>
+            )}
         </div>
       </fieldset>
 

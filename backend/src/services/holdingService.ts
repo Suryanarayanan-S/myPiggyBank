@@ -34,13 +34,22 @@ export const TradeInput = z
   .object({
     date: pastDay,
     type: z.enum(['buy', 'sell', 'dividend']),
-    units: micros('number of units').optional(),
+    // checked below: dividends have no units (ignored if sent) and no fees
+    units: z.string().max(30).optional(),
     amount: cents.positive('Enter an amount above zero'),
     fees: cents.min(0).optional(),
   })
-  .refine((t) => t.type === 'dividend' || t.units !== undefined, {
-    message: 'Enter the number of units',
-    path: ['units'],
+  .superRefine((t, ctx) => {
+    if (t.type === 'dividend') {
+      if (t.fees)
+        ctx.addIssue({ code: 'custom', path: ['fees'], message: 'Enter the dividend after fees' });
+    } else if (t.units === undefined || parseRate(t.units) === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['units'],
+        message: 'Enter the number of units as a number above zero, e.g. 12.5',
+      });
+    }
   });
 export const PriceInput = z.object({ date: pastDay, price: micros('price') });
 
@@ -80,6 +89,7 @@ function computed(h: Row, onDay = todayLocal()) {
     unrealised: c.unrealised,
     returnBp: c.returnBp,
     realised: c.realised,
+    realisedBp: c.realisedBp,
     dividends: c.dividends,
     trades: [...h.trades]
       .sort(
@@ -137,22 +147,26 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
   const holdings = rows.map((h) => computed(h));
   const currency = view ?? family.wealthCurrency;
   const month = todayLocal().slice(0, 7);
-  const sum = { value: 0, invested: 0, unrealised: 0, realised: 0, dividends: 0 };
+  const sum = { value: 0, invested: 0, realised: 0, dividends: 0 };
   const byKind = new Map<string, number>();
   const byMember = new Map<string | null, number>();
   const unconverted = new Map<string, number>();
   for (const h of holdings.filter((x) => !x.archived)) {
-    const to = (n: number) => convert(n, h.currency, currency, month, rates);
-    const value = h.value === null ? 0 : to(h.value);
-    if (value === null) {
-      unconverted.set(h.currency, (unconverted.get(h.currency) ?? 0) + (h.value ?? 0));
-      continue;
+    // Each part on its own: zero needs no rate, and a part without a rate is listed, not lost.
+    const part = (n: number) => {
+      if (n === 0) return 0;
+      const v = convert(n, h.currency, currency, month, rates);
+      if (v === null) unconverted.set(h.currency, (unconverted.get(h.currency) ?? 0) + n);
+      return v;
+    };
+    const value = part(h.value ?? 0);
+    if (value !== null) {
+      sum.value += value;
+      sum.invested += part(h.cost) ?? 0; // same rate as the value, so it converts too
     }
-    sum.value += value;
-    sum.invested += to(h.cost)!;
-    sum.unrealised += to(h.unrealised ?? 0)!;
-    sum.realised += to(h.realised)!;
-    sum.dividends += to(h.dividends)!;
+    sum.realised += part(h.realised) ?? 0;
+    sum.dividends += part(h.dividends) ?? 0;
+    if (value === null) continue;
     if (value !== 0) {
       byKind.set(h.kind, (byKind.get(h.kind) ?? 0) + value);
       const owner = members.some((m) => m.id === h.ownerMemberId) ? h.ownerMemberId : null;
@@ -164,6 +178,8 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
     summary: {
       currency,
       ...sum,
+      // derived, so value − invested always matches it to the cent
+      unrealised: sum.value - sum.invested,
       byKind: [...byKind]
         .map(([kind, value]) => ({ kind, value }))
         .sort((a, b) => b.value - a.value),
@@ -180,8 +196,16 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
 }
 
 /** Open holdings as net-worth items (investment class) and for goals, valued on a day. */
-export async function holdingValues(prisma: PrismaClient, familyId: string, onDay = todayLocal()) {
-  const rows = await prisma.holding.findMany({ where: { familyId, archived: false }, include });
+export async function holdingValues(
+  prisma: PrismaClient,
+  familyId: string,
+  onDay = todayLocal(),
+  opts: { includeArchived?: boolean } = {},
+) {
+  const rows = await prisma.holding.findMany({
+    where: { familyId, ...(!opts.includeArchived && { archived: false }) },
+    include,
+  });
   return rows.map((h) => {
     const c = computed(h, onDay);
     return {
@@ -190,7 +214,8 @@ export async function holdingValues(prisma: PrismaClient, familyId: string, onDa
       currency: h.currency,
       ownerMemberId: h.ownerMemberId,
       assetClass: 'investment',
-      value: c.value,
+      // Nothing held: nothing to count (and no exchange rate needed for it).
+      value: c.units === '0' ? null : c.value,
     };
   });
 }

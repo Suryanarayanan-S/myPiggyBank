@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Holding } from './investments';
 import {
+  ACCOUNT,
+  CAP,
+  SECTOR,
+  allocation,
+  contributors,
+  sliceColors,
   isSoldOut,
   listed,
   movers,
@@ -35,6 +41,8 @@ const h = (name: string, p: Partial<Holding> = {}): Holding => ({
   trades: [],
   prices: [],
   inView: { value: 120_000, cost: 100_000 },
+  industry: null,
+  cap: null,
   ...p,
 });
 
@@ -162,5 +170,78 @@ describe('portfolio', () => {
       ],
     });
     expect(valueHistory([sameDay])).toEqual([{ date: '2026-01-10', value: 90_000 }]);
+  });
+
+  it('splits the portfolio into the largest groups plus Other, by value', () => {
+    const v = (value: number) => ({ value, inView: { value, cost: value } });
+    const book = [
+      h('INFY', { ...v(50), industry: 'IT', cap: 'large' }),
+      h('TCS', { ...v(30), industry: 'IT', cap: 'large' }),
+      h('SBIN', { ...v(40), industry: 'Financial Services', cap: 'large' }),
+      h('BHEL', { ...v(20), industry: 'Capital Goods', cap: 'mid' }),
+      h('IEX', { ...v(10), industry: 'Power', cap: 'small' }),
+      h('GLOBE', { ...v(5), industry: 'Textiles', cap: null }),
+      h('GOLDBEES', { ...v(100), kind: 'gold' }),
+      h('NIFTYBEES', { ...v(45), kind: 'etf' }),
+    ];
+    expect(allocation(book, ACCOUNT)).toEqual([
+      { label: 'Equity', value: 200, shareBp: 6_667 },
+      { label: 'Gold', value: 100, shareBp: 3_333 },
+    ]);
+    expect(allocation(book, SECTOR).map((g) => [g.label, g.value])).toEqual([
+      ['Gold', 100],
+      ['IT', 80],
+      ['ETF', 45],
+      ['Financial Services', 40],
+      ['Other', 35], // Capital Goods, Power, Textiles
+    ]);
+    // Size groups are about shares only.
+    expect(allocation(book, CAP).map((g) => [g.label, g.value])).toEqual([
+      ['Large cap', 120],
+      ['Mid cap', 20],
+      ['Small cap', 10],
+      ['Not classified', 5],
+    ]);
+  });
+
+  it('ranks what added and what took away the most money', () => {
+    const c = contributors(
+      [
+        h('A', { inView: { value: 150, cost: 100 } }),
+        h('B', { inView: { value: 80, cost: 100 } }),
+        h('C', { inView: { value: 400, cost: 100 } }),
+        h('D', { inView: { value: 100, cost: 100 } }),
+      ],
+      5,
+    );
+    expect(c.performers.map((r) => [r.holding.name, r.pnl])).toEqual([
+      ['C', 300],
+      ['A', 50],
+    ]);
+    expect(c.decliners.map((r) => [r.holding.name, r.pnl])).toEqual([['B', -20]]);
+  });
+
+  it('colours follow the group, not its place: Gold looks the same in every donut', () => {
+    const sl = (...labels: string[]) => labels.map((label) => ({ label, value: 1, shareBp: 0 }));
+    expect(sliceColors(ACCOUNT, sl('Gold', 'Equity'))).toEqual([
+      'var(--c-cat-4)',
+      'var(--c-cat-1)',
+    ]);
+    expect(sliceColors(SECTOR, sl('Gold', 'IT', 'ETF', 'Banks', 'Other'))).toEqual([
+      'var(--c-cat-4)',
+      'var(--c-cat-1)',
+      'var(--c-cat-2)',
+      'var(--c-cat-3)',
+      'var(--c-rest)',
+    ]);
+    expect(sliceColors(CAP, sl('Small cap', 'Large cap', 'Not classified'))).toEqual([
+      'var(--c-cat-3)',
+      'var(--c-cat-1)',
+      'var(--c-rest)',
+    ]);
+  });
+
+  it('calls InvITs and REITs by name in the account split', () => {
+    expect(ACCOUNT.groupOf(h('PGINVIT', { kind: 'other' }))).toBe('InvIT & other');
   });
 });

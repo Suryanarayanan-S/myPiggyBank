@@ -17,7 +17,7 @@ const day = (date: string, infy: string) =>
   ].join('\n');
 
 /** A fake NSE archive: files for 13 and 14 Oct 2026 only (the 15th is not published yet). */
-function fakeNse(opts: { fail?: boolean; everyDay?: boolean } = {}) {
+function fakeNse(opts: { fail?: boolean; everyDay?: boolean; noLists?: boolean } = {}) {
   const urls: string[] = [];
   const fetchText: FetchText = async (url) => {
     urls.push(url);
@@ -27,6 +27,17 @@ function fakeNse(opts: { fail?: boolean; everyDay?: boolean } = {}) {
       'sec_bhavdata_full_14102026.csv': day('14-Oct-2026', '1100.00'),
     };
     const name = url.split('/').at(-1)!;
+    const lists: Record<string, string> = {
+      'ind_nifty500list.csv':
+        'Company Name,Industry,Symbol,Series,ISIN Code\nInfosys Ltd.,Information Technology,INFY,EQ,X',
+      'ind_nifty100list.csv':
+        'Company Name,Industry,Symbol,Series,ISIN Code\nInfosys Ltd.,Information Technology,INFY,EQ,X',
+      'ind_niftymidcap150list.csv': 'Company Name,Industry,Symbol,Series,ISIN Code',
+      'ind_niftysmallcap250list.csv': 'Company Name,Industry,Symbol,Series,ISIN Code',
+      'ind_niftymicrocap250_list.csv': 'Company Name,Industry,Symbol,Series,ISIN Code',
+    };
+    if (lists[name] && opts.noLists) return { ok: false, status: 404, text: async () => '' };
+    if (lists[name]) return { ok: true, status: 200, text: async () => lists[name]! };
     // everyDay: a file for whatever day is asked (tests that use the real date).
     const m = name.match(/_(\d{2})(\d{2})(\d{4})\.csv$/)!;
     const months = [
@@ -96,7 +107,7 @@ describe('daily prices from NSE', () => {
 
     await call('PUT', '/api/family', { livePrices: true });
     status = await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
-    expect(nse.urls.map((u) => u.split('/').at(-1))).toEqual([
+    expect(nse.urls.filter((u) => u.includes('/sec_')).map((u) => u.split('/').at(-1))).toEqual([
       'sec_bhavdata_full_15102026.csv', // not yet published
       'sec_bhavdata_full_14102026.csv',
     ]);
@@ -200,5 +211,30 @@ describe('daily prices from NSE', () => {
 
   it('only families that switched it on can ask for an update', async () => {
     expect((await call('POST', '/api/holdings/live-prices/refresh')).statusCode).toBe(403);
+  });
+
+  it('learns each company’s industry and size group, about once a month', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const lists = () => nse.urls.filter((u) => u.includes('/ind_')).length;
+    expect(lists()).toBe(5);
+    const h = await value(infy);
+    expect(h).toMatchObject({ industry: 'Information Technology', cap: 'large' });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-16');
+    expect(lists()).toBe(5); // not again within the month
+    await prisma.instrumentInfo.updateMany({ data: { updatedAt: new Date('2026-09-01') } });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-16');
+    expect(lists()).toBe(10);
+  });
+
+  it('saved prices are not reported as failed when only the sector lists fail', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    const status = await refreshLivePrices(
+      prisma,
+      fakeNse({ noLists: true }).fetchText,
+      '2026-10-15',
+    );
+    expect(status).toMatchObject({ asOf: '2026-10-14', updated: 1, lastError: null });
+    expect(status.warning).toMatch(/sectors/i);
   });
 });

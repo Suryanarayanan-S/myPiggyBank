@@ -1,0 +1,115 @@
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { ChartCard, DataTable } from '../dashboard/ChartCard';
+import { ChartTooltip } from '../dashboard/ChartTooltip';
+import { SURFACE } from '../../lib/chart';
+import type { Holding } from '../../lib/investments';
+import { formatMoney } from '../../lib/money';
+import { formatPercent } from '../../lib/percent';
+import { allGroups, allocation, sliceColors, type Grouping } from '../../lib/portfolio';
+
+/** Part of the portfolio at a glance: at most five slices, each named with its share. */
+export function AllocationDonut({
+  holdings,
+  grouping,
+  currency,
+  subtitle,
+}: {
+  holdings: Holding[];
+  grouping: Grouping;
+  currency: string;
+  subtitle?: string;
+}) {
+  const slices = allocation(holdings, grouping);
+  const everyGroup = allGroups(holdings, grouping);
+  const colors = sliceColors(grouping, slices);
+  const colorOf = (label: string) =>
+    colors[slices.findIndex((s) => s.label === label)] ?? 'var(--c-rest)';
+  if (slices.length === 0) return null;
+  return (
+    <ChartCard
+      title={grouping.title}
+      subtitle={subtitle}
+      table={
+        <DataTable
+          head={['Group', 'Value', 'Share']}
+          rows={everyGroup.map((g) => [
+            g.label,
+            formatMoney(g.value, currency),
+            formatPercent(g.shareBp),
+          ])}
+        />
+      }
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div
+          className="relative h-40 w-40 shrink-0"
+          role="img"
+          aria-label={`${grouping.title}: ${slices.map((s) => `${s.label} ${formatPercent(s.shareBp)}`).join(', ')}`}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={slices}
+                dataKey="value"
+                nameKey="label"
+                innerRadius="62%"
+                outerRadius="100%"
+                startAngle={90}
+                endAngle={-270}
+                stroke={SURFACE}
+                strokeWidth={2}
+                isAnimationActive={false}
+              >
+                {slices.map((s) => (
+                  <Cell key={s.label} fill={colorOf(s.label)} />
+                ))}
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  // Recharts passes a copy of the slice: find it by its label.
+                  const p = payload?.[0]?.payload as (typeof slices)[number] | undefined;
+                  return (
+                    <ChartTooltip
+                      active={active}
+                      title={p?.label}
+                      rows={
+                        p
+                          ? [
+                              {
+                                label: formatPercent(p.shareBp),
+                                value: formatMoney(p.value, currency),
+                                color: colorOf(p.label),
+                              },
+                            ]
+                          : []
+                      }
+                    />
+                  );
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="w-full min-w-0 space-y-1.5 text-sm">
+          {slices.map((s) => (
+            <li key={s.label} className="flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  aria-hidden
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ background: colorOf(s.label) }}
+                />
+                <span className="truncate" title={s.label}>
+                  {s.label}
+                </span>
+              </span>
+              <span className="shrink-0 text-slate-600 tabular-nums dark:text-slate-300">
+                {formatPercent(s.shareBp)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </ChartCard>
+  );
+}

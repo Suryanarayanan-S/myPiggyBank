@@ -16,7 +16,20 @@ import { AXIS, GRID, SINGLE, SURFACE, axisTick, niceTicks } from '../../lib/char
 import { gainClass, signed, type Holding } from '../../lib/investments';
 import { formatCompact, formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
-import { movers, oneCurrency, ranked, valueHistory } from '../../lib/portfolio';
+import {
+  ACCOUNT,
+  CAP,
+  SECTOR,
+  allocation,
+  contributors,
+  oneCurrency,
+  ranked,
+  valueHistory,
+  type RankedHolding,
+} from '../../lib/portfolio';
+import { AllocationDonut } from './AllocationDonut';
+
+const COLUMNS: Record<number, string> = { 1: '', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3' };
 
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -37,9 +50,24 @@ export function PortfolioOverview({
   onOpen: (id: string) => void;
 }) {
   const top = ranked(holdings, currency).slice(0, 10);
-  const { gainers, losers } = movers(holdings, 5);
+  const { performers, decliners } = contributors(holdings, 5);
+  // A one-slice donut says nothing: only splits with at least two groups are drawn.
+  const donuts = [ACCOUNT, SECTOR, CAP].filter((g) => allocation(holdings, g).length >= 2);
   return (
     <div className="space-y-5">
+      {donuts.length > 0 && (
+        <div className={clsx('grid gap-5', COLUMNS[donuts.length])}>
+          {donuts.map((g) => (
+            <AllocationDonut
+              key={g.title}
+              holdings={holdings}
+              grouping={g}
+              currency={currency}
+              subtitle={g === CAP ? 'Shares only, by SEBI size group' : undefined}
+            />
+          ))}
+        </div>
+      )}
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="Biggest holdings">
           {top.length === 0 && (
@@ -76,51 +104,66 @@ export function PortfolioOverview({
             ))}
           </ol>
         </Card>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-          <Movers title="Top gainers" list={gainers} onOpen={onOpen} />
-          <Movers title="Top losers" list={losers} onOpen={onOpen} />
-        </div>
+        <Card title="Contributors to returns">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Contributors
+              title="Top performers"
+              list={performers}
+              currency={currency}
+              onOpen={onOpen}
+            />
+            <Contributors
+              title="Top decliners"
+              list={decliners}
+              currency={currency}
+              onOpen={onOpen}
+            />
+          </div>
+        </Card>
       </div>
       <ValueChart holdings={holdings} />
     </div>
   );
 }
 
-function Movers({
+function Contributors({
   title,
   list,
+  currency,
   onOpen,
 }: {
   title: string;
-  list: Holding[];
+  list: (RankedHolding & { pnl: number })[];
+  currency: string;
   onOpen: (id: string) => void;
 }) {
   return (
-    <Card title={title}>
+    <section aria-label={title}>
+      <h3 className="mb-2 text-sm font-medium text-slate-500">{title}</h3>
       {list.length === 0 ? (
         <p className="text-sm text-slate-500">None</p>
       ) : (
         <ol className="space-y-2 text-sm">
-          {list.map((h) => (
-            <li key={h.id} className="flex items-baseline justify-between gap-3">
+          {list.map((r) => (
+            <li key={r.holding.id} className="flex items-baseline justify-between gap-3">
               <button
                 type="button"
                 className="min-w-0 truncate text-left hover:underline"
-                onClick={() => onOpen(h.id)}
+                onClick={() => onOpen(r.holding.id)}
               >
-                {h.name}
+                {r.holding.name}
               </button>
-              <span className={clsx('shrink-0 text-right tabular-nums', gainClass(h.returnBp))}>
-                {formatPercent(h.returnBp)}
+              <span className={clsx('shrink-0 text-right tabular-nums', gainClass(r.pnl))}>
+                {signed(r.pnl, currency)}
                 <span className="block text-xs">
-                  {h.unrealised === null ? '' : signed(h.unrealised, h.currency)}
+                  {r.holding.returnBp === null ? '' : formatPercent(r.holding.returnBp)}
                 </span>
               </span>
             </li>
           ))}
         </ol>
       )}
-    </Card>
+    </section>
   );
 }
 

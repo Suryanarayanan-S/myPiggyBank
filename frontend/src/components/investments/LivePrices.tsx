@@ -11,6 +11,7 @@ type Status = {
   updated: number;
   notFound: string[];
   lastError: string | null;
+  warning: string | null;
 };
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -83,6 +84,9 @@ export function LivePrices() {
                 }`
               : 'Checked every few hours.'}
       </p>
+      {on && s?.warning && !s.lastError && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{s.warning}</p>
+      )}
       <FormError error={toggle.error ?? update.error} />
     </div>
   );

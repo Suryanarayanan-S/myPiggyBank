@@ -166,18 +166,14 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            <div className="grid gap-5 lg:grid-cols-2">
-              <Shares
-                title="By kind"
-                currency={s.currency}
-                rows={s.byKind.map((k) => ({ label: HOLDING_KINDS[k.kind], value: k.value }))}
-              />
+            {/* The account split is in the donuts; by person only when there is more than one. */}
+            {s.byMember.length > 1 && (
               <Shares
                 title="By person"
                 currency={s.currency}
                 rows={s.byMember.map((m) => ({ label: m.name, value: m.value }))}
               />
-            </div>
+            )}
           </div>
           <div
             role="tabpanel"

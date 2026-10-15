@@ -6,6 +6,7 @@ import { formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { getFamily } from './familyService.js';
 import { assertAccount, assertMember } from './ownership.js';
+import { plainSymbol } from '../domain/brokerHoldings.js';
 import { loadRates } from './rateService.js';
 
 export const HOLDING_KINDS = ['stock', 'etf', 'fund', 'gold', 'other'] as const;
@@ -144,7 +145,24 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
     loadRates(prisma, familyId),
     prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
   ]);
-  const holdings = rows.map((h) => computed(h));
+  // Industry and size group of rupee holdings listed on NSE (when downloaded).
+  const keyOf = (h: { currency: string; symbol: string | null }) =>
+    h.currency === 'INR' && h.symbol ? plainSymbol(h.symbol) : null;
+  const keys = [...new Set(rows.map(keyOf).filter((k): k is string => k !== null))];
+  const infos = new Map(
+    (keys.length
+      ? await prisma.instrumentInfo.findMany({ where: { symbol: { in: keys } } })
+      : []
+    ).map((i) => [i.symbol, i]),
+  );
+  const holdings = rows.map((h) => {
+    const info = infos.get(keyOf(h) ?? '');
+    return {
+      ...computed(h),
+      industry: info?.industry ?? null,
+      cap: (info?.cap ?? null) as 'large' | 'mid' | 'small' | null,
+    };
+  });
   const currency = view ?? family.wealthCurrency;
   const month = todayLocal().slice(0, 7);
   const sum = { value: 0, invested: 0, realised: 0, dividends: 0 };

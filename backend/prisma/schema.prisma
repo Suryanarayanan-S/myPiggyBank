@@ -460,3 +460,12 @@ model HoldingPrice {
 
   @@unique([holdingId, date])
 }
+
+/// Public facts about an NSE-listed company, from NSE's index lists (refreshed monthly).
+model InstrumentInfo {
+  symbol    String   @id
+  industry  String?
+  /// SEBI size group: large | mid | small
+  cap       String?
+  updatedAt DateTime @updatedAt
+}

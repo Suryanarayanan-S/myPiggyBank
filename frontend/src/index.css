@@ -29,6 +29,12 @@
   --c-property: #eda100;
   --c-investment: #e87ba4;
   --c-other: #94a3b8;
+  --c-cat-1: #2a78d6;
+  --c-cat-2: #eb6834;
+  --c-cat-3: #1baf7a;
+  --c-cat-4: #eda100;
+  /* "Other" in a donut: neutral, and apart from its blue and yellow neighbours */
+  --c-rest: #94a3b8;
 }
 :root[data-mode='dark'] {
   --c-essentials: #3987e5;
@@ -44,6 +50,11 @@
   --c-property: #c98500;
   --c-investment: #d55181;
   --c-other: #64748b;
+  --c-cat-1: #3987e5;
+  --c-cat-2: #d95926;
+  --c-cat-3: #199e70;
+  --c-cat-4: #c98500;
+  --c-rest: #94a3b8;
 }
 
 /* ───────────────────────── Retro (8-bit arcade) ─────────────────────────
@@ -124,6 +135,11 @@
   --c-property: #b8860b;
   --c-investment: #e0457b;
   --c-other: #83769c;
+  --c-cat-1: #1d6fd6;
+  --c-cat-2: #ff7a00;
+  --c-cat-3: #008751;
+  --c-cat-4: #b8860b;
+  --c-rest: #5f574f;
 }
 
 :root[data-style='retro'] {

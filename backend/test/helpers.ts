@@ -15,6 +15,7 @@ export function makeApp(overrides: Partial<AppOptions> = {}) {
 export async function resetDb() {
   await prisma.family.deleteMany();
   await prisma.liveRate.deleteMany(); // public rates, not family data
+  await prisma.instrumentInfo.deleteMany(); // public company facts
 }
 
 export async function signUp(

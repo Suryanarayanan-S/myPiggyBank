@@ -44,6 +44,9 @@ export type Holding = {
   prices: { id: string; date: string; price: string }[];
   /** Value and cost in the summary currency; null without an exchange rate. */
   inView: { value: number; cost: number } | null;
+  /** From NSE's index lists, for listed rupee shares (null when not known). */
+  industry: string | null;
+  cap: 'large' | 'mid' | 'small' | null;
 };
 export type HoldingsResponse = {
   holdings: Holding[];

@@ -157,3 +157,105 @@ export function valueHistory(holdings: Holding[]): { date: string; value: number
 /** Whether `valueHistory` can chart these holdings at all (one currency only). */
 export const oneCurrency = (holdings: Holding[]) =>
   new Set(holdings.filter((h) => !h.archived).map((h) => h.currency)).size <= 1;
+
+/** How holdings are grouped for a share-of-portfolio chart; null leaves a holding out. */
+export type Grouping = {
+  title: string;
+  groupOf: (h: Holding) => string | null;
+  /** Groups with a colour of their own (slot 1–4), the same in every chart. */
+  pinned?: Record<string, number>;
+};
+const UNKNOWN = 'Not classified';
+
+/** Equity (shares and funds) against gold, like a broker's account split. */
+export const ACCOUNT: Grouping = {
+  title: 'Account',
+  groupOf: (h) => (h.kind === 'gold' ? 'Gold' : h.kind === 'other' ? 'InvIT & other' : 'Equity'),
+  pinned: { Equity: 1, 'InvIT & other': 3, Gold: 4 },
+};
+/** Industries of shares; funds and gold as their own groups. */
+export const SECTOR: Grouping = {
+  title: 'Sectors',
+  groupOf: (h) =>
+    h.kind === 'gold'
+      ? 'Gold'
+      : h.kind === 'etf'
+        ? 'ETF'
+        : h.kind === 'fund'
+          ? 'Mutual funds'
+          : h.kind === 'other'
+            ? 'InvIT & other'
+            : (h.industry ?? UNKNOWN),
+  pinned: { Gold: 4 },
+};
+const CAP_LABEL = { large: 'Large cap', mid: 'Mid cap', small: 'Small cap' } as const;
+/** SEBI size groups — shares only. */
+export const CAP: Grouping = {
+  title: 'Market cap',
+  groupOf: (h) => (h.kind !== 'stock' ? null : h.cap ? CAP_LABEL[h.cap] : UNKNOWN),
+  pinned: { 'Large cap': 1, 'Mid cap': 2, 'Small cap': 3 },
+};
+
+export type Slice = { label: string; value: number; shareBp: number };
+
+/**
+ * Shares of the portfolio by group (summary currency), largest first and at most `top` groups
+ * plus "Other" — a donut stays readable at five slices. "Not classified" never leads.
+ */
+export function allocation(holdings: Holding[], grouping: Grouping, top = 4): Slice[] {
+  const sums = new Map<string, number>();
+  for (const r of ranked(holdings)) {
+    const g = grouping.groupOf(r.holding);
+    if (g !== null && r.value > 0) sums.set(g, (sums.get(g) ?? 0) + r.value);
+  }
+  const groups = [...sums]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => Number(a.label === UNKNOWN) - Number(b.label === UNKNOWN) || b.value - a.value);
+  const shown =
+    groups.length <= top + 1
+      ? groups
+      : [
+          ...groups.slice(0, top),
+          { label: 'Other', value: groups.slice(top).reduce((s, g) => s + g.value, 0) },
+        ];
+  const total = shown.reduce((s, g) => s + g.value, 0);
+  return shown.map((g) => ({
+    ...g,
+    shareBp: total > 0 ? Math.round((g.value * 10_000) / total) : 0,
+  }));
+}
+
+/** Every group with its share (for the legend list and table: nothing folded away). */
+export function allGroups(holdings: Holding[], grouping: Grouping): Slice[] {
+  return allocation(holdings, grouping, Number.MAX_SAFE_INTEGER);
+}
+
+/** What added and what took away the most money (summary currency), like a broker's report. */
+export function contributors(holdings: Holding[], n: number) {
+  const rows = ranked(holdings).map((r) => ({ ...r, pnl: r.value - r.cost }));
+  return {
+    performers: rows
+      .filter((r) => r.pnl > 0)
+      .sort((a, b) => b.pnl - a.pnl)
+      .slice(0, n),
+    decliners: rows
+      .filter((r) => r.pnl < 0)
+      .sort((a, b) => a.pnl - b.pnl)
+      .slice(0, n),
+  };
+}
+
+/**
+ * Colours of a donut's slices: a group with a colour of its own keeps it everywhere (Gold is
+ * always the same yellow); other groups take the free slots by size; the rest is neutral.
+ */
+export function sliceColors(grouping: Grouping, slices: { label: string }[]): string[] {
+  const pinned = grouping.pinned ?? {};
+  const taken = new Set(slices.map((s) => pinned[s.label]).filter((n): n is number => !!n));
+  const free = [1, 2, 3, 4].filter((n) => !taken.has(n));
+  return slices.map((s) => {
+    if (s.label === 'Other' || s.label === UNKNOWN) return 'var(--c-rest)';
+    const slot = pinned[s.label] ?? free.shift();
+    return slot ? `var(--c-cat-${slot})` : 'var(--c-rest)';
+  });
+}

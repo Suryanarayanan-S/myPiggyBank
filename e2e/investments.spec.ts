@@ -144,15 +144,21 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   });
   await expect(biggest.getByRole('listitem').first()).toContainText('GOLDBEES');
   await expect(biggest.getByRole('listitem').first()).toContainText('94.5 %');
-  const gainers = page.locator('section', {
-    has: page.getByRole('heading', { name: 'Top gainers' }),
-  });
-  await expect(gainers).toContainText('GOLDBEES');
-  await expect(gainers).toContainText('92.5 %');
-  const losers = page.locator('section', {
-    has: page.getByRole('heading', { name: 'Top losers' }),
-  });
-  await expect(losers).toContainText('INFY');
+  // Donuts: the account split and sectors (no NSE lists here, so INFY is not classified).
+  const card = (title: string) =>
+    page
+      .locator('section', { has: page.getByRole('heading', { name: title, exact: true }) })
+      .first();
+  await expect(card('Account')).toContainText('Gold');
+  await expect(card('Account')).toContainText('94.5 %');
+  await expect(card('Sectors')).toContainText('Not classified');
+  // A one-group split (all shares unclassified here) is not drawn as a donut.
+  await expect(page.getByRole('heading', { name: /^Market cap/ })).toHaveCount(0);
+  // Contributors to returns, in rupees.
+  const performers = page.getByRole('region', { name: 'Top performers' });
+  await expect(performers).toContainText('GOLDBEES');
+  await expect(performers).toContainText('+₹2,89,292.01');
+  await expect(page.getByRole('region', { name: 'Top decliners' })).toContainText('INFY');
   await expect(page.getByText('1 in profit · 1 in loss')).toBeVisible();
   await shot(page, '30-investments-overview');
 

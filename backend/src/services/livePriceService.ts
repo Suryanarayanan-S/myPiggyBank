@@ -1,5 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 import { bhavcopyName, priceFor, readBhavcopy, type Bhavcopy } from '../domain/bhavcopy.js';
+import {
+  INDEX_LISTS,
+  classify,
+  readIndexList,
+  type IndexList,
+  type Listed,
+} from '../domain/indexLists.js';
 import { addDays, formatDay, parseDay } from '../lib/dates.js';
 
 /** The slice of `fetch` the price download needs (injected so tests never touch the network). */
@@ -21,12 +28,15 @@ export type LivePriceStatus = {
   /** symbols NSE does not list (e.g. BSE-only shares): they keep their last price */
   notFound: string[];
   lastError: string | null;
+  /** The prices were saved, but something on the side (sector lists) was not. */
+  warning: string | null;
 };
 
 // One server process, so the last outcome can live in memory (per family: symbols are private).
 type Outcome = { asOf: string; fetchedAt: string; updated: number; notFound: string[] };
 const outcomes = new Map<string, Outcome>();
 let lastError: string | null = null;
+let warning: string | null = null;
 let lastFile: string | null = null;
 // The last file read, so the same day is downloaded once (NSE does not change a published file).
 let cached: Bhavcopy | null = null;
@@ -35,6 +45,7 @@ export function forgetLivePrices() {
   cached = null;
   lastFile = null;
   lastError = null;
+  warning = null;
   outcomes.clear();
 }
 
@@ -47,7 +58,42 @@ export function livePriceStatus(familyId?: string): LivePriceStatus {
     updated: familyId ? (o?.updated ?? 0) : all.reduce((s, x) => s + x.updated, 0),
     notFound: familyId ? (o?.notFound ?? []) : [...new Set(all.flatMap((x) => x.notFound))],
     lastError,
+    warning,
   };
+}
+
+/** NSE keeps the index lists next to the daily files: …/products/content → …/content/indices. */
+const listsUrl = (base: string) =>
+  base.endsWith('/products/content')
+    ? `${base.slice(0, -'/products/content'.length)}/content/indices`
+    : `${base}/indices`;
+/** Industries and size groups change slowly (index reviews are half-yearly): refresh monthly. */
+const INFO_DAYS = 30;
+
+/** Each listed company's industry and SEBI size group, from NSE's index lists. */
+async function refreshInstruments(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  baseUrl: string,
+  today: string,
+) {
+  const newest = await prisma.instrumentInfo.findFirst({ orderBy: { updatedAt: 'desc' } });
+  if (newest && newest.updatedAt >= parseDay(addDays(today, -INFO_DAYS))!) return;
+  const files = {} as Record<IndexList, Listed[]>;
+  for (const [list, name] of Object.entries(INDEX_LISTS) as [IndexList, string][]) {
+    const res = await fetchText(`${listsUrl(baseUrl)}/${name}`);
+    if (!res.ok) throw new Error(`NSE answered ${res.status} for its index lists`);
+    files[list] = readIndexList(await res.text());
+  }
+  const rows = classify(files);
+  if (rows.length === 0) throw new Error('NSE sent empty index lists');
+  await prisma.$transaction([
+    prisma.instrumentInfo.deleteMany(),
+    // Dated by the run's day (not the clock), like everything else here.
+    prisma.instrumentInfo.createMany({
+      data: rows.map((r) => ({ ...r, updatedAt: parseDay(today)! })),
+    }),
+  ]);
 }
 
 /** The newest published file on or before `today`. */
@@ -145,6 +191,13 @@ async function run(prisma: PrismaClient, fetchText: FetchText, today: string, ba
     }
     lastFile = formatDay(date);
     lastError = null;
+    // Sectors and size groups: a failure here keeps the old ones and does not undo the prices.
+    try {
+      await refreshInstruments(prisma, fetchText, baseUrl, today);
+      warning = null;
+    } catch (err) {
+      warning = `Sectors and size groups were not updated: ${err instanceof Error ? err.message : String(err)}`;
+    }
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);
   }

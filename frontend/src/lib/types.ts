@@ -18,6 +18,8 @@ export type Family = {
   extras: { quickEntrySuggestions: boolean };
   /** What holdings count with in net worth and goals. */
   investmentsAt: 'value' | 'invested';
+  /** Daily closing prices from NSE for rupee holdings. */
+  livePrices: boolean;
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

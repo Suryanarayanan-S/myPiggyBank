@@ -26,6 +26,8 @@ model Family {
   quickEntryHints  Boolean            @default(true)
   /// What holdings count with in net worth and goals: "value" (at today's price) or "invested"
   investmentsAt    String             @default("value")
+  /// Download daily closing prices from NSE for rupee holdings
+  livePrices       Boolean            @default(false)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   users            User[]
@@ -452,6 +454,8 @@ model HoldingPrice {
   date      DateTime
   /// micros of the currency per unit (€98.4567 = 98 456 700)
   price     BigInt
+  /// manual (typed) | import (holdings file) | nse (downloaded close); NSE never replaces manual
+  source    String   @default("manual")
   createdAt DateTime @default(now())
 
   @@unique([holdingId, date])

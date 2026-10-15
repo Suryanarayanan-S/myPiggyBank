@@ -12,6 +12,8 @@ const EnvSchema = z.object({
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   /** Where live exchange rates come from (Frankfurter API, ECB reference rates). */
   RATES_URL: z.url().default('https://api.frankfurter.dev/v1'),
+  /** NSE's archive of daily price files (tests point it elsewhere). */
+  PRICES_URL: z.url().default('https://nsearchives.nseindia.com/products/content'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

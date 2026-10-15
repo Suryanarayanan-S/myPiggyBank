@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Config } from './config.js';
 import { DEFAULT_RATES_URL, type FetchRates } from './services/liveRateService.js';
+import { DEFAULT_PRICES_URL, type FetchText } from './services/livePriceService.js';
 import { AppError } from './lib/errors.js';
 import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
@@ -39,6 +40,9 @@ export interface AppOptions {
   /** Downloads live exchange rates; without it the server never goes online for rates. */
   fetchRates?: FetchRates;
   ratesUrl?: string;
+  /** Downloads NSE closing prices; without it the server never goes online for prices. */
+  fetchPrices?: FetchText;
+  pricesUrl?: string;
 }
 
 function safeHost(origin: string): string | null {
@@ -57,6 +61,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.decorate(
     'liveRates',
     opts.fetchRates ? { fetch: opts.fetchRates, url: opts.ratesUrl ?? DEFAULT_RATES_URL } : null,
+  );
+  app.decorate(
+    'livePrices',
+    opts.fetchPrices
+      ? { fetch: opts.fetchPrices, url: opts.pricesUrl ?? DEFAULT_PRICES_URL }
+      : null,
   );
   app.decorateRequest('user', null);
 

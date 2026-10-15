@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
+import { livePricesWanted, refreshLivePrices } from './services/livePriceService.js';
 import { generateDue } from './services/recurringService.js';
 import { todayLocal } from './lib/dates.js';
 
@@ -24,6 +25,13 @@ const app = await buildApp({
   fetchRates: (url) => fetch(url, { signal: AbortSignal.timeout(15_000) }),
   loginRateLimit: { max: config.LOGIN_RATE_LIMIT, timeWindow: '1 minute' },
   ratesUrl: config.RATES_URL,
+  // NSE's archive refuses requests without a browser-like agent.
+  fetchPrices: (url) =>
+    fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (myPiggyBank)', Accept: 'text/csv,*/*' },
+      signal: AbortSignal.timeout(20_000),
+    }),
+  pricesUrl: config.PRICES_URL,
 });
 
 const shutdown = async () => {
@@ -57,3 +65,17 @@ const runRates = async () => {
 };
 void runRates().catch((err) => app.log.error(err, 'live rate download failed'));
 setInterval(() => void runRates().catch(() => {}), 6 * 60 * 60 * 1000).unref();
+
+// NSE closing prices: only downloaded when a family chose them; checked every 6 hours.
+const runPrices = async () => {
+  if (!app.livePrices || !(await livePricesWanted(prisma))) return;
+  const status = await refreshLivePrices(
+    prisma,
+    app.livePrices.fetch,
+    todayLocal(),
+    app.livePrices.url,
+  );
+  if (status.lastError) app.log.warn({ error: status.lastError }, 'NSE price download failed');
+};
+void runPrices().catch((err) => app.log.error(err, 'NSE price download failed'));
+setInterval(() => void runPrices().catch(() => {}), 6 * 60 * 60 * 1000).unref();

@@ -238,7 +238,7 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
       const mine = byOwner(await rupeeHoldings(tx, familyId), input.ownerMemberId);
       for (const r of rows) {
         const had = mine.get(r.symbol);
-        const price = { date: today, price: r.price };
+        const price = { date: today, price: r.price, source: 'import' };
         if (!had) {
           await tx.holding.create({
             data: {
@@ -287,7 +287,7 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
         await tx.holdingPrice.upsert({
           where: { holdingId_date: { holdingId: id, date: today } },
           create: { holdingId: id, ...price },
-          update: { price: r.price },
+          update: { price: r.price, source: 'import' },
         });
         if (had.holding.archived) {
           await tx.holding.update({ where: { id }, data: { archived: false } });

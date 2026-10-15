@@ -32,6 +32,7 @@ export const FamilyInput = z.object({
     .refine((o) => Object.keys(o).length > 0, 'Choose a setting to change')
     .optional(),
   investmentsAt: z.enum(['value', 'invested']).optional(),
+  livePrices: z.boolean().optional(),
   bucketNames: z
     .object({ essentials: bucketName, fun: bucketName, future: bucketName })
     .refine(
@@ -55,6 +56,7 @@ const select = {
   nameFuture: true,
   quickEntryHints: true,
   investmentsAt: true,
+  livePrices: true,
 } as const;
 
 type Row = {
@@ -65,7 +67,7 @@ type Row = {
   rateMode: string;
 } & Record<'targetEssentials' | 'targetFun' | 'targetFuture', number> &
   Record<'nameEssentials' | 'nameFun' | 'nameFuture', string> &
-  Record<'quickEntryHints', boolean> & { investmentsAt: string };
+  Record<'quickEntryHints' | 'livePrices', boolean> & { investmentsAt: string };
 
 const toDto = (f: Row) => ({
   id: f.id,
@@ -77,6 +79,7 @@ const toDto = (f: Row) => ({
   bucketNames: { essentials: f.nameEssentials, fun: f.nameFun, future: f.nameFuture },
   extras: { quickEntrySuggestions: f.quickEntryHints },
   investmentsAt: f.investmentsAt as 'value' | 'invested',
+  livePrices: f.livePrices,
 });
 export type FamilyDto = ReturnType<typeof toDto>;
 

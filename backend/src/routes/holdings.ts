@@ -5,6 +5,9 @@ import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
+import { livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
+import { AppError } from '../lib/errors.js';
+import { todayLocal } from '../lib/dates.js';
 
 // A holdings file (base64) plus the other fields.
 const bodyLimit = hi.MAX_FILE_CHARS + 64 * 1024;
@@ -31,6 +34,26 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       parse(hi.HoldingImportInput, req.body),
     ),
   }));
+  // Daily closing prices from NSE (opt-in per family).
+  app.get('/holdings/live-prices', async (req) => ({ data: livePriceStatus(fam(req)) }));
+  app.post('/holdings/live-prices/refresh', async (req) => {
+    if (!app.livePrices) {
+      throw new AppError(503, 'LIVE_PRICES_OFF', 'This server is not set up to download prices');
+    }
+    const family = await app.prisma.family.findUnique({ where: { id: fam(req) } });
+    if (!family?.livePrices) {
+      throw new AppError(403, 'LIVE_PRICES_OFF', 'Switch on daily NSE prices first');
+    }
+    return {
+      data: await refreshLivePrices(
+        app.prisma,
+        app.livePrices.fetch,
+        todayLocal(),
+        app.livePrices.url,
+        fam(req),
+      ),
+    };
+  });
   app.get('/holdings', async (req) => ({
     data: await h.listHoldings(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
   }));

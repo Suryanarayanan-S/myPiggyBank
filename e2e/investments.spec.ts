@@ -182,4 +182,12 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await countAt.selectOption('invested');
   await page.reload();
   await expect(page.getByLabel('Count in net worth and goals at')).toHaveValue('invested');
+
+  // Daily NSE prices are off until switched on; a failed download keeps the prices.
+  const daily = page.getByLabel('Daily closing prices from NSE');
+  await expect(daily).not.toBeChecked();
+  await daily.click();
+  await expect(daily).toBeChecked();
+  await expect(page.getByText(/Could not update: .*The last prices are kept/)).toBeVisible();
+  await expect(value).toContainText('₹6,37,036.40');
 });

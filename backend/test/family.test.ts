@@ -25,6 +25,7 @@ describe('family settings', () => {
       bucketNames: { essentials: 'Keep Me Alive', fun: 'Make Me Happy', future: 'Make Me Rich' },
       extras: { quickEntrySuggestions: true },
       investmentsAt: 'value',
+      livePrices: false,
     });
   });
 

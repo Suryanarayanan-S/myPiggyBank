@@ -321,8 +321,9 @@ export async function setPrice(
   const price = parseRate(input.price)!;
   await prisma.holdingPrice.upsert({
     where: { holdingId_date: { holdingId: id, date } },
-    create: { holdingId: id, date, price },
-    update: { price },
+    create: { holdingId: id, date, price, source: 'manual' },
+    // Typed by hand: NSE downloads never replace it, even where one was downloaded before.
+    update: { price, source: 'manual' },
   });
   return computed(await owned(prisma, familyId, id));
 }

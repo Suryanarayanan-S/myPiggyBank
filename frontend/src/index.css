@@ -2,8 +2,8 @@
 @import '@fontsource/vt323/400.css';
 @import '@fontsource/press-start-2p/400.css';
 
-/* Light/dark is set on <html data-mode> by lib/theme.ts (modern follows the system setting;
-   retro is one fixed palette), so `dark:` utilities follow that attribute, not the media query. */
+/* Light/dark is set on <html data-mode> by lib/theme.ts (chosen, or following the system — for
+   both looks), so `dark:` utilities follow that attribute, not the media query. */
 @custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
 
 /* Colour usage: slate = neutral, indigo = primary action,
@@ -59,8 +59,8 @@
 
 /* ───────────────────────── Retro (8-bit arcade) ─────────────────────────
    Built on the PICO-8 palette. Instead of restyling every component, the Tailwind theme
-   variables are remapped, so the whole app switches with one attribute. Retro is always the
-   "light" mode (cream panels, navy ink); chart colours were re-validated on the cream surface. */
+   variables are remapped, so the whole app switches with one attribute. This is retro light
+   (cream panels, navy ink); retro dark follows below. Chart colours validated per surface. */
 :root[data-style='retro'] {
   /* VT323 for text and numbers: pixel style, but unambiguous digits and € / ₹ glyphs. */
   --font-sans: 'VT323', ui-monospace, 'Courier New', monospace;
@@ -198,6 +198,70 @@
 :root[data-style='retro'] :focus-visible {
   outline: 3px dashed #ff004d;
   outline-offset: 2px;
+}
+
+/* ───────── Retro dark ─────────
+   The same arcade look at night: black page, navy panels, cream text, lavender pixel
+   shadows. `dark:` utilities are on (data-mode='dark'), so the scale is re-mapped for them;
+   chart colours are the dark-validated set, re-checked on the navy panel. */
+:root[data-style='retro'][data-mode='dark'] {
+  --retro-ink: #83769c;
+
+  --color-slate-50: #1d2b53;
+  --color-slate-100: #fff1e8;
+  --color-slate-200: #fff1e8;
+  --color-slate-300: #ecdcc6;
+  --color-slate-400: #c2c3c7;
+  --color-slate-500: #c2c3c7;
+  --color-slate-600: #c2c3c7;
+  --color-slate-700: #c2c3c7;
+  --color-slate-800: #83769c;
+  --color-slate-900: #1d2b53;
+  --color-slate-950: #000000;
+
+  --color-indigo-300: #29adff;
+  --color-indigo-400: #29adff;
+  --color-indigo-800: #29adff;
+  --color-indigo-950: #29366f;
+
+  --color-emerald-300: #00e436;
+  --color-emerald-400: #00e436;
+  --color-emerald-800: #008751;
+  --color-emerald-950: #003d22;
+
+  --color-rose-300: #ff77a8;
+  --color-rose-400: #ff77a8;
+  --color-rose-900: #7e2553;
+  --color-rose-950: #4a0f2b;
+
+  --color-amber-300: #ffec27;
+  --color-amber-400: #ffa300;
+  --color-amber-800: #ab5236;
+  --color-amber-950: #3d2a00;
+
+  --c-essentials: #3987e5;
+  --c-fun: #d95926;
+  --c-future: #199e70;
+  --c-single: #9085e9;
+  --c-ink: #fff1e8;
+  --c-muted: #c2c3c7;
+  --c-grid: #2b3a6b;
+  --c-axis: #83769c;
+  --c-surface: #1d2b53;
+  --c-liquid: #9085e9;
+  --c-property: #c98500;
+  --c-investment: #d55181;
+  --c-other: #94a3b8;
+  --c-cat-1: #3987e5;
+  --c-cat-2: #d95926;
+  --c-cat-3: #199e70;
+  --c-cat-4: #c98500;
+  --c-rest: #94a3b8;
+}
+:root[data-style='retro'][data-mode='dark'] body {
+  background-image:
+    linear-gradient(rgb(255 241 232 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 241 232 / 0.05) 1px, transparent 1px);
 }
 
 /* ───────── Retro start screen ───────── */

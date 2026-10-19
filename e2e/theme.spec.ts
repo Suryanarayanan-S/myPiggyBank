@@ -61,14 +61,43 @@ test('one click switches between modern and retro; the choice is remembered', as
     await page.waitForTimeout(400);
     await page.screenshot({ path: `e2e/screenshots/${file}.png`, fullPage: true });
   }
+  // Retro dark: the mode button cycles System → Light → Dark.
+  const mode = page.getByRole('button', { name: /^Colour mode: / }).first();
+  await expect(mode).toHaveAccessibleName('Colour mode: System. Switch to Light');
+  await mode.click();
+  await mode.click();
+  expect(await look(page)).toMatchObject({ style: 'retro', mode: 'dark' });
+  for (const [link, file] of [
+    ['Dashboard', '32-retro-dark-dashboard'],
+    ['Budget', '33-retro-dark-budget'],
+    ['Settings', '34-retro-dark-settings'],
+  ] as const) {
+    await page.getByRole('link', { name: link }).first().click();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `e2e/screenshots/${file}.png`, fullPage: true });
+  }
+  // Settings shows the same choices, and the choice is kept.
+  await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /Retro/ })).toBeChecked();
+  await page.reload();
+  expect(await look(page)).toMatchObject({ style: 'retro', mode: 'dark' });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('link', { name: 'Dashboard' }).last().click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: 'e2e/screenshots/22-retro-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // …and back to modern with one click (following the system dark mode).
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.getByRole('button', { name: 'Switch to modern look' }).first().click();
+  expect(await look(page)).toMatchObject({ style: 'modern', mode: 'dark' });
+
+  // A fixed choice wins over the computer's setting; System follows it again.
+  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await page.getByRole('radio', { name: 'Light' }).check();
+  expect(await look(page)).toMatchObject({ style: 'modern', mode: 'light' });
+  await page.getByRole('radio', { name: 'System' }).check();
   expect(await look(page)).toMatchObject({ style: 'modern', mode: 'dark' });
 });
 

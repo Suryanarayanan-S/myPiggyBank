@@ -1,6 +1,7 @@
 import { useMe } from '../auth/auth';
 import { CategoriesCard } from '../components/settings/CategoriesCard';
 import { DangerZoneCard } from '../components/settings/DangerZoneCard';
+import { AppearanceCard } from '../components/settings/AppearanceCard';
 import { ExtrasCard } from '../components/settings/ExtrasCard';
 import { FamilyCard } from '../components/settings/FamilyCard';
 import { RatesCard } from '../components/settings/RatesCard';
@@ -18,6 +19,7 @@ export function SettingsPage() {
           email={data.user.email}
         />
         <ExtrasCard family={data.family} />
+        <AppearanceCard />
       </div>
       <CategoriesCard />
       <RatesCard family={data.family} />

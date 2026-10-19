@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { applyLook, modeFor, readLook, saveLook } from './theme';
+import {
+  applyLook,
+  modeFor,
+  nextModePref,
+  readLook,
+  readModePref,
+  saveLook,
+  saveModePref,
+} from './theme';
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -12,6 +20,14 @@ const fakeRoot = () => ({
   dataset: {} as Record<string, string>,
   style: {} as Record<string, string>,
 });
+const broken = {
+  getItem: () => {
+    throw new Error('denied');
+  },
+  setItem: () => {
+    throw new Error('denied');
+  },
+};
 
 describe('theme', () => {
   it('defaults to the modern look and remembers the choice', () => {
@@ -21,32 +37,40 @@ describe('theme', () => {
     expect(readLook(s)).toBe('retro');
   });
 
+  it('defaults to following the system for light or dark, and remembers a choice', () => {
+    const s = memory();
+    expect(readModePref(s)).toBe('system');
+    saveModePref('dark', s);
+    expect(readModePref(s)).toBe('dark');
+  });
+
   it('survives storage that throws (private mode)', () => {
-    const broken = {
-      getItem: () => {
-        throw new Error('denied');
-      },
-      setItem: () => {
-        throw new Error('denied');
-      },
-    };
     expect(readLook(broken)).toBe('modern');
+    expect(readModePref(broken)).toBe('system');
     expect(() => saveLook('retro', broken)).not.toThrow();
+    expect(() => saveModePref('light', broken)).not.toThrow();
   });
 
-  it('modern follows the system dark mode; retro is always its own light arcade palette', () => {
-    expect(modeFor('modern', true)).toBe('dark');
-    expect(modeFor('modern', false)).toBe('light');
-    expect(modeFor('retro', true)).toBe('light');
+  it('light or dark: the choice wins, "system" follows the computer — for both looks', () => {
+    expect(modeFor('system', true)).toBe('dark');
+    expect(modeFor('system', false)).toBe('light');
+    expect(modeFor('light', true)).toBe('light');
+    expect(modeFor('dark', false)).toBe('dark');
   });
 
-  it('applies the look and mode to the page', () => {
+  it('cycles system → light → dark → system', () => {
+    expect(nextModePref('system')).toBe('light');
+    expect(nextModePref('light')).toBe('dark');
+    expect(nextModePref('dark')).toBe('system');
+  });
+
+  it('applies the look and mode to the page; retro has a dark mode too', () => {
     const root = fakeRoot();
-    applyLook('retro', true, root);
-    expect(root.dataset).toEqual({ style: 'retro', mode: 'light' });
-    expect(root.style.colorScheme).toBe('light');
-    applyLook('modern', true, root);
-    expect(root.dataset).toEqual({ style: 'modern', mode: 'dark' });
+    applyLook('retro', 'dark', root);
+    expect(root.dataset).toEqual({ style: 'retro', mode: 'dark' });
     expect(root.style.colorScheme).toBe('dark');
+    applyLook('modern', 'light', root);
+    expect(root.dataset).toEqual({ style: 'modern', mode: 'light' });
+    expect(root.style.colorScheme).toBe('light');
   });
 });

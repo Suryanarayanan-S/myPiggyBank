@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import { Brand } from './Brand';
 import { CurrencySwitch } from '../components/CurrencySwitch';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { ModeToggle } from '../components/ModeToggle';
 import { navItems } from './nav';
 import { forgetUserData } from '../lib/session';
 
@@ -29,7 +30,10 @@ export function AppShell() {
       <aside className="fixed inset-y-0 hidden w-60 print:!hidden flex-col border-r border-slate-200 bg-white md:flex dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-2 px-5 py-5">
           <Brand />
-          <ThemeToggle compact />
+          <span className="flex items-center">
+            <ModeToggle />
+            <ThemeToggle compact />
+          </span>
         </div>
         <div className="-mt-2 px-3 pb-3">
           <CurrencySwitch label />
@@ -70,10 +74,17 @@ export function AppShell() {
       <div className="md:pl-60 print:!pl-0">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden print:hidden dark:border-slate-800 dark:bg-slate-900">
           <Brand />
-          <span className="flex items-center gap-1">
+          {/* Five controls on a phone: tight icon buttons so nothing scrolls sideways. */}
+          <span className="flex items-center">
             <CurrencySwitch />
-            <ThemeToggle compact />
-            <Button variant="ghost" aria-label="Log out" onClick={() => logout.mutate()}>
+            <ModeToggle className="!px-1.5" />
+            <ThemeToggle compact className="!px-1.5" />
+            <Button
+              variant="ghost"
+              className="!px-1.5"
+              aria-label="Log out"
+              onClick={() => logout.mutate()}
+            >
               <LogOut size={18} aria-hidden />
             </Button>
           </span>

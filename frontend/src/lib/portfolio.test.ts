@@ -241,7 +241,11 @@ describe('portfolio', () => {
     ]);
   });
 
-  it('calls InvITs and REITs by name in the account split', () => {
-    expect(ACCOUNT.groupOf(h('PGINVIT', { kind: 'other' }))).toBe('InvIT & other');
+  it('counts listed InvITs and REITs as equity in the account split, like the broker does', () => {
+    expect(ACCOUNT.groupOf(h('PGINVIT-IV', { kind: 'other' }))).toBe('Equity');
+    // Something unlisted, added by hand without a symbol, stays apart.
+    expect(ACCOUNT.groupOf(h('Chit fund', { kind: 'other', symbol: null }))).toBe('Other');
+    // Sectors still name them.
+    expect(SECTOR.groupOf(h('PGINVIT-IV', { kind: 'other' }))).toBe('InvIT & other');
   });
 });

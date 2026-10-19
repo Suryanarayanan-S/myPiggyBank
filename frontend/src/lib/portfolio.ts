@@ -167,11 +167,14 @@ export type Grouping = {
 };
 const UNKNOWN = 'Not classified';
 
-/** Equity (shares and funds) against gold, like a broker's account split. */
+/** Equity (shares, funds, listed trusts) against gold, like a broker's account split. */
 export const ACCOUNT: Grouping = {
   title: 'Account',
-  groupOf: (h) => (h.kind === 'gold' ? 'Gold' : h.kind === 'other' ? 'InvIT & other' : 'Equity'),
-  pinned: { Equity: 1, 'InvIT & other': 3, Gold: 4 },
+  // Like a broker's account view: whatever trades on an exchange (InvITs and REITs included)
+  // is equity; only something unlisted, without a symbol, stays apart.
+  groupOf: (h) =>
+    h.kind === 'gold' ? 'Gold' : h.kind === 'other' && !h.symbol ? 'Other' : 'Equity',
+  pinned: { Equity: 1, Gold: 4 },
 };
 /** Industries of shares; funds and gold as their own groups. */
 export const SECTOR: Grouping = {

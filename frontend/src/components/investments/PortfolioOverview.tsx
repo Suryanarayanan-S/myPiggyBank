@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import clsx from 'clsx';
 import { Card } from '../ui/Card';
 import { gainClass, signed, type Holding } from '../../lib/investments';
@@ -9,11 +10,19 @@ import {
   SECTOR,
   allocation,
   contributors,
+  dayMovers,
   ranked,
   type RankedHolding,
 } from '../../lib/portfolio';
 import { AllocationDonut } from './AllocationDonut';
 import { ValueOverTime } from './ValueOverTime';
+
+const dayLabel = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 
 const COLUMNS: Record<number, string> = { 1: '', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3' };
 
@@ -28,7 +37,18 @@ export function PortfolioOverview({
   onOpen: (id: string) => void;
 }) {
   const top = ranked(holdings, currency).slice(0, 10);
-  const { performers, decliners } = contributors(holdings, 5);
+  const overall = contributors(holdings, 5);
+  const day = dayMovers(holdings, 5);
+  // The day chosen; a new day (or none) starts on Overall again.
+  const [picked, setPicked] = useState<string | null>(null);
+  const hasDay = day.performers.length + day.decliners.length > 0;
+  const shown = hasDay && picked === day.date ? day : null;
+  const performers = shown
+    ? shown.performers
+    : overall.performers.map((r) => ({ ...r, changeBp: r.holding.returnBp }));
+  const decliners = shown
+    ? shown.decliners
+    : overall.decliners.map((r) => ({ ...r, changeBp: r.holding.returnBp }));
   // A one-slice donut says nothing: only splits with at least two groups are drawn.
   const donuts = [ACCOUNT, SECTOR, CAP].filter((g) => allocation(holdings, g).length >= 2);
   return (
@@ -83,15 +103,44 @@ export function PortfolioOverview({
           </ol>
         </Card>
         <Card title="Contributors to returns">
+          {hasDay && (
+            <div
+              role="group"
+              aria-label="Contributors over"
+              className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 text-sm dark:border-slate-700"
+            >
+              {(
+                [
+                  ['overall', 'Overall'],
+                  ['day', `Day · ${dayLabel(day.date ?? '')}`],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={(shown ? 'day' : 'overall') === key}
+                  onClick={() => setPicked(key === 'day' ? day.date : null)}
+                  className={clsx(
+                    'rounded-md px-3 py-1',
+                    (shown ? 'day' : 'overall') === key
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="grid gap-5 sm:grid-cols-2">
             <Contributors
-              title="Top performers"
+              title={shown ? 'Top performers of the day' : 'Top performers'}
               list={performers}
               currency={currency}
               onOpen={onOpen}
             />
             <Contributors
-              title="Top decliners"
+              title={shown ? 'Top decliners of the day' : 'Top decliners'}
               list={decliners}
               currency={currency}
               onOpen={onOpen}
@@ -111,7 +160,7 @@ function Contributors({
   onOpen,
 }: {
   title: string;
-  list: (RankedHolding & { pnl: number })[];
+  list: (RankedHolding & { pnl: number; changeBp: number | null })[];
   currency: string;
   onOpen: (id: string) => void;
 }) {
@@ -134,7 +183,7 @@ function Contributors({
               <span className={clsx('shrink-0 text-right tabular-nums', gainClass(r.pnl))}>
                 {signed(r.pnl, currency)}
                 <span className="block text-xs">
-                  {r.holding.returnBp === null ? '' : formatPercent(r.holding.returnBp)}
+                  {r.changeBp === null ? '' : formatPercent(r.changeBp)}
                 </span>
               </span>
             </li>

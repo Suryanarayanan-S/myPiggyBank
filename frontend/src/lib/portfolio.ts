@@ -248,6 +248,55 @@ export function contributors(holdings: Holding[], n: number) {
   };
 }
 
+/** A weekend date (Zerodha imports on a Saturday repeat Friday's close). */
+const weekend = (d: string) => [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay());
+const DAY_MS = 86_400_000;
+
+/**
+ * What moved most on the latest market day: each held holding's last price against its price
+ * before, times the units held, in the summary currency. The day is the one most holdings have
+ * their last price on (one hand-entered price never decides it); weekend prices are skipped.
+ * Left out: holdings whose last price is on another day, whose price before is more than five
+ * days older (a month's change is not a day's move), and those bought or sold since the price
+ * before (the move would mix in the trade).
+ */
+export function dayMovers(holdings: Holding[], n: number) {
+  const rows = ranked(holdings).flatMap((r) => {
+    const prices = r.holding.prices
+      .filter((p) => !weekend(p.date))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const last = prices.at(-1);
+    const before = prices.at(-2);
+    if (!last || !before || !r.holding.value) return [];
+    const gap = Date.parse(last.date) - Date.parse(before.date);
+    const traded = r.holding.trades.some(
+      (t) => t.type !== 'dividend' && !!t.units && t.date > before.date,
+    );
+    const from = Number(before.price);
+    if (gap > 5 * DAY_MS || traded || from <= 0) return [];
+    const step = Number(last.price) - from;
+    // in the summary currency, like the rest of the overview
+    const pnl = Math.round(Number(r.holding.units) * step * 100 * (r.value / r.holding.value));
+    return [{ ...r, date: last.date, pnl, changeBp: Math.round((step / from) * 10_000) }];
+  });
+  const count = new Map<string, number>();
+  for (const r of rows) count.set(r.date, (count.get(r.date) ?? 0) + 1);
+  // the most shared day; on a tie the later one
+  const date = [...count].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0]?.[0] ?? null;
+  const today = rows.filter((r) => r.date === date);
+  return {
+    date,
+    performers: today
+      .filter((r) => r.pnl > 0)
+      .sort((a, b) => b.pnl - a.pnl)
+      .slice(0, n),
+    decliners: today
+      .filter((r) => r.pnl < 0)
+      .sort((a, b) => a.pnl - b.pnl)
+      .slice(0, n),
+  };
+}
+
 /**
  * Colours of a donut's slices: a group with a colour of its own keeps it everywhere (Gold is
  * always the same yellow); other groups take the free slots by size; the rest is neutral.

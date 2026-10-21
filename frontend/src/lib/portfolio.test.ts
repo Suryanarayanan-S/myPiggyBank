@@ -7,6 +7,7 @@ import {
   allocation,
   compareSince,
   contributors,
+  dayMovers,
   returnIndex,
   sliceColors,
   isSoldOut,
@@ -221,6 +222,80 @@ describe('portfolio', () => {
       ['A', 50],
     ]);
     expect(c.decliners.map((r) => [r.holding.name, r.pnl])).toEqual([['B', -20]]);
+  });
+
+  it('ranks what moved most on the latest market day, against the price the day before', () => {
+    const px = (...list: [string, string][]) =>
+      list.map(([date, price], i) => ({ id: String(i), date, price }));
+    const day = dayMovers(
+      [
+        // +10 a unit × 10 units = +100 (in the summary currency: here the same)
+        h('Up', { prices: px(['2026-10-19', '100'], ['2026-10-21', '110']) }),
+        // −5 × 10 = −50; prices arrive in any order
+        h('Down', {
+          prices: px(['2026-10-21', '95'], ['2026-10-16', '90'], ['2026-10-19', '100']),
+        }),
+        // a smaller rise
+        h('Bit', { prices: px(['2026-10-19', '100'], ['2026-10-21', '101']) }),
+        // the summary currency differs: scaled by its value there (2 × 10 = 20)
+        h('Eur', {
+          value: 1_000,
+          inView: { value: 2_000, cost: 1_000 },
+          prices: px(['2026-10-19', '100'], ['2026-10-21', '101']),
+        }),
+        // no change, an older last price, only one price, bought today: all left out
+        h('Flat', { prices: px(['2026-10-19', '100'], ['2026-10-21', '100']) }),
+        h('Stale', { prices: px(['2026-10-16', '100'], ['2026-10-19', '120']) }),
+        h('One', { prices: px(['2026-10-21', '100']) }),
+        h('New', {
+          prices: px(['2026-10-19', '100'], ['2026-10-21', '150']),
+          trades: [
+            { id: 't', date: '2026-10-21', type: 'buy', units: '10', amount: 100_000, fees: 0 },
+          ] as Holding['trades'],
+        }),
+        h('Gone', { archived: true, prices: px(['2026-10-19', '100'], ['2026-10-21', '200']) }),
+      ],
+      5,
+    );
+    expect(day.date).toBe('2026-10-21');
+    expect(day.performers.map((r) => [r.holding.name, r.pnl, r.changeBp])).toEqual([
+      ['Up', 10_000, 1_000],
+      ['Eur', 2_000, 100],
+      ['Bit', 1_000, 100],
+    ]);
+    expect(day.decliners.map((r) => [r.holding.name, r.pnl, r.changeBp])).toEqual([
+      ['Down', -5_000, -500],
+    ]);
+    expect(dayMovers([h('A')], 5)).toEqual({ date: null, performers: [], decliners: [] });
+  });
+
+  it('takes the day most holdings share, on market days, against a recent price', () => {
+    const px = (...list: [string, string][]) =>
+      list.map(([date, price], i) => ({ id: String(i), date, price }));
+    const nse = (name: string, to: string) =>
+      h(name, { prices: px(['2026-10-16', '100'], ['2026-10-19', to]) });
+    const day = dayMovers(
+      [
+        nse('A', '110'),
+        nse('B', '90'),
+        // priced by hand today (after the market, before NSE's file): does not move the day
+        h('Manual', { prices: px(['2026-10-19', '100'], ['2026-10-21', '150']) }),
+        // a Zerodha import on Saturday repeats Friday's close: weekends are not market days
+        h('Import', {
+          prices: px(['2026-10-15', '100'], ['2026-10-16', '100'], ['2026-10-17', '100']),
+        }),
+        // priced once a month: a month's change is not a day's move
+        h('Monthly', { prices: px(['2026-09-19', '100'], ['2026-10-19', '130']) }),
+      ],
+      5,
+    );
+    expect(day.date).toBe('2026-10-19');
+    expect(day.performers.map((r) => r.holding.name)).toEqual(['A']);
+    expect(day.decliners.map((r) => r.holding.name)).toEqual(['B']);
+    // a weekend price alone is no day either
+    expect(
+      dayMovers([h('Sat', { prices: px(['2026-10-16', '100'], ['2026-10-17', '101']) })], 5).date,
+    ).toBeNull();
   });
 
   it('colours follow the group, not its place: Gold looks the same in every donut', () => {

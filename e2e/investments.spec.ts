@@ -62,6 +62,15 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await d.getByLabel('Units').fill('');
   await d.getByLabel(/Total (paid|received)/).fill('');
 
+  // The two latest weekdays' prices (weekends are no market days): the move is 12,5 × 2,50.
+  const weekdays = [0, 1, 2, 3, 4, 5]
+    .map(daysAgo)
+    .filter((x) => ![0, 6].includes(new Date(`${x}T00:00:00Z`).getUTCDay()));
+  await d.locator('#p-date').fill(weekdays[1]!);
+  await d.getByLabel('Price per unit (EUR)').fill('118,00');
+  await d.getByRole('button', { name: 'Save price' }).click();
+  await expect(d.getByText('118 EUR')).toBeVisible();
+  await d.locator('#p-date').fill(weekdays[0]!);
   await d.getByLabel('Price per unit (EUR)').fill('120,50');
   await d.getByRole('button', { name: 'Save price' }).click();
   await expect(d.getByText('120,5 EUR')).toBeVisible();
@@ -85,6 +94,15 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
     page.locator('section', { has: page.getByText('Dividends', { exact: true }) }).first(),
   ).toContainText('12,40 €');
   await shot(page, '26-investments');
+  // Contributors to returns: overall, or the latest market day.
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  const contrib = page.locator('section', { has: page.getByText('Contributors to returns') });
+  await expect(contrib.getByLabel('Top performers', { exact: true })).toContainText('+211,90 €');
+  await contrib.getByRole('button', { name: /^Day · / }).click();
+  await expect(contrib.getByLabel('Top performers of the day')).toContainText('+31,25 €');
+  await expect(contrib.getByLabel('Top performers of the day')).toContainText('2.1 %');
+  await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
+  await contrib.getByRole('button', { name: 'Overall' }).click();
 
   // Compared with Nifty 50 and gold: market data stands in (the test server is offline).
   const days = [90, 60, 30, 5, 0].map(daysAgo);

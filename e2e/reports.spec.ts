@@ -19,6 +19,7 @@ test('the year report compares with last year, downloads as CSV and prints witho
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');

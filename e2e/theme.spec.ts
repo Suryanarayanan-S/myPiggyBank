@@ -43,6 +43,7 @@ test('one click switches between modern and retro; the choice is remembered', as
     fun: [['Restaurant', 172 + back * 40]] as [string, number][],
     future: [['Stocks', 580]] as [string, number][],
   });
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.locator('#import-file').setInputFiles({
     name: 'm.xlsx',

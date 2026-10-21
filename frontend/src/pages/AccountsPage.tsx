@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Pencil, Plus } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { AccountForm } from '../components/accounts/AccountForm';
@@ -107,8 +108,18 @@ export function AccountsPage() {
                   <p className="mt-3 text-2xl font-semibold tabular-nums">
                     <Amount cents={a.balance} currency={a.currency} />
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    <Amount cents={a.monthChange} currency={a.currency} signed /> this month
+                  <p className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>
+                      <Amount cents={a.monthChange} currency={a.currency} signed /> this month
+                    </span>
+                    {/* The account's money in and out lives on the Transactions page. */}
+                    <Link
+                      to={`/transactions?accountId=${a.id}`}
+                      className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                      aria-label={`Transactions of ${a.name}`}
+                    >
+                      Transactions
+                    </Link>
                   </p>
                 </Card>
               ))}

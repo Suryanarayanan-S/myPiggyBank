@@ -19,6 +19,21 @@ import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { InsightsPage } from './pages/InsightsPage';
 import { RecurringPage } from './pages/RecurringPage';
+import { Moved, SectionLayout, type SectionTab } from './layout/SectionTabs';
+
+const TRANSACTION_TABS: SectionTab[] = [
+  { to: '/transactions', label: 'All', end: true },
+  { to: '/transactions/recurring', label: 'Recurring' },
+  { to: '/transactions/import', label: 'Import' },
+];
+const WEALTH_TABS: SectionTab[] = [
+  { to: '/wealth', label: 'Net worth & assets', end: true },
+  { to: '/wealth/accounts', label: 'Accounts' },
+];
+const REPORT_TABS: SectionTab[] = [
+  { to: '/reports', label: 'Year report', end: true },
+  { to: '/reports/insights', label: 'Insights' },
+];
 
 export function App() {
   return (
@@ -37,16 +52,30 @@ export function App() {
           <Route index element={<DashboardPage />} />
           <Route path="budget" element={<BudgetPage />} />
           <Route path="budget/entry" element={<MonthEntryPage />} />
-          <Route path="transactions" element={<TransactionsPage />} />
-          <Route path="accounts" element={<AccountsPage />} />
-          <Route path="wealth" element={<WealthPage />} />
+          <Route
+            path="transactions"
+            element={<SectionLayout name="Transactions" tabs={TRANSACTION_TABS} />}
+          >
+            <Route index element={<TransactionsPage />} />
+            <Route path="recurring" element={<RecurringPage />} />
+            <Route path="import" element={<ImportPage />} />
+          </Route>
+          <Route path="wealth" element={<SectionLayout name="Wealth" tabs={WEALTH_TABS} />}>
+            <Route index element={<WealthPage />} />
+            <Route path="accounts" element={<AccountsPage />} />
+          </Route>
           <Route path="investments" element={<InvestmentsPage />} />
           <Route path="goals" element={<GoalsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="insights" element={<InsightsPage />} />
-          <Route path="recurring" element={<RecurringPage />} />
-          <Route path="import" element={<ImportPage />} />
+          <Route path="reports" element={<SectionLayout name="Reports" tabs={REPORT_TABS} />}>
+            <Route index element={<ReportsPage />} />
+            <Route path="insights" element={<InsightsPage />} />
+          </Route>
           <Route path="settings" element={<SettingsPage />} />
+          {/* Pages that moved into a section keep their old addresses (bookmarks, links). */}
+          <Route path="accounts" element={<Moved to="/wealth/accounts" />} />
+          <Route path="recurring" element={<Moved to="/transactions/recurring" />} />
+          <Route path="import" element={<Moved to="/transactions/import" />} />
+          <Route path="insights" element={<Moved to="/reports/insights" />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

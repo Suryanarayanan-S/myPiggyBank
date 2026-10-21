@@ -30,7 +30,7 @@ export function Insights({
       title="Financial insights"
       actions={
         more && (
-          <Link to="/insights" className="text-sm text-indigo-600 hover:underline">
+          <Link to="/reports/insights" className="text-sm text-indigo-600 hover:underline">
             All insights
           </Link>
         )

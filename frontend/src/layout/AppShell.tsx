@@ -38,7 +38,7 @@ export function AppShell() {
         <div className="-mt-2 px-3 pb-3">
           <CurrencySwitch label />
         </div>
-        <nav className="flex-1 space-y-1 px-3">
+        <nav aria-label="Sections" className="flex-1 space-y-1 px-3">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

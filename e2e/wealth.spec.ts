@@ -28,6 +28,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   }
   await page.getByLabel('equals').fill('100');
   await page.getByRole('button', { name: 'Save rate' }).click();
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');

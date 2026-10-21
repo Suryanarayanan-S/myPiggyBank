@@ -17,8 +17,12 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Reports' }).first().click();
+
   await page.getByRole('link', { name: 'Insights' }).first().click();
   await expect(page.getByText('Nothing stands out right now')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
 
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
@@ -38,6 +42,7 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await expect(page.getByText('50,00 € over')).toBeVisible();
 
   const sentence = /Groceries is 50,00\s€ over its limit this month\./;
+  await page.getByRole('link', { name: 'Reports' }).first().click();
   await page.getByRole('link', { name: 'Insights' }).first().click();
   await expect(page.getByText(sentence)).toBeVisible();
   await expect(page.getByLabel('Attention')).toBeVisible(); // tone has a name, not only a colour

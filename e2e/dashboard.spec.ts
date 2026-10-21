@@ -40,6 +40,8 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
+
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page
     .locator('#import-file')

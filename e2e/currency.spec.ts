@@ -11,6 +11,7 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   // A EUR account with a salary this month, and EUR → INR = 100 for this month.
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
@@ -57,6 +58,7 @@ test('"Show in" switches every page to one currency and back to each page defaul
   // The choice carries over to other pages and survives a reload.
   await page.reload();
   await expect(showIn).toHaveValue('INR');
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('All open accounts in INR')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/23-show-in-inr.png', fullPage: true });

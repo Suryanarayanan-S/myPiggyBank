@@ -24,6 +24,8 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
+
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');

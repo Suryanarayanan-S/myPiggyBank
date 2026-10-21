@@ -19,6 +19,8 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
+
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');

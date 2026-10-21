@@ -49,6 +49,8 @@ test('import a workbook: preview, map, import, budget matches, re-import is skip
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
+
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.locator('#import-file').setInputFiles(file);
   await expect(page.getByText('2 · Categories')).toBeVisible();
@@ -70,6 +72,7 @@ test('import a workbook: preview, map, import, budget matches, re-import is skip
   await expect(card('Unused')).toContainText('-852,00 €');
 
   // Re-importing the same file: months default to Skip.
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.locator('#import-file').setInputFiles(file);
   await expect(page.getByText('Already imported earlier.')).toHaveCount(2);

@@ -95,7 +95,7 @@ export function DashboardPage() {
                   Quick entry
                 </Link>
                 , or{' '}
-                <Link to="/import" className="font-medium text-indigo-600 underline">
+                <Link to="/transactions/import" className="font-medium text-indigo-600 underline">
                   import your spreadsheet
                 </Link>
                 .
@@ -179,7 +179,7 @@ export function DashboardPage() {
                 ))}
               </dl>
               <Link
-                to="/accounts"
+                to="/wealth/accounts"
                 className="mt-2 inline-block text-sm text-indigo-600 hover:underline"
               >
                 See accounts

@@ -8,7 +8,6 @@ import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
 import { Brand } from './Brand';
 import { CurrencySwitch } from '../components/CurrencySwitch';
-import { ThemeToggle } from '../components/ThemeToggle';
 import { ModeToggle } from '../components/ModeToggle';
 import { navItems } from './nav';
 import { forgetUserData } from '../lib/session';
@@ -32,7 +31,6 @@ export function AppShell() {
           <Brand />
           <span className="flex items-center">
             <ModeToggle />
-            <ThemeToggle compact />
           </span>
         </div>
         <div className="-mt-2 px-3 pb-3">
@@ -78,7 +76,6 @@ export function AppShell() {
           <span className="flex items-center">
             <CurrencySwitch />
             <ModeToggle className="!px-1.5" />
-            <ThemeToggle compact className="!px-1.5" />
             <Button
               variant="ghost"
               className="!px-1.5"

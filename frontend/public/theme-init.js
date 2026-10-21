@@ -1,15 +1,16 @@
-// Applies the saved look before the first paint (no flash of the wrong theme).
+// Applies the saved light/dark choice before the first paint (no flash of the wrong colours).
 // Kept as a file, not inline, because the production Content-Security-Policy blocks inline scripts.
 (function () {
   var root = document.documentElement;
-  var look = 'modern';
+  var pref = 'system';
   try {
-    if (localStorage.getItem('pb-look') === 'retro') look = 'retro';
+    pref = localStorage.getItem('pb-mode') || 'system';
   } catch {
-    // storage unavailable (private window): use the modern look
+    // storage unavailable (private window): follow the computer
   }
-  var dark = look === 'modern' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.style = look;
+  var dark =
+    pref === 'dark' ||
+    (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   root.dataset.mode = dark ? 'dark' : 'light';
   root.style.colorScheme = dark ? 'dark' : 'light';
 })();

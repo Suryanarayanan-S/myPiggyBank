@@ -2,7 +2,7 @@
 
 A simple, private family-finance app: income, expenses, budgets, accounts and net worth — running on your own machine.
 
-> Status: v1 complete — login, family, accounts, transactions, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, eight currencies with live or own exchange rates, savings goals, investments, year reports, insights, modern and retro looks, backup/restore, demo data. See `docs/superpowers/specs/` for the design.
+> Status: v1 complete — login, family, accounts, transactions, 50/30/20 budget, quick entry, spreadsheet + bank CSV import, dashboard, family wealth, recurring transactions, eight currencies with live or own exchange rates, savings goals, investments, year reports, insights, light and dark mode, backup/restore, demo data. See `docs/superpowers/specs/` for the design.
 
 **Docs:** [how it works (pictures)](docs/how-it-works.html) · [architecture](docs/architecture.md) · [API](docs/api.md) · [database](docs/database.md) · [moving and restoring](docs/moving-and-restoring.md)
 
@@ -114,9 +114,9 @@ docker compose start
   - _Live (daily ECB)_ — the server downloads the official European Central Bank reference rates from [Frankfurter](https://frankfurter.dev) once at start and every 6 hours (only the rate list is fetched; no data of yours is sent). Past months use their month-end rate. A rate you enter yourself still wins for its month. Offline, the last downloaded rates are kept. The source can be changed with `RATES_URL` in `.env`.
 - Amounts that have no rate are never added 1:1: they are listed separately as "without a rate".
 
-## Looks: modern and retro
+## Light and dark
 
-Click the controller icon (top of the sidebar, the phone header, or the login page) to switch between the **modern** look (follows your system light/dark setting) and the **retro 8-bit** look (PICO-8 colours, pixel fonts, "PRESS START" screen). Click again to switch back; the choice is remembered on this device. The start screen is skipped for people who prefer reduced motion.
+The sun/moon/screen button (top of the sidebar, the phone header, or the login page) cycles **System → Light → Dark**; Settings → Appearance has the same choice. System follows your computer's setting. The choice is remembered on this device.
 
 ## Importing
 

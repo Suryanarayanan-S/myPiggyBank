@@ -66,9 +66,4 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   const summary = page.locator('section', { has: page.getByRole('heading', { name: 'Goals' }) });
   await expect(summary).toContainText('House deposit');
   await expect(summary).toContainText('2.500,00 € of 10.000,00 €');
-
-  await page.getByRole('button', { name: 'Switch to retro look' }).click();
-  await page.getByRole('dialog', { name: 'myPiggyBank start screen' }).press('Enter');
-  await page.getByRole('link', { name: 'Goals' }).first().click();
-  await page.screenshot({ path: 'e2e/screenshots/25-retro-goals.png', fullPage: true });
 });

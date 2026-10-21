@@ -54,9 +54,9 @@ user, applies migrations on start, and has a health check (`/api/health`).
 - Server data comes through TanStack Query (`lib/api.ts`, `lib/queries.ts`); query keys include
   the month and the "Show in" currency, so switching refetches.
 - `lib/` holds tested helpers: money formatting and parsing (Indian grouping for INR), months,
-  chart scales, the theme (modern/retro) and view-currency choice (both remembered per browser).
+  chart scales, the light/dark choice and view-currency choice (both remembered per browser).
 - Charts use Recharts with colour tokens from `index.css`, checked for colour-blind safety in
-  light, dark and retro.
+  light and dark.
 
 ## Tests
 

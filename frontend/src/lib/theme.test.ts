@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyLook,
-  modeFor,
-  nextModePref,
-  readLook,
-  readModePref,
-  saveLook,
-  saveModePref,
-} from './theme';
+import { applyMode, modeFor, nextModePref, readModePref, saveModePref } from './theme';
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -30,13 +22,6 @@ const broken = {
 };
 
 describe('theme', () => {
-  it('defaults to the modern look and remembers the choice', () => {
-    const s = memory();
-    expect(readLook(s)).toBe('modern');
-    saveLook('retro', s);
-    expect(readLook(s)).toBe('retro');
-  });
-
   it('defaults to following the system for light or dark, and remembers a choice', () => {
     const s = memory();
     expect(readModePref(s)).toBe('system');
@@ -45,13 +30,11 @@ describe('theme', () => {
   });
 
   it('survives storage that throws (private mode)', () => {
-    expect(readLook(broken)).toBe('modern');
     expect(readModePref(broken)).toBe('system');
-    expect(() => saveLook('retro', broken)).not.toThrow();
     expect(() => saveModePref('light', broken)).not.toThrow();
   });
 
-  it('light or dark: the choice wins, "system" follows the computer — for both looks', () => {
+  it('light or dark: the choice wins, "system" follows the computer', () => {
     expect(modeFor('system', true)).toBe('dark');
     expect(modeFor('system', false)).toBe('light');
     expect(modeFor('light', true)).toBe('light');
@@ -64,13 +47,19 @@ describe('theme', () => {
     expect(nextModePref('dark')).toBe('system');
   });
 
-  it('applies the look and mode to the page; retro has a dark mode too', () => {
+  it('applies the mode to the page', () => {
     const root = fakeRoot();
-    applyLook('retro', 'dark', root);
-    expect(root.dataset).toEqual({ style: 'retro', mode: 'dark' });
+    applyMode('dark', root);
+    expect(root.dataset).toEqual({ mode: 'dark' });
     expect(root.style.colorScheme).toBe('dark');
-    applyLook('modern', 'light', root);
-    expect(root.dataset).toEqual({ style: 'modern', mode: 'light' });
+    applyMode('light', root);
+    expect(root.dataset).toEqual({ mode: 'light' });
     expect(root.style.colorScheme).toBe('light');
+  });
+
+  it('ignores an unknown saved value', () => {
+    const s = memory();
+    s.setItem('pb-mode', 'retro');
+    expect(readModePref(s)).toBe('system');
   });
 });

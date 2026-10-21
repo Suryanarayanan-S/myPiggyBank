@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
-import { ThemeToggle } from '../components/ThemeToggle';
 import { ModeToggle } from '../components/ModeToggle';
 
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
@@ -8,7 +7,6 @@ export function AuthLayout({ title, children }: { title: string; children: React
     <div className="relative flex min-h-screen items-center justify-center px-4">
       <span className="absolute top-4 right-4 flex items-center">
         <ModeToggle />
-        <ThemeToggle />
       </span>
       <div className="w-full max-w-sm space-y-6">
         <div className="flex justify-center">

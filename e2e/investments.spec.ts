@@ -141,11 +141,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(page.getByLabel('GOLDBEES ETF')).not.toBeChecked();
   await page.getByLabel('Daily closing prices from NSE').click();
 
-  await page.getByRole('button', { name: 'Switch to retro look' }).click();
-  await page.getByRole('dialog', { name: 'myPiggyBank start screen' }).press('Enter');
-  await page.screenshot({ path: 'e2e/screenshots/27-retro-investments.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Switch to modern look' }).first().click();
   await page.screenshot({ path: 'e2e/screenshots/28-mobile-investments.png', fullPage: true });
 });
 

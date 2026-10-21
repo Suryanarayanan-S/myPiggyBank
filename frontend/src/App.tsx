@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
-import { RetroIntro } from './components/RetroIntro';
-import { useLook } from './lib/theme';
 import { RequireAuth } from './auth/auth';
 import { AppShell } from './layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
@@ -38,7 +35,6 @@ const REPORT_TABS: SectionTab[] = [
 export function App() {
   return (
     <BrowserRouter>
-      <RetroStart />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -81,32 +77,4 @@ export function App() {
       </Routes>
     </BrowserRouter>
   );
-}
-
-/** Shows the retro start screen once per visit, and whenever the retro look is switched on. */
-function RetroStart() {
-  const [look] = useLook();
-  const [show, setShow] = useState(false);
-  const previous = useRef(look);
-  useEffect(() => {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem('pb-intro-seen') === '1';
-    } catch {
-      seen = false;
-    }
-    const switchedOn = previous.current !== 'retro' && look === 'retro';
-    previous.current = look;
-    if (look === 'retro' && !reducedMotion && (!seen || switchedOn)) setShow(true);
-  }, [look]);
-  const start = useCallback(() => {
-    setShow(false);
-    try {
-      sessionStorage.setItem('pb-intro-seen', '1');
-    } catch {
-      // ignore: the intro may show again next time
-    }
-  }, []);
-  return show ? <RetroIntro onStart={start} /> : null;
 }

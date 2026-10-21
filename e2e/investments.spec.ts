@@ -237,9 +237,9 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
       .first();
   await expect(card('Account')).toContainText('Gold');
   await expect(card('Account')).toContainText('94.5 %');
-  // Under each donut: shares of the money put in (87.8 % = 3,12,899.59 of 3,56,457.79).
-  await card('Account').getByRole('button', { name: 'Put in' }).click();
-  await expect(card('Account').getByRole('button', { name: 'Put in' })).toHaveAttribute(
+  // Under each donut: shares of the money invested (87.8 % = 3,12,899.59 of 3,56,457.79).
+  await card('Account').getByRole('button', { name: 'Invested' }).click();
+  await expect(card('Account').getByRole('button', { name: 'Invested' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -248,7 +248,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await card('Account').getByRole('button', { name: 'Show table' }).click();
   await expect(card('Account').getByRole('row', { name: /Gold/ })).toContainText('₹3,12,899.59');
   await card('Account').getByRole('button', { name: 'Show chart' }).click();
-  await card('Account').getByRole('button', { name: 'Worth now' }).click();
+  await card('Account').getByRole('button', { name: 'Current' }).click();
   await expect(card('Account')).toContainText('94.5 %');
   await expect(card('Sectors')).toContainText('Not classified');
   // A one-group split (all shares unclassified here) is not drawn as a donut.

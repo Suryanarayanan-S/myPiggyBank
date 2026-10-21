@@ -16,13 +16,13 @@ import {
 } from '../../lib/portfolio';
 
 const MEASURES: [Measure, string][] = [
-  ['value', 'Worth now'],
-  ['cost', 'Put in'],
+  ['value', 'Current'],
+  ['cost', 'Invested'],
 ];
 
 /**
  * Part of the portfolio at a glance: at most five slices, each named with its share — of what
- * it is worth now, or of the money put in (switch under the donut).
+ * it is worth now (Current), or of the money invested (switch under the donut).
  */
 export function AllocationDonut({
   holdings,
@@ -49,7 +49,7 @@ export function AllocationDonut({
       subtitle={subtitle}
       table={
         <DataTable
-          head={['Group', 'Worth now', 'Share', 'Put in', 'Share']}
+          head={['Group', 'Current', 'Share', 'Invested', 'Share']}
           rows={everyGroup.map((g) => [
             g.label,
             formatMoney(g.value, currency),
@@ -64,7 +64,7 @@ export function AllocationDonut({
         <div
           className="relative h-40 w-40 shrink-0"
           role="img"
-          aria-label={`${grouping.title}, ${measure === 'value' ? 'worth now' : 'money put in'}: ${slices.map((s) => `${s.label} ${formatPercent(s.shareBp)}`).join(', ')}`}
+          aria-label={`${grouping.title}, ${measure === 'value' ? 'current value' : 'invested amount'}: ${slices.map((s) => `${s.label} ${formatPercent(s.shareBp)}`).join(', ')}`}
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>

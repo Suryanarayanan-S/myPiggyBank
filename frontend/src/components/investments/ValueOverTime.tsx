@@ -9,19 +9,20 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import clsx from 'clsx';
 import { useMe } from '../../auth/auth';
 import { Card } from '../ui/Card';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
-import { AXIS, GRID, SINGLE, SURFACE, axisTick, niceTicks } from '../../lib/chart';
+import { AXIS, GRID, SURFACE, axisTick, niceTicks } from '../../lib/chart';
 import { api } from '../../lib/api';
 import type { Holding } from '../../lib/investments';
-import { formatCompact, formatMoney } from '../../lib/money';
+import { formatMoney } from '../../lib/money';
 import { compareSince, oneCurrency, returnIndex, valueHistory } from '../../lib/portfolio';
 
 type Point = { date: string; value: number };
-type Benchmarks = Record<SeriesKey, Point[]>;
+type MarketKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
+type LineKey = 'portfolio' | MarketKey;
+type Benchmarks = Record<MarketKey, Point[]>;
 
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -32,266 +33,150 @@ const dayLabel = (d: string) =>
   });
 const pct = (bp: number | null) =>
   bp === null ? '—' : `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${(Math.abs(bp) / 100).toFixed(1)} %`;
-
-/** Colours follow the line everywhere: yours blue, Nifty 50 aqua, gold yellow (as in the donuts). */
-type SeriesKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
 const inr = (v: number, digits = 0) =>
   `₹${v.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
+
 /**
- * What can be compared. Colours follow the entity: Nifty 50 aqua; gold yellow — Indian gold
- * solid, world gold dashed (so the two never rely on colour alone). Yours is always blue.
+ * Every line that can be ticked. Colours follow the entity: yours blue, Nifty 50 aqua, gold
+ * yellow (as in the donuts), GOLDBEES orange. The yellow golds differ by stroke — 22K solid,
+ * 24K dotted, world dashed — so they never rely on colour alone.
  */
-const SERIES: Record<
-  SeriesKey,
-  { label: string; short: string; color: string; dash?: string; price: (v: number) => string }
+const LINES: Record<
+  LineKey,
+  {
+    label: string;
+    tick: string;
+    short: string;
+    color: string;
+    dash?: string;
+    shape?: 'dash' | 'dot';
+  }
 > = {
-  nifty50: {
-    label: 'Nifty 50',
-    short: 'Nifty 50',
-    color: 'var(--c-cat-3)',
-    price: (v) => v.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
+  portfolio: {
+    label: 'Your investments',
+    tick: 'Your investments',
+    short: 'Yours',
+    color: 'var(--c-cat-1)',
   },
+  nifty50: { label: 'Nifty 50', tick: 'Nifty 50', short: 'Nifty 50', color: 'var(--c-cat-3)' },
   gold22k: {
     label: 'Gold 22K (IBJA)',
+    tick: 'Gold 22K per gram',
     short: '22K gold',
     color: 'var(--c-cat-4)',
-    price: (v) => `${inr(v)}/g`,
   },
   gold24k: {
     label: 'Gold 24K (IBJA)',
+    tick: 'Gold 24K per gram',
     short: '24K gold',
     color: 'var(--c-cat-4)',
-    price: (v) => `${inr(v)}/g`,
+    dash: '2 3',
+    shape: 'dot',
   },
   gold: {
-    label: 'Gold (GOLDBEES)',
+    label: 'GOLDBEES ETF',
+    tick: 'GOLDBEES ETF',
     short: 'GOLDBEES',
-    color: 'var(--c-cat-4)',
-    price: (v) => inr(v, 2),
+    color: 'var(--c-cat-2)',
   },
   goldUsd: {
     label: 'Gold, world ($/oz)',
+    tick: 'Gold, world price ($ per ounce)',
     short: 'Gold $',
     color: 'var(--c-cat-4)',
     dash: '6 4',
-    price: (v) => `$${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}/oz`,
+    shape: 'dash',
   },
 };
-const YOURS = { label: 'Your investments', short: 'Yours', color: 'var(--c-cat-1)' };
+const MARKET: MarketKey[] = ['nifty50', 'gold22k', 'gold24k', 'gold', 'goldUsd'];
+const ORDER: LineKey[] = ['portfolio', ...MARKET];
 
-/** Which lines are shown: Nifty 50, one Indian gold, world gold (remembered on this browser). */
-type GoldIndia = 'gold22k' | 'gold24k' | 'gold';
-type Choice = { nifty50: boolean; goldIndiaOn: boolean; goldIndia: GoldIndia; goldUsd: boolean };
-const CHOICE_KEY = 'pb-compare';
+/** Which lines are shown (remembered on this browser). */
+type Choice = Record<LineKey, boolean>;
+const CHOICE_KEY = 'pb-lines';
+/** Before every line had its own tick box: Nifty, one Indian gold (or none), world gold. */
+const OLD_CHOICE_KEY = 'pb-compare';
 const DEFAULT_CHOICE: Choice = {
+  portfolio: true,
   nifty50: true,
-  goldIndiaOn: true,
-  goldIndia: 'gold22k',
+  gold22k: true,
+  gold24k: false,
+  gold: false,
   goldUsd: false,
 };
 function readChoice(): Choice {
   try {
     const c = JSON.parse(localStorage.getItem(CHOICE_KEY) ?? 'null') as Partial<Choice> | null;
-    if (!c) return DEFAULT_CHOICE;
-    return {
-      nifty50: c.nifty50 !== false,
-      goldIndiaOn: c.goldIndiaOn !== false,
-      goldIndia: ['gold22k', 'gold24k', 'gold'].includes(c.goldIndia as string)
-        ? (c.goldIndia as GoldIndia)
-        : 'gold22k',
-      goldUsd: c.goldUsd === true,
-    };
+    if (!c) {
+      const old = JSON.parse(localStorage.getItem(OLD_CHOICE_KEY) ?? 'null') as {
+        nifty50?: boolean;
+        goldIndiaOn?: boolean;
+        goldIndia?: string;
+        goldUsd?: boolean;
+      } | null;
+      if (!old) return DEFAULT_CHOICE;
+      const india = (['gold22k', 'gold24k', 'gold'] as const).find((k) => k === old.goldIndia);
+      return {
+        ...DEFAULT_CHOICE,
+        nifty50: old.nifty50 !== false,
+        gold22k: old.goldIndiaOn !== false && (india ?? 'gold22k') === 'gold22k',
+        gold24k: old.goldIndiaOn !== false && india === 'gold24k',
+        gold: old.goldIndiaOn !== false && india === 'gold',
+        goldUsd: old.goldUsd === true,
+      };
+    }
+    return Object.fromEntries(
+      ORDER.map((k) => [k, typeof c[k] === 'boolean' ? c[k] : DEFAULT_CHOICE[k]]),
+    ) as Choice;
   } catch {
     return DEFAULT_CHOICE;
   }
 }
-const chosen = (c: Choice): SeriesKey[] => [
-  ...(c.nifty50 ? (['nifty50'] as const) : []),
-  ...(c.goldIndiaOn ? [c.goldIndia] : []),
-  ...(c.goldUsd ? (['goldUsd'] as const) : []),
-];
 
-/** The portfolio in rupees, or its performance next to Nifty 50 and gold (% since a start). */
-export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
-  const [view, setView] = useState<'value' | 'compare'>('value');
-  const switcher = (
-    <div
-      role="group"
-      aria-label="Value over time view"
-      className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 text-sm dark:border-slate-700"
-    >
-      {(
-        [
-          ['value', 'Value (₹)'],
-          ['compare', 'vs Nifty 50 & gold'],
-        ] as const
-      ).map(([key, label]) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={view === key}
-          onClick={() => setView(key)}
-          className={clsx(
-            'rounded-md px-3 py-1',
-            view === key
-              ? 'bg-indigo-600 text-white'
-              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-  return view === 'value' ? (
-    <ValueView holdings={holdings} switcher={switcher} />
-  ) : (
-    <CompareView holdings={holdings} switcher={switcher} />
-  );
-}
-
-function Note({ switcher, text }: { switcher: React.ReactNode; text: string }) {
-  return (
-    <Card title="Value over time">
-      {switcher}
-      <p className="text-sm text-slate-500">{text}</p>
-    </Card>
-  );
-}
-
-function ValueView({ holdings, switcher }: { holdings: Holding[]; switcher: React.ReactNode }) {
-  const data = useMemo(() => valueHistory(holdings), [holdings]);
-  const currency = holdings[0]?.currency ?? 'INR';
-  if (data.length < 2) {
-    return (
-      <Note
-        switcher={switcher}
-        text={
-          oneCurrency(holdings)
-            ? 'Each day with prices adds a point: switch on daily NSE prices above, or import your holdings again later, to see the trend.'
-            : 'Holdings in different currencies cannot be added up day by day, so there is no chart.'
-        }
-      />
-    );
-  }
-  const ticks = niceTicks(Math.max(...data.map((d) => d.value)));
-  return (
-    <ChartCard
-      title="Value over time"
-      subtitle="On each day a price or trade was recorded"
-      controls={switcher}
-      table={
-        <DataTable
-          head={['Date', 'Value']}
-          rows={data.map((d) => [dayLabel(d.date), formatMoney(d.value, currency)])}
-        />
-      }
-    >
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} stroke={GRID} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={dayLabel}
-              tick={axisTick}
-              tickLine={false}
-              axisLine={{ stroke: AXIS }}
-              minTickGap={24}
-            />
-            <YAxis
-              ticks={ticks}
-              domain={[ticks[0]!, ticks.at(-1)!]}
-              tick={axisTick}
-              tickLine={false}
-              axisLine={false}
-              width={64}
-              tickFormatter={(v: number) => formatCompact(v, currency)}
-            />
-            <Tooltip
-              content={({ active, payload }) => {
-                const p = payload?.[0]?.payload as (typeof data)[number] | undefined;
-                return (
-                  <ChartTooltip
-                    active={active}
-                    title={p ? dayLabel(p.date) : undefined}
-                    rows={
-                      p
-                        ? [{ label: 'Value', value: formatMoney(p.value, currency), color: SINGLE }]
-                        : []
-                    }
-                  />
-                );
-              }}
-            />
-            <Line
-              dataKey="value"
-              type="linear"
-              stroke={SINGLE}
-              strokeWidth={2}
-              dot={
-                data.length <= 24 ? { r: 3, fill: SINGLE, stroke: SURFACE, strokeWidth: 2 } : false
-              }
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </ChartCard>
-  );
-}
-
-function Picker({ choice, onChange }: { choice: Choice; onChange: (c: Choice) => void }) {
+function Picker({
+  choice,
+  keys,
+  onChange,
+}: {
+  choice: Choice;
+  keys: LineKey[];
+  onChange: (c: Choice) => void;
+}) {
   return (
     <fieldset className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-      <legend className="sr-only">Compare with</legend>
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={choice.nifty50}
-          onChange={(e) => onChange({ ...choice, nifty50: e.target.checked })}
-        />
-        Nifty 50
-      </label>
-      <span className="flex items-center gap-2">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={choice.goldIndiaOn}
-            onChange={(e) => onChange({ ...choice, goldIndiaOn: e.target.checked })}
-          />
-          Gold in India
-        </label>
-        <select
-          aria-label="Which gold in India"
-          className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-          value={choice.goldIndia}
-          // choosing a gold also ticks it
-          onChange={(e) =>
-            onChange({ ...choice, goldIndiaOn: true, goldIndia: e.target.value as GoldIndia })
-          }
-        >
-          <option value="gold22k">22K per gram (IBJA)</option>
-          <option value="gold24k">24K per gram (IBJA)</option>
-          <option value="gold">GOLDBEES ETF</option>
-        </select>
-      </span>
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={choice.goldUsd}
-          onChange={(e) => onChange({ ...choice, goldUsd: e.target.checked })}
-        />
-        Gold, world price ($ per ounce)
-        <span className="text-xs text-slate-500">— collected daily from 21 Oct 2026</span>
-      </label>
+      <legend className="sr-only">Lines to show</legend>
+      {keys.map((k) => (
+        <span key={k} className="flex items-center gap-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={choice[k]}
+              aria-describedby={k === 'goldUsd' ? 'gold-usd-since' : undefined}
+              onChange={(e) => onChange({ ...choice, [k]: e.target.checked })}
+            />
+            {LINES[k].tick}
+          </label>
+          {k === 'goldUsd' && (
+            <span id="gold-usd-since" className="text-xs text-slate-500">
+              — collected daily from 21 Oct 2026
+            </span>
+          )}
+        </span>
+      ))}
     </fieldset>
   );
 }
 
-function CompareView({ holdings, switcher }: { holdings: Holding[]; switcher: React.ReactNode }) {
+/**
+ * Your investments next to Nifty 50 and gold, each ticked on or off: % since a common start on
+ * one axis, with the value itself (₹, ₹ per gram, $ per ounce) next to the % on hover and in
+ * the table.
+ */
+export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
   const me = useMe();
   const on = me.data?.family.livePrices ?? false;
+  // Adding up day by day needs one currency; the markets can still be compared without yours.
+  const single = oneCurrency(holdings);
   const [choice, setChoice] = useState<Choice>(readChoice);
   const choose = (c: Choice) => {
     setChoice(c);
@@ -306,60 +191,84 @@ function CompareView({ holdings, switcher }: { holdings: Holding[]; switcher: Re
     queryFn: () => api.get<Benchmarks>('/holdings/benchmarks'),
     enabled: on,
   });
-  const keys = useMemo(() => chosen(choice), [choice]);
-  const rows = useMemo(
+  const currency = holdings.find((h) => !h.archived)?.currency ?? 'INR';
+  // Market prices come with the daily NSE prices; without them only yours can be shown.
+  const offered = ORDER.filter((k) => (k === 'portfolio' ? single : on));
+  const ticked = useMemo(
+    () => ORDER.filter((k) => choice[k] && (k === 'portfolio' ? single : on)),
+    [choice, on, single],
+  );
+  const history = useMemo(() => valueHistory(holdings), [holdings]);
+  const index = useMemo(
+    () => returnIndex(holdings).map((p) => ({ date: p.date, value: p.index })),
+    [holdings],
+  );
+  // A ticked market with no prices yet is left out (and named), so the rest still shows.
+  const missing = useMemo(
     () =>
       bench.data
-        ? compareSince(
-            returnIndex(holdings),
-            Object.fromEntries(keys.map((k) => [k, bench.data[k] ?? []])),
-          )
+        ? ticked.filter((k) => k !== 'portfolio' && (bench.data[k as MarketKey] ?? []).length === 0)
         : [],
-    [holdings, bench.data, keys],
+    [ticked, bench.data],
   );
+  const keys = useMemo(() => ticked.filter((k) => !missing.includes(k)), [ticked, missing]);
+  const rows = useMemo(() => {
+    if (keys.some((k) => k !== 'portfolio') && !bench.data) return [];
+    return compareSince(
+      Object.fromEntries(
+        keys.map((k) => [k, k === 'portfolio' ? index : (bench.data?.[k as MarketKey] ?? [])]),
+      ),
+    );
+  }, [index, bench.data, keys]);
+
   const controls = (
     <>
-      {switcher}
-      {on && <Picker choice={choice} onChange={choose} />}
+      <Picker choice={choice} keys={offered} onChange={choose} />
+      {!on && me.data && (
+        <p className="-mt-1 mb-3 text-xs text-slate-500">
+          Switch on “Daily closing prices from NSE” above to compare with Nifty 50 and gold.
+        </p>
+      )}
+      {!single && (
+        <p className="-mt-1 mb-3 text-xs text-slate-500">
+          Your holdings are in different currencies, so they cannot be added up day by day — only
+          the markets can be shown.
+        </p>
+      )}
+      {missing.length > 0 && (
+        <p className="-mt-1 mb-3 text-xs text-slate-500">
+          No prices yet for {missing.map((k) => LINES[k].label).join(', ')}: they are collected each
+          day from now on.
+        </p>
+      )}
     </>
   );
-  if (!oneCurrency(holdings))
-    return (
-      <Note
-        switcher={switcher}
-        text="Holdings in different currencies cannot be compared day by day."
-      />
-    );
-  if (!on)
-    return (
-      <Note
-        switcher={controls}
-        text="Switch on “Daily closing prices from NSE” above: Nifty 50 and the gold prices come with it."
-      />
-    );
+  const note = (text: string) => (
+    <Card title="Value over time">
+      {controls}
+      <p className="text-sm text-slate-500">{text}</p>
+    </Card>
+  );
+  if (me.isPending) return note('Loading…');
+  if (keys.length === 0)
+    return note(missing.length ? 'Nothing to draw yet.' : 'Tick at least one line to see it.');
   if (rows.length < 2) {
-    const empty = keys
-      .filter((k) => (bench.data?.[k] ?? []).length === 0)
-      .map((k) => SERIES[k].label);
-    return (
-      <Note
-        switcher={controls}
-        text={
-          bench.isError
-            ? 'Market prices could not be loaded. Try again later.'
-            : bench.isPending
-              ? 'Loading…'
-              : empty.length
-                ? `No prices yet for ${empty.join(', ')}: they are collected each day from now on.`
-                : 'The comparison starts once all ticked lines have two days in common — untick one to start earlier.'
-        }
-      />
+    const market = keys.some((k) => k !== 'portfolio');
+    return note(
+      market && bench.isError
+        ? 'Market prices could not be loaded. Try again later.'
+        : market && bench.isPending
+          ? 'Loading…'
+          : keys.includes('portfolio') && index.length < 2
+            ? 'Each day with prices adds a point: switch on daily NSE prices above, or import your holdings again later, to see the trend.'
+            : 'The comparison starts once all ticked lines have two days in common — untick one to start earlier.',
     );
   }
-  const lines = [
-    { key: 'portfolio', ...YOURS, dash: undefined as string | undefined },
-    ...keys.map((k) => ({ key: k as string, ...SERIES[k] })),
-  ];
+  // The markets may start later than yours: say how much of your history is left out.
+  const yoursFrom = keys.includes('portfolio') && keys.length > 1 ? index[0]?.date : undefined;
+  const cut = yoursFrom && yoursFrom < rows[0]!.date ? yoursFrom : undefined;
+
+  const lines = keys.map((k) => ({ key: k, ...LINES[k] }));
   const values = rows
     .flatMap((r) => Object.values(r.change))
     .filter((v): v is number => v !== null);
@@ -368,27 +277,38 @@ function CompareView({ holdings, switcher }: { holdings: Holding[]; switcher: Re
   const step = (ticks[1] ?? 0) - (ticks[0] ?? 0);
   // Each line is named at its own last point (a later day may have only some of the lines).
   const lastOf: Record<string, number> = Object.fromEntries(
-    ['portfolio', ...keys].map((k) => [
-      k,
-      rows.reduce((at, x, i) => (x.change[k] != null ? i : at), -1),
-    ]),
+    keys.map((k) => [k, rows.reduce((at, x, i) => (x.change[k] != null ? i : at), -1)]),
   );
   const data = rows.map((r) => ({ date: r.date, ...r.change }));
-  const cell = (r: (typeof rows)[number], k: string) => {
+  /** The value itself next to its change, e.g. "₹13,400/g (+3.1 %)". */
+  const value = (k: LineKey, v: number) =>
+    k === 'portfolio'
+      ? formatMoney(v, currency)
+      : k === 'nifty50'
+        ? v.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+        : k === 'gold'
+          ? inr(v, 2)
+          : k === 'goldUsd'
+            ? `$${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}/oz`
+            : `${inr(v)}/g`;
+  const cell = (r: (typeof rows)[number], k: LineKey) => {
     const change = pct(r.change[k] ?? null);
-    const price = k === 'portfolio' ? null : r.price[k];
-    return price == null ? change : `${SERIES[k as SeriesKey].price(price)} (${change})`;
+    // Yours: what it was worth that day (the % leaves out money added or taken out).
+    // (the last value on or before the day, as the % is measured)
+    const v =
+      k === 'portfolio'
+        ? r.change[k] == null
+          ? null
+          : history.filter((p) => p.date <= r.date).at(-1)?.value
+        : r.price[k];
+    return v == null ? change : `${value(k, v)} (${change})`;
   };
   return (
     <ChartCard
       title="Value over time"
-      subtitle={`Change since ${dayLabel(rows[0]!.date)} — yours without money added or taken out`}
+      subtitle={`Change since ${dayLabel(rows[0]!.date)}${keys.includes('portfolio') ? ' — yours without money added or taken out' : ''}. Hover or show the table for the values.${cut ? ` Yours goes back to ${dayLabel(cut)} — untick the markets to see all of it.` : ''}`}
       controls={controls}
-      legend={lines.map((l) => ({
-        label: l.label,
-        color: l.color,
-        shape: l.dash ? ('dash' as const) : ('line' as const),
-      }))}
+      legend={lines.map((l) => ({ label: l.label, color: l.color, shape: l.shape ?? 'line' }))}
       table={
         <DataTable
           head={['Date', ...lines.map((l) => l.label)]}

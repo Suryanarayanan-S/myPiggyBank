@@ -104,30 +104,41 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await page.getByLabel('Daily closing prices from NSE').click();
   await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
-  // Ticked by default: Nifty 50 and 22K gold in India.
+  // One chart, each line ticked on or off; ticked by default: yours, Nifty 50 and 22K gold.
+  await expect(page.getByLabel('Your investments')).toBeChecked();
   await expect(page.getByLabel('Nifty 50')).toBeChecked();
-  await expect(page.getByLabel('Gold in India', { exact: true })).toBeChecked();
-  await expect(page.getByLabel('Which gold in India')).toHaveValue('gold22k');
+  await expect(page.getByLabel('Gold 22K per gram')).toBeChecked();
+  await expect(page.getByLabel('Gold 24K per gram')).not.toBeChecked();
+  await expect(page.getByLabel('GOLDBEES ETF')).not.toBeChecked();
   await expect(page.getByLabel('Gold, world price ($ per ounce)')).not.toBeChecked();
   const compare = page.locator('section', { has: page.getByText(/^Change since/) });
   await expect(compare).toContainText('Gold 22K (IBJA)');
   await compare.getByRole('button', { name: 'Show table' }).click();
-  // prices next to the change: 22K 13,000 → 13,400 per gram
+  // values next to the change: 22K 13,000 → 13,400 per gram; yours in its own currency
   await expect(compare.getByRole('row').last()).toContainText('₹13,400/g (+3.1 %)');
+  await expect(compare.getByRole('row').last()).toContainText('1.506,25 € (+20.5 %)');
   await compare.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '35-investments-vs-nifty-gold');
   // World gold has only today so far: it says so, and unticking brings the chart back.
-  await page.getByLabel('Gold, world price ($ per ounce)').check();
+  await page.getByLabel('Gold, world price ($ per ounce)').click();
   await expect(page.getByText(/two days in common/)).toBeVisible();
-  await page.getByLabel('Gold, world price ($ per ounce)').uncheck();
+  await page.getByLabel('Gold, world price ($ per ounce)').click();
   await expect(compare).toContainText('Nifty 50');
+  // GOLDBEES is a line of its own, next to 22K gold.
+  await page.getByLabel('GOLDBEES ETF').click();
+  await expect(compare).toContainText('GOLDBEES ETF');
+  await expect(compare).toContainText('Gold 22K (IBJA)');
+  // Without yours, only the markets are compared.
+  await page.getByLabel('Your investments').click();
+  await expect(compare).not.toContainText('without money added');
   // The choice is remembered.
-  await page.getByLabel('Which gold in India').selectOption('gold24k');
   await page.reload();
-  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
-  await expect(page.getByLabel('Which gold in India')).toHaveValue('gold24k');
-  await page.getByRole('button', { name: 'Value (₹)' }).click();
+  await expect(page.getByLabel('GOLDBEES ETF')).toBeChecked();
+  await expect(page.getByLabel('Your investments')).not.toBeChecked();
+  await page.getByLabel('Your investments').click();
+  await page.getByLabel('GOLDBEES ETF').click();
+  await expect(page.getByLabel('Your investments')).toBeChecked();
+  await expect(page.getByLabel('GOLDBEES ETF')).not.toBeChecked();
   await page.getByLabel('Daily closing prices from NSE').click();
 
   await page.getByRole('button', { name: 'Switch to retro look' }).click();
@@ -242,12 +253,20 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
 
   // Value over time: the comparison with Nifty 50 and gold needs NSE data (none here).
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
-  await expect(page.getByRole('button', { name: 'vs Nifty 50 & gold' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  // Markets without prices yet are named and left out; yours needs a second day first.
   await expect(page.getByText(/No prices yet for Nifty 50, Gold 22K/)).toBeVisible();
-  await page.getByRole('button', { name: 'Value (₹)' }).click();
+  await expect(page.getByText(/Each day with prices adds a point/)).toBeVisible();
   await expect(value).toContainText('₹6,37,036.40');
+  // A choice saved before every line had its own tick box is carried over.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'pb-compare',
+      JSON.stringify({ nifty50: false, goldIndiaOn: true, goldIndia: 'gold24k', goldUsd: true }),
+    ),
+  );
+  await page.reload();
+  await expect(page.getByLabel('Nifty 50')).not.toBeChecked();
+  await expect(page.getByLabel('Gold 22K per gram')).not.toBeChecked();
+  await expect(page.getByLabel('Gold 24K per gram')).toBeChecked();
+  await expect(page.getByLabel('Gold, world price ($ per ounce)')).toBeChecked();
 });

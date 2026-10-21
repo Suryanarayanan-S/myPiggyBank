@@ -299,24 +299,20 @@ export type ComparisonRow = {
   /** change since the start in basis points, by series ("portfolio" and each compared one);
    *  null: no point that day */
   change: Record<string, number | null>;
-  /** the compared series' own values that day (index points, ₹ per gram, $ per ounce…) */
+  /** each series' own value that day, as passed in (index points, ₹ per gram, $ per ounce;
+   *  for yours the return index, not money) */
   price: Record<string, number | null>;
 };
 
 /**
- * The portfolio and the chosen series as % change since the first day all of them are known
- * (each measured from its last value on or before that day).
+ * The ticked series as % change since the first day all of them are known
+ * (each measured from its last value on or before that day). For yours, pass `returnIndex`.
  */
 export function compareSince(
-  portfolio: { date: string; index: number }[],
-  compared: Record<string, { date: string; value: number }[]>,
+  series: Record<string, { date: string; value: number }[]>,
 ): ComparisonRow[] {
-  const series: Record<string, { date: string; value: number }[]> = {
-    portfolio: portfolio.map((p) => ({ date: p.date, value: p.index })),
-    ...compared,
-  };
   const all = Object.values(series);
-  if (all.some((s) => s.length === 0)) return [];
+  if (all.length === 0 || all.some((s) => s.length === 0)) return [];
   const start = all
     .map((s) => s[0]!.date)
     .sort()
@@ -338,8 +334,6 @@ export function compareSince(
         return [k, v !== null && bases[k]! > 0 ? Math.round((v / bases[k]! - 1) * 10_000) : null];
       }),
     ),
-    price: Object.fromEntries(
-      Object.keys(compared).map((k) => [k, d === start ? bases[k]! : valueOn(k, d)]),
-    ),
+    price: Object.fromEntries(keys.map((k) => [k, d === start ? bases[k]! : valueOn(k, d)])),
   }));
 }

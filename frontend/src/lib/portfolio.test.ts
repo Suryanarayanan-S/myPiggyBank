@@ -272,44 +272,46 @@ describe('portfolio', () => {
   });
 
   it('compares the ticked series as % change since the first day all of them have', () => {
-    const rows = compareSince(
-      [
-        { date: '2026-01-01', index: 1 },
-        { date: '2026-01-02', index: 1.1 },
-        { date: '2026-01-04', index: 1.21 },
+    const rows = compareSince({
+      portfolio: [
+        { date: '2026-01-01', value: 1 },
+        { date: '2026-01-02', value: 1.1 },
+        { date: '2026-01-04', value: 1.21 },
       ],
-      {
-        nifty50: [
-          { date: '2025-12-31', value: 20_000 }, // before the start: the base
-          { date: '2026-01-02', value: 21_000 },
-        ],
-        gold22k: [
-          { date: '2026-01-02', value: 100 },
-          { date: '2026-01-04', value: 90 },
-        ],
-      },
-    );
+      nifty50: [
+        { date: '2025-12-31', value: 20_000 }, // before the start: the base
+        { date: '2026-01-02', value: 21_000 },
+      ],
+      gold22k: [
+        { date: '2026-01-02', value: 100 },
+        { date: '2026-01-04', value: 90 },
+      ],
+    });
     expect(rows).toEqual([
       {
         date: '2026-01-02',
         change: { portfolio: 0, nifty50: 0, gold22k: 0 },
-        price: { nifty50: 21_000, gold22k: 100 },
+        price: { portfolio: 1.1, nifty50: 21_000, gold22k: 100 },
       },
       {
         date: '2026-01-04',
         change: { portfolio: 1_000, nifty50: null, gold22k: -1_000 },
-        price: { nifty50: null, gold22k: 90 },
+        price: { portfolio: 1.21, nifty50: null, gold22k: 90 },
       },
     ]);
-    // nothing ticked: the portfolio alone, from its own first day
+    // one line alone (any one, yours or a benchmark), from its own first day
     expect(
-      compareSince(
-        [
-          { date: '2026-01-01', index: 1 },
-          { date: '2026-01-02', index: 1.1 },
+      compareSince({
+        nifty50: [
+          { date: '2026-01-01', value: 20_000 },
+          { date: '2026-01-02', value: 22_000 },
         ],
-        {},
-      ),
-    ).toHaveLength(2);
+      }),
+    ).toEqual([
+      { date: '2026-01-01', change: { nifty50: 0 }, price: { nifty50: 20_000 } },
+      { date: '2026-01-02', change: { nifty50: 1_000 }, price: { nifty50: 22_000 } },
+    ]);
+    // nothing ticked: nothing to draw
+    expect(compareSince({})).toEqual([]);
   });
 });

@@ -79,22 +79,34 @@ export function profitSplit(holdings: Holding[]) {
   };
 }
 
-export type SortKey = 'name' | 'units' | 'invested' | 'value' | 'pnl' | 'pnlPct' | 'weight';
+export type SortKey =
+  'name' | 'units' | 'invested' | 'value' | 'pnl' | 'pnlPct' | 'dayPct' | 'weight';
+/** A holding's move on the latest market day (see `dayChanges`). */
+export type DayChange = { pnl: number; changeBp: number };
 // Money columns only compare amounts in the summary currency; other rows sort last.
 const inSummary = (r: RankedHolding, n: number) => (r.weightBp === null ? null : n);
-const sortValue: Record<SortKey, (r: RankedHolding) => number | string | null> = {
+const sortValue: Record<
+  SortKey,
+  (r: RankedHolding, day: Map<string, DayChange>) => number | string | null
+> = {
   name: (r) => r.holding.name,
   units: (r) => Number(r.holding.units),
   invested: (r) => inSummary(r, r.cost),
   value: (r) => inSummary(r, r.value),
   pnl: (r) => inSummary(r, r.value - r.cost),
   pnlPct: (r) => r.holding.returnBp,
+  dayPct: (r, day) => day.get(r.holding.id)?.changeBp ?? null,
   weight: (r) => r.weightBp,
 };
 
 /** Sorted by a column; rows without a value for it (e.g. no return) always come last. */
-export function sortHoldings(rows: RankedHolding[], key: SortKey, dir: 'asc' | 'desc') {
-  const get = sortValue[key];
+export function sortHoldings(
+  rows: RankedHolding[],
+  key: SortKey,
+  dir: 'asc' | 'desc',
+  day = new Map<string, DayChange>(),
+) {
+  const get = (r: RankedHolding) => sortValue[key](r, day);
   const sign = dir === 'asc' ? 1 : -1;
   return [...rows].sort((a, b) => {
     const x = get(a);
@@ -253,14 +265,14 @@ const weekend = (d: string) => [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTC
 const DAY_MS = 86_400_000;
 
 /**
- * What moved most on the latest market day: each held holding's last price against its price
+ * Each held holding's move on the latest market day: its last price against its price
  * before, times the units held, in the summary currency. The day is the one most holdings have
  * their last price on (one hand-entered price never decides it); weekend prices are skipped.
  * Left out: holdings whose last price is on another day, whose price before is more than five
  * days older (a month's change is not a day's move), and those bought or sold since the price
  * before (the move would mix in the trade).
  */
-export function dayMovers(holdings: Holding[], n: number) {
+export function dayChanges(holdings: Holding[]) {
   const rows = ranked(holdings).flatMap((r) => {
     const prices = r.holding.prices
       .filter((p) => !weekend(p.date))
@@ -284,6 +296,18 @@ export function dayMovers(holdings: Holding[], n: number) {
   // the most shared day; on a tie the later one
   const date = [...count].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0]?.[0] ?? null;
   const today = rows.filter((r) => r.date === date);
+  return {
+    date,
+    rows: today,
+    byId: new Map<string, DayChange>(
+      today.map((r) => [r.holding.id, { pnl: r.pnl, changeBp: r.changeBp }]),
+    ),
+  };
+}
+
+/** The day's biggest movers each way (see `dayChanges`). */
+export function dayMovers(holdings: Holding[], n: number) {
+  const { date, rows: today } = dayChanges(holdings);
   return {
     date,
     performers: today

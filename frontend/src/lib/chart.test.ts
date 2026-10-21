@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { niceTicks, shortMonth } from './chart';
+import { niceTicks, shortMonth, spreadLabels } from './chart';
 
 describe('niceTicks', () => {
   it('covers the data with round steps from zero', () => {
@@ -20,5 +20,21 @@ describe('shortMonth', () => {
   it('uses three-letter months', () => {
     expect(shortMonth('2026-09')).toBe('Sep 26');
     expect(shortMonth('2026-08')).toBe('Aug 26');
+  });
+});
+
+describe('spreadLabels', () => {
+  it('keeps labels that are apart where they are', () => {
+    expect(spreadLabels([10, 50, 100], 12)).toEqual([10, 50, 100]);
+  });
+  it('pushes labels apart around their middle, keeping their order', () => {
+    // two on the same spot: one moves up, one down
+    expect(spreadLabels([50, 50], 12)).toEqual([44, 56]);
+    // given in any order; the result is in the same order as given
+    expect(spreadLabels([60, 50, 55], 12)).toEqual([67, 43, 55]);
+  });
+  it('keeps them inside the plot', () => {
+    expect(spreadLabels([0, 1], 12, 0, 100)).toEqual([0, 12]);
+    expect(spreadLabels([100, 99], 12, 0, 100)).toEqual([100, 88]);
   });
 });

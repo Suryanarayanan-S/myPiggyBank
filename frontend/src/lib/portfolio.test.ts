@@ -7,6 +7,7 @@ import {
   allocation,
   compareSince,
   contributors,
+  dayChanges,
   dayMovers,
   returnIndex,
   sliceColors,
@@ -104,6 +105,31 @@ describe('portfolio', () => {
     ]);
     expect(sortHoldings(rows, 'name', 'desc').map((r) => r.holding.name)).toEqual(['C', 'B', 'A']);
     expect(sortHoldings(rows, 'pnl', 'asc').map((r) => r.holding.name)).toEqual(['B', 'A', 'C']);
+  });
+
+  it("gives each holding the day's move, and sorts by it (holdings without one last)", () => {
+    const px = (...list: [string, string][]) =>
+      list.map(([date, price], i) => ({ id: String(i), date, price }));
+    const list = [
+      h('Up', { prices: px(['2026-10-19', '100'], ['2026-10-21', '110']) }),
+      h('Down', { prices: px(['2026-10-19', '100'], ['2026-10-21', '95']) }),
+      h('Flat', { prices: px(['2026-10-19', '100'], ['2026-10-21', '100']) }),
+      h('None'),
+    ];
+    const day = dayChanges(list);
+    expect(day.date).toBe('2026-10-21');
+    expect(Object.fromEntries(day.byId)).toEqual({
+      Up: { pnl: 10_000, changeBp: 1_000 },
+      Down: { pnl: -5_000, changeBp: -500 },
+      Flat: { pnl: 0, changeBp: 0 },
+    });
+    const rows = ranked(list);
+    expect(sortHoldings(rows, 'dayPct', 'desc', day.byId).map((r) => r.holding.name)).toEqual([
+      'Up',
+      'Flat',
+      'Down',
+      'None',
+    ]);
   });
 
   it('values the portfolio on every day a price or trade was recorded', () => {

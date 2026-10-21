@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { ArrowDown, ArrowUp, Pencil } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -15,7 +15,13 @@ import {
 } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
-import { listed, sortHoldings, type RankedHolding, type SortKey } from '../../lib/portfolio';
+import {
+  dayChanges,
+  listed,
+  sortHoldings,
+  type RankedHolding,
+  type SortKey,
+} from '../../lib/portfolio';
 
 type Open = (d: { kind: 'form'; holding: Holding } | { kind: 'activity'; id: string }) => void;
 const COLUMNS: { key: SortKey | null; label: string; align?: 'right' }[] = [
@@ -27,6 +33,7 @@ const COLUMNS: { key: SortKey | null; label: string; align?: 'right' }[] = [
   { key: 'value', label: 'Cur. value', align: 'right' },
   { key: 'pnl', label: 'P&L', align: 'right' },
   { key: 'pnlPct', label: 'Net chg.', align: 'right' },
+  { key: 'dayPct', label: 'Day chg.', align: 'right' },
   { key: 'weight', label: 'Weight', align: 'right' },
 ];
 
@@ -51,6 +58,8 @@ export function HoldingsList({
     dir: 'desc',
   });
   const all = listed(holdings, currency);
+  // The latest market day's move; "—" for holdings without one (see dayChanges).
+  const day = useMemo(() => dayChanges(holdings), [holdings]);
   const people = [...new Set(all.map((r) => owner(r.holding.ownerMemberId)))].sort();
   const kinds = [...new Set(all.map((r) => r.holding.kind))];
   const needle = q.trim().toLowerCase();
@@ -65,6 +74,7 @@ export function HoldingsList({
     ),
     sort.key,
     sort.dir,
+    day.byId,
   );
   // Totals only add up what is in the summary currency (rows without a rate are listed apart).
   const total = shown
@@ -73,8 +83,12 @@ export function HoldingsList({
       (t, r) => ({
         cost: t.cost + r.cost,
         value: t.value + r.value,
+        // the day's move, against the value before it of the holdings that moved
+        day: t.day + (day.byId.get(r.holding.id)?.pnl ?? 0),
+        dayBase: t.dayBase + (day.byId.has(r.holding.id) ? r.value : 0),
+        moved: t.moved || day.byId.has(r.holding.id),
       }),
-      { cost: 0, value: 0 },
+      { cost: 0, value: 0, day: 0, dayBase: 0, moved: false },
     );
   // The shown rows' share of the whole portfolio (not a sum of rounded weights).
   const portfolio = all.reduce((t, r) => t + (r.weightBp === null ? 0 : r.value), 0);
@@ -145,6 +159,8 @@ export function HoldingsList({
           <option value="pnlPct:desc">Best return first</option>
           <option value="pnlPct:asc">Worst return first</option>
           <option value="pnl:desc">Most gained first</option>
+          <option value="dayPct:desc">Best day first</option>
+          <option value="dayPct:asc">Worst day first</option>
           <option value="name:asc">A–Z</option>
         </Select>
         <span className="ml-auto text-xs text-slate-500" aria-live="polite">
@@ -191,6 +207,13 @@ export function HoldingsList({
                     <span className={gainClass(r.holding.returnBp)}>
                       {r.holding.returnBp === null ? '' : formatPercent(r.holding.returnBp)}
                     </span>
+                    {day.byId.has(r.holding.id) && (
+                      <span
+                        className={clsx('block', gainClass(day.byId.get(r.holding.id)!.changeBp))}
+                      >
+                        day {formatPercent(day.byId.get(r.holding.id)!.changeBp)}
+                      </span>
+                    )}
                   </span>
                 </span>
               </div>
@@ -288,6 +311,14 @@ export function HoldingsList({
                     >
                       {h.returnBp === null ? '—' : formatPercent(h.returnBp)}
                     </td>
+                    <td
+                      className={clsx(
+                        'px-3 py-2 text-right tabular-nums',
+                        gainClass(day.byId.get(h.id)?.changeBp ?? null),
+                      )}
+                    >
+                      {day.byId.has(h.id) ? formatPercent(day.byId.get(h.id)!.changeBp) : '—'}
+                    </td>
                     <td className="px-3 py-2 text-right text-slate-500 tabular-nums">
                       {r.weightBp === null ? '—' : formatPercent(r.weightBp)}
                     </td>
@@ -325,6 +356,13 @@ export function HoldingsList({
                     {total.cost > 0
                       ? formatPercent(
                           Math.round(((total.value - total.cost) * 10_000) / total.cost),
+                        )
+                      : '—'}
+                  </td>
+                  <td className={clsx('px-3 py-2 text-right tabular-nums', gainClass(total.day))}>
+                    {total.moved && total.dayBase - total.day > 0
+                      ? formatPercent(
+                          Math.round((total.day * 10_000) / (total.dayBase - total.day)),
                         )
                       : '—'}
                   </td>

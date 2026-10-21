@@ -103,6 +103,16 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('2.1 %');
   await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
   await contrib.getByRole('button', { name: 'Overall' }).click();
+  // …and in the holdings table, next to the overall change.
+  await page.getByRole('tab', { name: /Holdings/ }).click();
+  await expect(page.getByRole('button', { name: 'Day chg.' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('row', { name: /MSCI World ETF/ })
+      .getByRole('cell')
+      .nth(8),
+  ).toHaveText('2.1 %');
+  await page.getByRole('tab', { name: 'Overview' }).click();
 
   // Compared with Nifty 50 and gold: market data stands in (the test server is offline).
   const days = [90, 60, 30, 5, 0].map(daysAgo);
@@ -137,6 +147,11 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(compare.getByRole('row').last()).toContainText('1.506,25 € (+20.5 %)');
   await compare.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '35-investments-vs-nifty-gold');
+  // 22K and 24K move alike: their end labels are spread apart, not drawn on top of each other.
+  await page.getByLabel('Gold 24K per gram').click();
+  await expect(compare).toContainText('Gold 24K (IBJA)');
+  await shot(page, '36-investments-gold-labels');
+  await page.getByLabel('Gold 24K per gram').click();
   // World gold has only today so far: it says so, and unticking brings the chart back.
   await page.getByLabel('Gold, world price ($ per ounce)').click();
   await expect(page.getByText(/two days in common/)).toBeVisible();

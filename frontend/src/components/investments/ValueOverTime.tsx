@@ -13,7 +13,7 @@ import { useMe } from '../../auth/auth';
 import { Card } from '../ui/Card';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
-import { AXIS, GRID, SURFACE, axisTick, niceTicks } from '../../lib/chart';
+import { AXIS, GRID, SURFACE, axisTick, niceTicks, spreadLabels } from '../../lib/chart';
 import { api } from '../../lib/api';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
@@ -279,6 +279,19 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
   const lastOf: Record<string, number> = Object.fromEntries(
     keys.map((k) => [k, rows.reduce((at, x, i) => (x.change[k] != null ? i : at), -1)]),
   );
+  // Labels ending on the same day are spread apart so none overlap (e.g. 22K and 24K gold,
+  // which move alike). Pixels follow the plot: 256 high, 8 margin on top, a 30 high x axis.
+  const PLOT = { top: 8, height: 256 - 8 - 30 };
+  const [low, high] = [ticks[0]!, ticks.at(-1)!];
+  const shift: Record<string, number> = {};
+  for (const at of new Set(Object.values(lastOf))) {
+    const group = keys.filter((k) => lastOf[k] === at && at >= 0);
+    const ys = group.map(
+      (k) => PLOT.top + ((high - (rows[at]!.change[k] ?? 0)) / (high - low || 1)) * PLOT.height,
+    );
+    const placed = spreadLabels(ys, 12, PLOT.top, PLOT.top + PLOT.height);
+    group.forEach((k, i) => (shift[k] = placed[i]! - ys[i]!));
+  }
   const data = rows.map((r) => ({ date: r.date, ...r.change }));
   /** The value itself next to its change, e.g. "₹13,400/g (+3.1 %)". */
   const value = (k: LineKey, v: number) =>
@@ -382,7 +395,7 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
                     <text
                       x={Number(props.x) + 8}
                       y={Number(props.y)}
-                      dy={4}
+                      dy={4 + (shift[l.key] ?? 0)}
                       fontSize={11}
                       fill="var(--c-ink)"
                     >

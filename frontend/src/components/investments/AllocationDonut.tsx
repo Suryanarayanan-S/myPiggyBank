@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import clsx from 'clsx';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
@@ -5,9 +7,23 @@ import { SURFACE } from '../../lib/chart';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
-import { allGroups, allocation, sliceColors, type Grouping } from '../../lib/portfolio';
+import {
+  allGroups,
+  allocation,
+  sliceColors,
+  type Grouping,
+  type Measure,
+} from '../../lib/portfolio';
 
-/** Part of the portfolio at a glance: at most five slices, each named with its share. */
+const MEASURES: [Measure, string][] = [
+  ['value', 'Worth now'],
+  ['cost', 'Put in'],
+];
+
+/**
+ * Part of the portfolio at a glance: at most five slices, each named with its share — of what
+ * it is worth now, or of the money put in (switch under the donut).
+ */
 export function AllocationDonut({
   holdings,
   grouping,
@@ -19,8 +35,10 @@ export function AllocationDonut({
   currency: string;
   subtitle?: string;
 }) {
-  const slices = allocation(holdings, grouping);
+  const [measure, setMeasure] = useState<Measure>('value');
+  const slices = allocation(holdings, grouping, 4, measure);
   const everyGroup = allGroups(holdings, grouping);
+  const putIn = new Map(allGroups(holdings, grouping, 'cost').map((g) => [g.label, g]));
   const colors = sliceColors(grouping, slices);
   const colorOf = (label: string) =>
     colors[slices.findIndex((s) => s.label === label)] ?? 'var(--c-rest)';
@@ -31,11 +49,13 @@ export function AllocationDonut({
       subtitle={subtitle}
       table={
         <DataTable
-          head={['Group', 'Value', 'Share']}
+          head={['Group', 'Worth now', 'Share', 'Put in', 'Share']}
           rows={everyGroup.map((g) => [
             g.label,
             formatMoney(g.value, currency),
             formatPercent(g.shareBp),
+            formatMoney(putIn.get(g.label)?.value ?? 0, currency),
+            formatPercent(putIn.get(g.label)?.shareBp ?? 0),
           ])}
         />
       }
@@ -44,7 +64,7 @@ export function AllocationDonut({
         <div
           className="relative h-40 w-40 shrink-0"
           role="img"
-          aria-label={`${grouping.title}: ${slices.map((s) => `${s.label} ${formatPercent(s.shareBp)}`).join(', ')}`}
+          aria-label={`${grouping.title}, ${measure === 'value' ? 'worth now' : 'money put in'}: ${slices.map((s) => `${s.label} ${formatPercent(s.shareBp)}`).join(', ')}`}
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -109,6 +129,28 @@ export function AllocationDonut({
             </li>
           ))}
         </ul>
+        <div
+          role="group"
+          aria-label={`${grouping.title}: share of`}
+          className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs dark:border-slate-700"
+        >
+          {MEASURES.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={measure === key}
+              onClick={() => setMeasure(key)}
+              className={clsx(
+                'rounded-md px-2.5 py-1',
+                measure === key
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </ChartCard>
   );

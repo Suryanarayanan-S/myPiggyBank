@@ -219,36 +219,62 @@ export const CAP: Grouping = {
 
 export type Slice = { label: string; value: number; shareBp: number };
 
+/** What a share-of-portfolio chart measures: worth now, or the money put in. */
+export type Measure = 'value' | 'cost';
+
 /**
  * Shares of the portfolio by group (summary currency), largest first and at most `top` groups
  * plus "Other" — a donut stays readable at five slices. "Not classified" never leads.
+ * The groups and their order always follow worth now, so switching to money put in only
+ * resizes the slices (each group keeps its place and colour).
  */
-export function allocation(holdings: Holding[], grouping: Grouping, top = 4): Slice[] {
-  const sums = new Map<string, number>();
+export function allocation(
+  holdings: Holding[],
+  grouping: Grouping,
+  top = 4,
+  measure: Measure = 'value',
+): Slice[] {
+  const sums = new Map<string, { value: number; cost: number }>();
   for (const r of ranked(holdings)) {
     const g = grouping.groupOf(r.holding);
-    if (g !== null && r.value > 0) sums.set(g, (sums.get(g) ?? 0) + r.value);
+    if (g === null || r.value <= 0) continue;
+    const s = sums.get(g) ?? { value: 0, cost: 0 };
+    sums.set(g, { value: s.value + r.value, cost: s.cost + Math.max(0, r.cost) });
   }
   const groups = [...sums]
-    .map(([label, value]) => ({ label, value }))
+    .map(([label, s]) => ({ label, ...s }))
     .sort((a, b) => Number(a.label === UNKNOWN) - Number(b.label === UNKNOWN) || b.value - a.value);
   const shown =
     groups.length <= top + 1
       ? groups
       : [
           ...groups.slice(0, top),
-          { label: 'Other', value: groups.slice(top).reduce((s, g) => s + g.value, 0) },
+          groups
+            .slice(top)
+            .reduce(
+              (o, g) => ({ label: 'Other', value: o.value + g.value, cost: o.cost + g.cost }),
+              {
+                label: 'Other',
+                value: 0,
+                cost: 0,
+              },
+            ),
         ];
-  const total = shown.reduce((s, g) => s + g.value, 0);
+  const total = shown.reduce((s, g) => s + g[measure], 0);
   return shown.map((g) => ({
-    ...g,
-    shareBp: total > 0 ? Math.round((g.value * 10_000) / total) : 0,
+    label: g.label,
+    value: g[measure],
+    shareBp: total > 0 ? Math.round((g[measure] * 10_000) / total) : 0,
   }));
 }
 
 /** Every group with its share (for the legend list and table: nothing folded away). */
-export function allGroups(holdings: Holding[], grouping: Grouping): Slice[] {
-  return allocation(holdings, grouping, Number.MAX_SAFE_INTEGER);
+export function allGroups(
+  holdings: Holding[],
+  grouping: Grouping,
+  measure: Measure = 'value',
+): Slice[] {
+  return allocation(holdings, grouping, Number.MAX_SAFE_INTEGER, measure);
 }
 
 /** What added and what took away the most money (summary currency), like a broker's report. */

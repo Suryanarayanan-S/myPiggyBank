@@ -242,6 +242,39 @@ describe('portfolio', () => {
     ]);
   });
 
+  it('splits by money put in too, keeping the same groups (and colours) as by worth', () => {
+    const at = (value: number, cost: number) => ({ value, inView: { value, cost } });
+    const book = [
+      h('A', { ...at(100, 10), industry: 'IT' }),
+      h('B', { ...at(60, 60), industry: 'Banks' }),
+      h('C', { ...at(50, 90), industry: 'Power' }),
+      h('D', { ...at(40, 200), industry: 'Metals' }),
+      h('E', { ...at(30, 30), industry: 'Auto' }),
+      h('F', { ...at(20, 20), industry: 'Textiles' }),
+    ];
+    // largest by worth now: IT, Banks, Power, Metals, then Other (Auto, Textiles)
+    expect(allocation(book, SECTOR, 4, 'cost').map((g) => [g.label, g.value])).toEqual([
+      ['IT', 10],
+      ['Banks', 60],
+      ['Power', 90],
+      ['Metals', 200],
+      ['Other', 50],
+    ]);
+    expect(allocation(book, SECTOR, 4, 'cost')[3]!.shareBp).toBe(4_878); // 200 of 410
+    // a group with nothing put in (e.g. bonus shares) keeps its place with no slice
+    expect(
+      allocation(
+        [h('X', { ...at(10, 0), industry: 'IT' }), h('Y', { ...at(5, 5), industry: 'Auto' })],
+        SECTOR,
+        4,
+        'cost',
+      ),
+    ).toEqual([
+      { label: 'IT', value: 0, shareBp: 0 },
+      { label: 'Auto', value: 5, shareBp: 10_000 },
+    ]);
+  });
+
   it('ranks what added and what took away the most money', () => {
     const c = contributors(
       [

@@ -237,6 +237,19 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
       .first();
   await expect(card('Account')).toContainText('Gold');
   await expect(card('Account')).toContainText('94.5 %');
+  // Under each donut: shares of the money put in (87.8 % = 3,12,899.59 of 3,56,457.79).
+  await card('Account').getByRole('button', { name: 'Put in' }).click();
+  await expect(card('Account').getByRole('button', { name: 'Put in' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(card('Account')).toContainText('87.8 %');
+  await expect(card('Account')).toContainText('12.2 %');
+  await card('Account').getByRole('button', { name: 'Show table' }).click();
+  await expect(card('Account').getByRole('row', { name: /Gold/ })).toContainText('₹3,12,899.59');
+  await card('Account').getByRole('button', { name: 'Show chart' }).click();
+  await card('Account').getByRole('button', { name: 'Worth now' }).click();
+  await expect(card('Account')).toContainText('94.5 %');
   await expect(card('Sectors')).toContainText('Not classified');
   // A one-group split (all shares unclassified here) is not drawn as a donut.
   await expect(page.getByRole('heading', { name: /^Market cap/ })).toHaveCount(0);

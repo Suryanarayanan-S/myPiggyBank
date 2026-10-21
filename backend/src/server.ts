@@ -32,6 +32,7 @@ const app = await buildApp({
       signal: AbortSignal.timeout(20_000),
     }),
   pricesUrl: config.PRICES_URL,
+  goldSources: { ibja: config.IBJA_URL, usd: config.GOLD_PRICE_URL },
 });
 
 const shutdown = async () => {
@@ -74,8 +75,11 @@ const runPrices = async () => {
     app.livePrices.fetch,
     todayLocal(),
     app.livePrices.url,
+    undefined,
+    app.livePrices.gold,
   );
   if (status.lastError) app.log.warn({ error: status.lastError }, 'NSE price download failed');
+  if (status.warning) app.log.warn({ warning: status.warning }, 'market data partly updated');
 };
 void runPrices().catch((err) => app.log.error(err, 'NSE price download failed'));
 setInterval(() => void runPrices().catch(() => {}), 6 * 60 * 60 * 1000).unref();

@@ -296,48 +296,50 @@ export function returnIndex(holdings: Holding[]): { date: string; index: number 
 
 export type ComparisonRow = {
   date: string;
-  /** change since the start, basis points (null: no point that day) */
-  portfolio: number | null;
-  nifty50: number | null;
-  gold: number | null;
+  /** change since the start in basis points, by series ("portfolio" and each compared one);
+   *  null: no point that day */
+  change: Record<string, number | null>;
+  /** the compared series' own values that day (index points, ₹ per gram, $ per ounce…) */
+  price: Record<string, number | null>;
 };
 
 /**
- * Portfolio, Nifty 50 and gold as % change since the first day all three are known (each
- * measured from its last value on or before that day).
+ * The portfolio and the chosen series as % change since the first day all of them are known
+ * (each measured from its last value on or before that day).
  */
 export function compareSince(
   portfolio: { date: string; index: number }[],
-  nifty50: { date: string; value: number }[],
-  gold: { date: string; value: number }[],
+  compared: Record<string, { date: string; value: number }[]>,
 ): ComparisonRow[] {
-  const series = {
+  const series: Record<string, { date: string; value: number }[]> = {
     portfolio: portfolio.map((p) => ({ date: p.date, value: p.index })),
-    nifty50,
-    gold,
+    ...compared,
   };
-  if (Object.values(series).some((s) => s.length === 0)) return [];
-  const start = Object.values(series)
+  const all = Object.values(series);
+  if (all.some((s) => s.length === 0)) return [];
+  const start = all
     .map((s) => s[0]!.date)
     .sort()
     .at(-1)!;
-  const base = (s: { date: string; value: number }[]) =>
-    s.filter((p) => p.date <= start).at(-1)!.value;
-  const bases = {
-    portfolio: base(series.portfolio),
-    nifty50: base(series.nifty50),
-    gold: base(series.gold),
-  };
-  const at = (key: keyof typeof series, day: string) => {
-    const p = series[key].find((x) => x.date === day);
-    return p && bases[key] > 0 ? Math.round((p.value / bases[key] - 1) * 10_000) : null;
-  };
-  const days = [...new Set(Object.values(series).flatMap((s) => s.map((p) => p.date)))]
+  const keys = Object.keys(series);
+  const bases = Object.fromEntries(
+    keys.map((k) => [k, series[k]!.filter((p) => p.date <= start).at(-1)!.value]),
+  );
+  const valueOn = (k: string, day: string) => series[k]!.find((x) => x.date === day)?.value ?? null;
+  const days = [...new Set(all.flatMap((s) => s.map((p) => p.date)))]
     .filter((d) => d >= start)
     .sort();
-  return days.map((d) =>
-    d === start
-      ? { date: d, portfolio: 0, nifty50: 0, gold: 0 }
-      : { date: d, portfolio: at('portfolio', d), nifty50: at('nifty50', d), gold: at('gold', d) },
-  );
+  return days.map((d) => ({
+    date: d,
+    change: Object.fromEntries(
+      keys.map((k) => {
+        if (d === start) return [k, 0];
+        const v = valueOn(k, d);
+        return [k, v !== null && bases[k]! > 0 ? Math.round((v / bases[k]! - 1) * 10_000) : null];
+      }),
+    ),
+    price: Object.fromEntries(
+      Object.keys(compared).map((k) => [k, d === start ? bases[k]! : valueOn(k, d)]),
+    ),
+  }));
 }

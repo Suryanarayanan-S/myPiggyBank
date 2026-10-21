@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { indexClosesName, readIndexCloses } from '../domain/indexCloses.js';
+import { readGoldApi, readIbja } from '../domain/goldRates.js';
 import { bhavcopyName, priceFor, readBhavcopy, type Bhavcopy } from '../domain/bhavcopy.js';
 import {
   INDEX_LISTS,
@@ -17,6 +18,12 @@ export type FetchText = (
 
 /** NSE's public archive of end-of-day files: free, no login, published each trading evening. */
 export const DEFAULT_PRICES_URL = 'https://nsearchives.nseindia.com/products/content';
+/** Indian gold rates (IBJA) and the world gold price in US dollars per ounce. */
+export const DEFAULT_GOLD_SOURCES = {
+  ibja: 'https://ibjarates.com/',
+  usd: 'https://api.gold-api.com/price/XAU',
+};
+export type GoldSources = typeof DEFAULT_GOLD_SOURCES;
 /** Weekends and holidays: look back this many days for the latest published file. */
 const LOOKBACK_DAYS = 7;
 
@@ -128,10 +135,11 @@ export function refreshLivePrices(
   today: string,
   baseUrl = DEFAULT_PRICES_URL,
   familyId?: string,
+  gold: GoldSources = DEFAULT_GOLD_SOURCES,
 ): Promise<LivePriceStatus> {
   // The 6-hour timer and "Update now" can overlap: they share one run.
   const start = () =>
-    (running ??= run(prisma, fetchText, today, baseUrl).finally(() => {
+    (running ??= run(prisma, fetchText, today, baseUrl, gold).finally(() => {
       running = null;
     }));
   const joined = running !== null;
@@ -143,37 +151,42 @@ export function refreshLivePrices(
 }
 let running: Promise<void> | null = null;
 
-async function run(prisma: PrismaClient, fetchText: FetchText, today: string, baseUrl: string) {
+async function run(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  today: string,
+  baseUrl: string,
+  gold: GoldSources,
+) {
+  const families = await prisma.family
+    .findMany({ where: { livePrices: true }, select: { id: true } })
+    .catch(() => null);
+  if (!families) return;
+  if (families.length === 0) {
+    outcomes.clear();
+    return;
+  }
+  const familyIds = families.map((f) => f.id);
+  // The steps on the side: each failure is said (prices are saved either way).
+  const warnings: string[] = [];
+  const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
   try {
-    const families = await prisma.family.findMany({
-      where: { livePrices: true },
-      select: { id: true },
-    });
-    if (families.length === 0) {
-      outcomes.clear();
-      return;
-    }
     const file = await latestFile(fetchText, baseUrl, today);
     // A run covers every family that wants prices: older outcomes (or switched-off families) go,
     // but only once there is a new file (a failed run keeps showing the last good one).
     outcomes.clear();
-    const familyIds = families.map((f) => f.id);
     const fetchedAt = new Date().toISOString();
     for (const id of familyIds)
       outcomes.set(id, { asOf: file.date, fetchedAt, updated: 0, notFound: [] });
     await applyDay(prisma, file, familyIds, outcomes);
-    const date = parseDay(file.date)!;
-    lastFile = formatDay(date);
+    lastFile = file.date;
     lastError = null;
-    // The steps on the side: each failure is said (prices are saved either way).
-    const warnings: string[] = [];
-    const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
-    // Nifty 50 and gold for comparison, then the days since the first trade that are missing.
+    // Nifty 50 and GOLDBEES for comparison, then the days since the first trade that are missing.
     try {
       await storeBenchmarks(prisma, fetchText, baseUrl, file);
       await backfill(prisma, fetchText, baseUrl, file, familyIds);
     } catch (err) {
-      warnings.push(`Comparison with Nifty 50 and gold not updated: ${message(err)}.`);
+      warnings.push(`Comparison with Nifty 50 not updated: ${message(err)}.`);
     }
     // Sectors and size groups: a failure here keeps the old ones.
     try {
@@ -181,10 +194,21 @@ async function run(prisma: PrismaClient, fetchText: FetchText, today: string, ba
     } catch (err) {
       warnings.push(`Sectors and size groups were not updated: ${message(err)}.`);
     }
-    warning = warnings.length ? warnings.join(' ') : null;
   } catch (err) {
-    lastError = err instanceof Error ? err.message : String(err);
+    lastError = message(err);
   }
+  // Gold does not depend on NSE: the Indian 22K / 24K rates and the world price per ounce.
+  try {
+    await storeIbja(prisma, fetchText, gold.ibja, today);
+  } catch (err) {
+    warnings.push(`Indian gold rates (IBJA) not updated: ${message(err)}.`);
+  }
+  try {
+    await storeGoldUsd(prisma, fetchText, gold.usd, today);
+  } catch (err) {
+    warnings.push(`World gold price not updated: ${message(err)}.`);
+  }
+  warning = warnings.length ? warnings.join(' ') : null;
 }
 
 /**
@@ -340,6 +364,43 @@ async function backfill(
   }
 }
 
+async function upsertPoint(prisma: PrismaClient, series: string, day: string, value: number) {
+  const date = parseDay(day)!;
+  await prisma.benchmarkPoint.upsert({
+    where: { series_date: { series, date } },
+    create: { series, date, value },
+    update: { value },
+  });
+}
+
+/** IBJA's last few days of 22K and 24K rates per gram (one page, every run). */
+async function storeIbja(prisma: PrismaClient, fetchText: FetchText, url: string, today: string) {
+  const res = await fetchText(url);
+  if (!res.ok) throw new Error(`IBJA answered ${res.status}`);
+  for (const r of readIbja(await res.text(), today)) {
+    await upsertPoint(prisma, 'gold22k', r.date, r.k22);
+    await upsertPoint(prisma, 'gold24k', r.date, r.k24);
+  }
+}
+
+/**
+ * The world gold price now, as today's point (the day's last run leaves its value). Markets are
+ * closed at weekends: nothing is stored then, so the chart has no rows for weekend days.
+ */
+async function storeGoldUsd(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  url: string,
+  today: string,
+) {
+  const weekday = parseDay(today)!.getUTCDay();
+  if (weekday === 0 || weekday === 6) return;
+  const res = await fetchText(url);
+  if (!res.ok) throw new Error(`the service answered ${res.status}`);
+  const p = readGoldApi(await res.text());
+  await upsertPoint(prisma, 'goldUsd', today, p.usd);
+}
+
 /** Nifty 50 and gold since a day, for the comparison chart (values as plain numbers). */
 export async function benchmarks(prisma: PrismaClient, from?: string) {
   const rows = await prisma.benchmarkPoint.findMany({
@@ -350,7 +411,16 @@ export async function benchmarks(prisma: PrismaClient, from?: string) {
     rows
       .filter((r) => r.series === name)
       .map((r) => ({ date: formatDay(r.date), value: Number(r.value) / 1_000_000 }));
-  return { nifty50: series('nifty50'), gold: series('gold') };
+  return {
+    nifty50: series('nifty50'),
+    /** GOLDBEES (₹ per unit) */
+    gold: series('gold'),
+    /** IBJA, ₹ per gram */
+    gold22k: series('gold22k'),
+    gold24k: series('gold24k'),
+    /** US dollars per troy ounce */
+    goldUsd: series('goldUsd'),
+  };
 }
 
 /** Whether any family wants NSE prices (the server only downloads when one does). */

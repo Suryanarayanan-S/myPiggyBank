@@ -61,6 +61,7 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
         todayLocal(),
         app.livePrices.url,
         fam(req),
+        app.livePrices.gold,
       ),
     };
   });

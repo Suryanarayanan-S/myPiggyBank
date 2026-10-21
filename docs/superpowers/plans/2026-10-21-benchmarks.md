@@ -31,3 +31,15 @@ User ask: Nifty 50 and the Indian gold price next to the portfolio's "Value over
 when gold, Nifty 50 (unless NSE has no close that day) and every holding held that day have
 closes, so holdings added later with older trades are filled in too; warnings from the side steps
 are collected, never overwritten.
+
+## Gold choices (follow-up)
+
+User ask: 22K and 24K gold per gram and the 1-ounce USD price, with tick boxes.
+
+- IBJA (ibjarates.com): the day's evening rate (else morning) for 999 and 916 per 10 g → ₹/g;
+  today's separate rates only when the page's chart ends on today and they differ from the
+  table's last day. Fetched every run, independent of NSE.
+- World price (gold-api.com, current spot only): stored as today's point on weekdays; history
+  builds from 21 Oct 2026.
+- Tick boxes: Nifty 50; Gold in India (22K / 24K / GOLDBEES — they move by the same %); world
+  gold. Indian gold solid yellow, world gold dashed yellow; table and tooltip show prices.

@@ -14,6 +14,9 @@ const EnvSchema = z.object({
   RATES_URL: z.url().default('https://api.frankfurter.dev/v1'),
   /** NSE's archive of daily price files (tests point it elsewhere). */
   PRICES_URL: z.url().default('https://nsearchives.nseindia.com/products/content'),
+  /** Indian gold rates page (IBJA) and the world gold price (US dollars per ounce). */
+  IBJA_URL: z.url().default('https://ibjarates.com/'),
+  GOLD_PRICE_URL: z.url().default('https://api.gold-api.com/price/XAU'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

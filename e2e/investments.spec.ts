@@ -86,7 +86,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   ).toContainText('12,40 €');
   await shot(page, '26-investments');
 
-  // Compared with Nifty 50 and gold: daily NSE data stands in (the test server is offline).
+  // Compared with Nifty 50 and gold: market data stands in (the test server is offline).
   const days = [90, 60, 30, 5, 0].map(daysAgo);
   await page.route('**/api/holdings/benchmarks', (route) =>
     route.fulfill({
@@ -94,6 +94,9 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
         data: {
           nifty50: days.map((date, i) => ({ date, value: 24_000 + i * 300 })),
           gold: days.map((date, i) => ({ date, value: 60 + i * 4 })),
+          gold22k: days.map((date, i) => ({ date, value: 13_000 + i * 100 })),
+          gold24k: days.map((date, i) => ({ date, value: 14_200 + i * 110 })),
+          goldUsd: [{ date: days[4], value: 4132.9 }], // collected from today only
         },
       },
     }),
@@ -102,15 +105,28 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
   await page.getByRole('tab', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
+  // Ticked by default: Nifty 50 and 22K gold in India.
+  await expect(page.getByLabel('Nifty 50')).toBeChecked();
+  await expect(page.getByLabel('Gold in India', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Which gold in India')).toHaveValue('gold22k');
+  await expect(page.getByLabel('Gold, world price ($ per ounce)')).not.toBeChecked();
   const compare = page.locator('section', { has: page.getByText(/^Change since/) });
-  await expect(compare).toContainText('Nifty 50');
-  await expect(compare).toContainText('Gold (GOLDBEES)');
+  await expect(compare).toContainText('Gold 22K (IBJA)');
   await compare.getByRole('button', { name: 'Show table' }).click();
-  // gold 60 → 76 by the last day, in the gold column; the view switch stays in table view
-  await expect(compare.getByRole('row').last().getByRole('cell').nth(3)).toHaveText('+26.7 %');
-  await expect(compare.getByRole('button', { name: 'Value (₹)' })).toBeVisible();
+  // prices next to the change: 22K 13,000 → 13,400 per gram
+  await expect(compare.getByRole('row').last()).toContainText('₹13,400/g (+3.1 %)');
   await compare.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '35-investments-vs-nifty-gold');
+  // World gold has only today so far: it says so, and unticking brings the chart back.
+  await page.getByLabel('Gold, world price ($ per ounce)').check();
+  await expect(page.getByText(/two days in common/)).toBeVisible();
+  await page.getByLabel('Gold, world price ($ per ounce)').uncheck();
+  await expect(compare).toContainText('Nifty 50');
+  // The choice is remembered.
+  await page.getByLabel('Which gold in India').selectOption('gold24k');
+  await page.reload();
+  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
+  await expect(page.getByLabel('Which gold in India')).toHaveValue('gold24k');
   await page.getByRole('button', { name: 'Value (₹)' }).click();
   await page.getByLabel('Daily closing prices from NSE').click();
 
@@ -231,7 +247,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
     'aria-pressed',
     'true',
   );
-  await expect(page.getByText(/comparison starts once there are two trading days/)).toBeVisible();
+  await expect(page.getByText(/No prices yet for Nifty 50, Gold 22K/)).toBeVisible();
   await page.getByRole('button', { name: 'Value (₹)' }).click();
   await expect(value).toContainText('₹6,37,036.40');
 });

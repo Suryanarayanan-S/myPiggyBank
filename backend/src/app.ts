@@ -6,7 +6,12 @@ import fastifyStatic from '@fastify/static';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Config } from './config.js';
 import { DEFAULT_RATES_URL, type FetchRates } from './services/liveRateService.js';
-import { DEFAULT_PRICES_URL, type FetchText } from './services/livePriceService.js';
+import {
+  DEFAULT_GOLD_SOURCES,
+  DEFAULT_PRICES_URL,
+  type FetchText,
+  type GoldSources,
+} from './services/livePriceService.js';
 import { AppError } from './lib/errors.js';
 import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
@@ -43,6 +48,8 @@ export interface AppOptions {
   /** Downloads NSE closing prices; without it the server never goes online for prices. */
   fetchPrices?: FetchText;
   pricesUrl?: string;
+  /** Indian (IBJA) and world gold price sources. */
+  goldSources?: GoldSources;
 }
 
 function safeHost(origin: string): string | null {
@@ -65,7 +72,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.decorate(
     'livePrices',
     opts.fetchPrices
-      ? { fetch: opts.fetchPrices, url: opts.pricesUrl ?? DEFAULT_PRICES_URL }
+      ? {
+          fetch: opts.fetchPrices,
+          url: opts.pricesUrl ?? DEFAULT_PRICES_URL,
+          gold: opts.goldSources ?? DEFAULT_GOLD_SOURCES,
+        }
       : null,
   );
   app.decorateRequest('user', null);

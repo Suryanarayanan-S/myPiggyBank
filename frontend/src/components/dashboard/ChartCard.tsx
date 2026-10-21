@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Card } from '../ui/Card';
 
-export type LegendItem = { label: string; color: string; shape?: 'box' | 'line' };
+export type LegendItem = { label: string; color: string; shape?: 'box' | 'line' | 'dash' };
 
 /** Card with title, legend, chart and a table view (every chart has one). */
 export function ChartCard({
@@ -47,8 +47,17 @@ export function ChartCard({
             <li key={l.label} className="flex items-center gap-1.5">
               <span
                 aria-hidden
-                className={l.shape === 'line' ? 'h-0.5 w-4 rounded' : 'h-2.5 w-2.5 rounded-sm'}
-                style={{ background: l.color }}
+                className={
+                  l.shape === 'line' || l.shape === 'dash'
+                    ? 'h-0.5 w-4 rounded'
+                    : 'h-2.5 w-2.5 rounded-sm'
+                }
+                style={{
+                  background:
+                    l.shape === 'dash'
+                      ? `repeating-linear-gradient(90deg, ${l.color} 0 4px, transparent 4px 7px)`
+                      : l.color,
+                }}
               />
               {l.label}
             </li>

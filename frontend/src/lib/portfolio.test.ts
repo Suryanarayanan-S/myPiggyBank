@@ -271,25 +271,45 @@ describe('portfolio', () => {
     ]);
   });
 
-  it('compares everything as % change since the first day all three have', () => {
+  it('compares the ticked series as % change since the first day all of them have', () => {
     const rows = compareSince(
       [
         { date: '2026-01-01', index: 1 },
         { date: '2026-01-02', index: 1.1 },
         { date: '2026-01-04', index: 1.21 },
       ],
-      [
-        { date: '2025-12-31', value: 20_000 }, // before the start: the base
-        { date: '2026-01-02', value: 21_000 },
-      ],
-      [
-        { date: '2026-01-02', value: 100 },
-        { date: '2026-01-04', value: 90 },
-      ],
+      {
+        nifty50: [
+          { date: '2025-12-31', value: 20_000 }, // before the start: the base
+          { date: '2026-01-02', value: 21_000 },
+        ],
+        gold22k: [
+          { date: '2026-01-02', value: 100 },
+          { date: '2026-01-04', value: 90 },
+        ],
+      },
     );
     expect(rows).toEqual([
-      { date: '2026-01-02', portfolio: 0, nifty50: 0, gold: 0 },
-      { date: '2026-01-04', portfolio: 1_000, nifty50: null, gold: -1_000 },
+      {
+        date: '2026-01-02',
+        change: { portfolio: 0, nifty50: 0, gold22k: 0 },
+        price: { nifty50: 21_000, gold22k: 100 },
+      },
+      {
+        date: '2026-01-04',
+        change: { portfolio: 1_000, nifty50: null, gold22k: -1_000 },
+        price: { nifty50: null, gold22k: 90 },
+      },
     ]);
+    // nothing ticked: the portfolio alone, from its own first day
+    expect(
+      compareSince(
+        [
+          { date: '2026-01-01', index: 1 },
+          { date: '2026-01-02', index: 1.1 },
+        ],
+        {},
+      ),
+    ).toHaveLength(2);
   });
 });

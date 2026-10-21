@@ -24,6 +24,24 @@ function fakeNse(
   const fetchText: FetchText = async (url) => {
     urls.push(url);
     if (opts.fail) throw new Error('network down');
+    if (url.includes('ibjarates'))
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          ['13/10/2026', '14/10/2026']
+            .map(
+              (d, i) =>
+                `<tr><td data-label="PM"><strong>${d}</strong></td><td data-label="Gold 999">${146000 + i * 1000}</td><td data-label="Gold 916">${133700 + i * 916}</td></tr>`,
+            )
+            .join(''),
+      };
+    if (url.includes('gold-api'))
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '{"price":4132.9,"updatedAt":"2026-10-15T14:00:00Z"}',
+      };
     const files: Record<string, string> = {
       'sec_bhavdata_full_13102026.csv': day('13-Oct-2026', '1000.00'),
       'sec_bhavdata_full_14102026.csv': day('14-Oct-2026', '1100.00'),
@@ -213,9 +231,13 @@ describe('daily prices from NSE', () => {
     const before = nse.urls.length;
     await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
     // only today's (still unpublished) file is asked again
-    expect(nse.urls.slice(before).map((u) => u.split('/').at(-1))).toEqual([
-      'sec_bhavdata_full_15102026.csv',
-    ]);
+    // NSE files only (IBJA and the world gold price are one small page each, every run)
+    expect(
+      nse.urls
+        .slice(before)
+        .filter((u) => !u.includes('ibjarates') && !u.includes('gold-api'))
+        .map((u) => u.split('/').at(-1)),
+    ).toEqual(['sec_bhavdata_full_15102026.csv']);
     await prisma.holdingTrade.create({
       data: {
         holdingId: infy,
@@ -355,5 +377,33 @@ describe('daily prices from NSE', () => {
 
   it('refuses a date that does not exist', async () => {
     expect((await call('GET', '/api/holdings/benchmarks?from=2026-02-30')).statusCode).toBe(400);
+  });
+
+  it('also keeps the Indian 22K and 24K gold rates per gram and the world price per ounce', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const b = (await call('GET', '/api/holdings/benchmarks')).json().data;
+    expect(b.gold24k).toEqual([
+      { date: '2026-10-13', value: 14600 },
+      { date: '2026-10-14', value: 14700 },
+    ]);
+    expect(b.gold22k).toEqual([
+      { date: '2026-10-13', value: 13370 },
+      { date: '2026-10-14', value: 13461.6 },
+    ]);
+    expect(b.goldUsd).toEqual([{ date: '2026-10-15', value: 4132.9 }]);
+  });
+
+  it('gold is fetched even when NSE cannot be reached; world gold not at weekends', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    const down: FetchText = async (url) =>
+      url.includes('nse') ? { ok: false, status: 503, text: async () => '' } : nse.fetchText(url);
+    const status = await refreshLivePrices(prisma, down, '2026-10-15');
+    expect(status.lastError).toMatch(/503/);
+    const b = (await call('GET', '/api/holdings/benchmarks')).json().data;
+    expect(b.gold22k).toHaveLength(2);
+    expect(b.goldUsd).toEqual([{ date: '2026-10-15', value: 4132.9 }]);
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-17'); // a Saturday
+    expect((await call('GET', '/api/holdings/benchmarks')).json().data.goldUsd).toHaveLength(1);
   });
 });

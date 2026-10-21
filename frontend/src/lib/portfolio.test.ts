@@ -5,7 +5,9 @@ import {
   CAP,
   SECTOR,
   allocation,
+  compareSince,
   contributors,
+  returnIndex,
   sliceColors,
   isSoldOut,
   listed,
@@ -247,5 +249,47 @@ describe('portfolio', () => {
     expect(ACCOUNT.groupOf(h('Chit fund', { kind: 'other', symbol: null }))).toBe('Other');
     // Sectors still name them.
     expect(SECTOR.groupOf(h('PGINVIT-IV', { kind: 'other' }))).toBe('InvIT & other');
+  });
+
+  it('measures the portfolio by its performance, not by money put in', () => {
+    const x = h('X', {
+      trades: [
+        { id: 'b2', date: '2026-01-03', type: 'buy', units: '10', amount: 110_000, fees: 0 },
+        { id: 'b1', date: '2026-01-01', type: 'buy', units: '10', amount: 100_000, fees: 0 },
+      ],
+      prices: [
+        { id: 'p1', date: '2026-01-02', price: '110' }, // +10 %
+        { id: 'p3', date: '2026-01-04', price: '121' }, // +10 % again
+      ],
+    });
+    // 3 Jan: 10 more units bought at 110 — value doubles, but that is new money, not a gain.
+    expect(returnIndex([x])).toEqual([
+      { date: '2026-01-01', index: 1 },
+      { date: '2026-01-02', index: 1.1 },
+      { date: '2026-01-03', index: 1.1 },
+      { date: '2026-01-04', index: 1.21 },
+    ]);
+  });
+
+  it('compares everything as % change since the first day all three have', () => {
+    const rows = compareSince(
+      [
+        { date: '2026-01-01', index: 1 },
+        { date: '2026-01-02', index: 1.1 },
+        { date: '2026-01-04', index: 1.21 },
+      ],
+      [
+        { date: '2025-12-31', value: 20_000 }, // before the start: the base
+        { date: '2026-01-02', value: 21_000 },
+      ],
+      [
+        { date: '2026-01-02', value: 100 },
+        { date: '2026-01-04', value: 90 },
+      ],
+    );
+    expect(rows).toEqual([
+      { date: '2026-01-02', portfolio: 0, nifty50: 0, gold: 0 },
+      { date: '2026-01-04', portfolio: 1_000, nifty50: null, gold: -1_000 },
+    ]);
   });
 });

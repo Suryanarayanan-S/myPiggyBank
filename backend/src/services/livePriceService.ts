@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { indexClosesName, readIndexCloses } from '../domain/indexCloses.js';
 import { bhavcopyName, priceFor, readBhavcopy, type Bhavcopy } from '../domain/bhavcopy.js';
 import {
   INDEX_LISTS,
@@ -43,6 +44,8 @@ let cached: Bhavcopy | null = null;
 /** For tests: forget what was downloaded and what the runs did. */
 export function forgetLivePrices() {
   cached = null;
+  noFile.clear();
+  noIndex.clear();
   lastFile = null;
   lastError = null;
   warning = null;
@@ -154,53 +157,200 @@ async function run(prisma: PrismaClient, fetchText: FetchText, today: string, ba
     // A run covers every family that wants prices: older outcomes (or switched-off families) go,
     // but only once there is a new file (a failed run keeps showing the last good one).
     outcomes.clear();
-    const date = parseDay(file.date)!;
-    const holdings = await prisma.holding.findMany({
-      where: {
-        familyId: { in: families.map((f) => f.id) },
-        archived: false,
-        currency: 'INR',
-        symbol: { not: null },
-      },
-      // Trades dated after the file's day do not change what was held that day.
-      include: { trades: { where: { date: { lte: date } } }, prices: { where: { date } } },
-    });
+    const familyIds = families.map((f) => f.id);
     const fetchedAt = new Date().toISOString();
-    for (const f of families)
-      outcomes.set(f.id, { asOf: file.date, fetchedAt, updated: 0, notFound: [] });
-    for (const h of holdings) {
-      const units = h.trades.reduce(
-        (s, t) =>
-          s + (t.type === 'buy' ? Number(t.units) : t.type === 'sell' ? -Number(t.units) : 0),
-        0,
-      );
-      if (units <= 0) continue;
-      const outcome = outcomes.get(h.familyId)!;
-      const price = priceFor(file, h.symbol!);
-      if (price === null) {
-        if (!outcome.notFound.includes(h.symbol!)) outcome.notFound.push(h.symbol!);
-        continue;
-      }
-      if (h.prices.some((p) => p.source === 'manual')) continue;
-      await prisma.holdingPrice.upsert({
-        where: { holdingId_date: { holdingId: h.id, date } },
-        create: { holdingId: h.id, date, price, source: 'nse' },
-        update: { price, source: 'nse' },
-      });
-      outcome.updated++;
-    }
+    for (const id of familyIds)
+      outcomes.set(id, { asOf: file.date, fetchedAt, updated: 0, notFound: [] });
+    await applyDay(prisma, file, familyIds, outcomes);
+    const date = parseDay(file.date)!;
     lastFile = formatDay(date);
     lastError = null;
-    // Sectors and size groups: a failure here keeps the old ones and does not undo the prices.
+    // The steps on the side: each failure is said (prices are saved either way).
+    const warnings: string[] = [];
+    const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+    // Nifty 50 and gold for comparison, then the days since the first trade that are missing.
+    try {
+      await storeBenchmarks(prisma, fetchText, baseUrl, file);
+      await backfill(prisma, fetchText, baseUrl, file, familyIds);
+    } catch (err) {
+      warnings.push(`Comparison with Nifty 50 and gold not updated: ${message(err)}.`);
+    }
+    // Sectors and size groups: a failure here keeps the old ones.
     try {
       await refreshInstruments(prisma, fetchText, baseUrl, today);
-      warning = null;
     } catch (err) {
-      warning = `Sectors and size groups were not updated: ${err instanceof Error ? err.message : String(err)}`;
+      warnings.push(`Sectors and size groups were not updated: ${message(err)}.`);
     }
+    warning = warnings.length ? warnings.join(' ') : null;
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);
   }
+}
+
+/**
+ * A day's closing prices for the open rupee holdings of these families (as held that day). A
+ * price typed by hand that day is kept. With `outcomes`, what happened is counted per family.
+ */
+async function applyDay(
+  prisma: PrismaClient,
+  file: Bhavcopy,
+  familyIds: string[],
+  outcomes?: Map<string, Outcome>,
+) {
+  const date = parseDay(file.date)!;
+  const holdings = await prisma.holding.findMany({
+    where: { familyId: { in: familyIds }, archived: false, currency: 'INR', symbol: { not: null } },
+    // Trades dated after the file's day do not change what was held that day.
+    include: { trades: { where: { date: { lte: date } } }, prices: { where: { date } } },
+  });
+  for (const h of holdings) {
+    const units = h.trades.reduce(
+      (s, t) => s + (t.type === 'buy' ? Number(t.units) : t.type === 'sell' ? -Number(t.units) : 0),
+      0,
+    );
+    if (units <= 0) continue;
+    const outcome = outcomes?.get(h.familyId);
+    const price = priceFor(file, h.symbol!);
+    if (price === null) {
+      if (outcome && !outcome.notFound.includes(h.symbol!)) outcome.notFound.push(h.symbol!);
+      continue;
+    }
+    if (h.prices.some((p) => p.source === 'manual')) continue;
+    await prisma.holdingPrice.upsert({
+      where: { holdingId_date: { holdingId: h.id, date } },
+      create: { holdingId: h.id, date, price, source: 'nse' },
+      update: { price, source: 'nse' },
+    });
+    if (outcome) outcome.updated++;
+  }
+}
+
+/** The gold ETF whose price follows the Indian gold price. */
+const GOLD_PROXY = 'GOLDBEES';
+
+/** Nifty 50 (from the day's index closes) and gold (GOLDBEES) for the day of `file`. */
+async function storeBenchmarks(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  baseUrl: string,
+  file: Bhavcopy,
+) {
+  const date = parseDay(file.date)!;
+  const points: { series: string; value: number }[] = [];
+  const gold = priceFor(file, GOLD_PROXY);
+  if (gold !== null) points.push({ series: 'gold', value: gold });
+  // A day's index close never changes: asked until known (or until NSE says it has none).
+  const known = await prisma.benchmarkPoint.findUnique({
+    where: { series_date: { series: 'nifty50', date } },
+  });
+  if (!known && !noIndex.has(file.date)) {
+    const res = await fetchText(`${listsUrl(baseUrl)}/${indexClosesName(file.date)}`);
+    if (res.ok) {
+      const closes = readIndexCloses(await res.text());
+      const nifty = closes.date === file.date ? closes.close('Nifty 50') : null;
+      if (nifty !== null) points.push({ series: 'nifty50', value: nifty });
+      else noIndex.add(file.date);
+    } else if (res.status === 404) noIndex.add(file.date);
+    else throw new Error(`NSE answered ${res.status} for its index closes`);
+  }
+  for (const p of points) {
+    await prisma.benchmarkPoint.upsert({
+      where: { series_date: { series: p.series, date } },
+      create: { series: p.series, date, value: p.value },
+      update: { value: p.value },
+    });
+  }
+}
+
+/** How far back, and how many past days per run (one file each: be gentle with NSE). */
+const BACKFILL_MAX_DAYS = 366;
+const BACKFILL_PER_RUN = 10;
+// Days NSE has no price file / no index close for (holidays): not asked again while the server
+// runs (after a restart they are asked once more — a handful of requests a year).
+const noFile = new Set<string>();
+const noIndex = new Set<string>();
+
+type Trade = { date: Date; type: string; units: bigint };
+/** Units held at the end of a day. */
+const unitsOn = (trades: Trade[], day: string) =>
+  trades
+    .filter((t) => formatDay(t.date) <= day)
+    .reduce(
+      (s, t) => s + (t.type === 'buy' ? Number(t.units) : t.type === 'sell' ? -Number(t.units) : 0),
+      0,
+    );
+
+/**
+ * Past trading days that are still missing something — a gold or Nifty 50 point, or the close
+ * of a holding held that day — since the first trade of a holding that is still held and listed
+ * on NSE (sold-out holdings and ones without a symbol do not reach back). Oldest first.
+ */
+async function backfill(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  baseUrl: string,
+  latest: Bhavcopy,
+  familyIds: string[],
+) {
+  const holdings = await prisma.holding.findMany({
+    where: { familyId: { in: familyIds }, currency: 'INR', archived: false, symbol: { not: null } },
+    include: { trades: true, prices: { select: { date: true } } },
+  });
+  // Held now and listed on NSE: others never get a close, so there is no point asking for them.
+  const open = holdings
+    .filter((h) => unitsOn(h.trades, latest.date) > 0 && priceFor(latest, h.symbol!) !== null)
+    .map((h) => ({ trades: h.trades, priced: new Set(h.prices.map((p) => formatDay(p.date))) }));
+  if (open.length === 0) return;
+  const first = open.flatMap((h) => h.trades.map((t) => formatDay(t.date))).sort()[0]!;
+  const floor = addDays(latest.date, -BACKFILL_MAX_DAYS);
+  let day = first < floor ? floor : first;
+  const points = new Set(
+    (
+      await prisma.benchmarkPoint.findMany({
+        where: { date: { gte: parseDay(day)! } },
+        select: { series: true, date: true },
+      })
+    ).map((p) => `${p.series}|${formatDay(p.date)}`),
+  );
+  const missing = (d: string) =>
+    !points.has(`gold|${d}`) ||
+    (!points.has(`nifty50|${d}`) && !noIndex.has(d)) ||
+    open.some((h) => !h.priced.has(d) && unitsOn(h.trades, d) > 0);
+  let asked = 0;
+  for (; day < latest.date && asked < BACKFILL_PER_RUN; day = addDays(day, 1)) {
+    const weekday = parseDay(day)!.getUTCDay();
+    if (weekday === 0 || weekday === 6 || noFile.has(day) || !missing(day)) continue;
+    asked++;
+    const res = await fetchText(`${baseUrl}/${bhavcopyName(day)}`);
+    if (res.status === 404) {
+      noFile.add(day);
+      continue;
+    }
+    if (!res.ok) throw new Error(`NSE answered ${res.status}`);
+    const file = readBhavcopy(await res.text());
+    // A file that is not that day's, or without a gold close, is not asked again either.
+    if (file.date !== day || priceFor(file, GOLD_PROXY) === null) {
+      noFile.add(day);
+      continue;
+    }
+    await applyDay(prisma, file, familyIds);
+    await storeBenchmarks(prisma, fetchText, baseUrl, file);
+    // What could be had of this day is in: not asked again while the server runs.
+    noFile.add(day);
+  }
+}
+
+/** Nifty 50 and gold since a day, for the comparison chart (values as plain numbers). */
+export async function benchmarks(prisma: PrismaClient, from?: string) {
+  const rows = await prisma.benchmarkPoint.findMany({
+    where: from ? { date: { gte: parseDay(from)! } } : {},
+    orderBy: { date: 'asc' },
+  });
+  const series = (name: string) =>
+    rows
+      .filter((r) => r.series === name)
+      .map((r) => ({ date: formatDay(r.date), value: Number(r.value) / 1_000_000 }));
+  return { nifty50: series('nifty50'), gold: series('gold') };
 }
 
 /** Whether any family wants NSE prices (the server only downloads when one does). */

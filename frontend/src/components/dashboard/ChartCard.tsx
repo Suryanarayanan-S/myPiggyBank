@@ -9,12 +9,15 @@ export function ChartCard({
   subtitle,
   legend,
   table,
+  controls,
   children,
 }: {
   title: string;
   subtitle?: string;
   legend?: LegendItem[];
   table: ReactNode;
+  /** Shown above the chart and its table alike (e.g. a view switch). */
+  controls?: ReactNode;
   children: ReactNode;
 }) {
   const [showTable, setShowTable] = useState(false);
@@ -37,6 +40,7 @@ export function ChartCard({
         </button>
       }
     >
+      {controls}
       {legend && legend.length > 1 && (
         <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
           {legend.map((l) => (

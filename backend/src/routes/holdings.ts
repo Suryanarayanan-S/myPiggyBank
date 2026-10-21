@@ -5,12 +5,18 @@ import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
-import { livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
+import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
 import { AppError } from '../lib/errors.js';
-import { todayLocal } from '../lib/dates.js';
+import { parseDay, todayLocal } from '../lib/dates.js';
 
 // A holdings file (base64) plus the other fields.
 const bodyLimit = hi.MAX_FILE_CHARS + 64 * 1024;
+const BenchmarkQuery = z.object({
+  from: z
+    .string()
+    .refine((d) => parseDay(d) !== null, 'Use a real date as YYYY-MM-DD')
+    .optional(),
+});
 const SubParams = z.object({ id: z.uuid(), subId: z.uuid() });
 
 export const holdingRoutes: FastifyPluginAsync = async (app) => {
@@ -36,6 +42,10 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
   }));
   // Daily closing prices from NSE (opt-in per family).
   app.get('/holdings/live-prices', async (req) => ({ data: livePriceStatus(fam(req)) }));
+  // Nifty 50 and gold (public market data) to compare investments with.
+  app.get('/holdings/benchmarks', async (req) => ({
+    data: await benchmarks(app.prisma, parse(BenchmarkQuery, req.query).from),
+  }));
   app.post('/holdings/live-prices/refresh', async (req) => {
     if (!app.livePrices) {
       throw new AppError(503, 'LIVE_PRICES_OFF', 'This server is not set up to download prices');

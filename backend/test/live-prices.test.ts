@@ -17,7 +17,9 @@ const day = (date: string, infy: string) =>
   ].join('\n');
 
 /** A fake NSE archive: files for 13 and 14 Oct 2026 only (the 15th is not published yet). */
-function fakeNse(opts: { fail?: boolean; everyDay?: boolean; noLists?: boolean } = {}) {
+function fakeNse(
+  opts: { fail?: boolean; everyDay?: boolean; noLists?: boolean; badIndex?: boolean } = {},
+) {
   const urls: string[] = [];
   const fetchText: FetchText = async (url) => {
     urls.push(url);
@@ -36,6 +38,18 @@ function fakeNse(opts: { fail?: boolean; everyDay?: boolean; noLists?: boolean }
       'ind_niftysmallcap250list.csv': 'Company Name,Industry,Symbol,Series,ISIN Code',
       'ind_niftymicrocap250_list.csv': 'Company Name,Industry,Symbol,Series,ISIN Code',
     };
+    const idx: Record<string, string> = {
+      'ind_close_all_13102026.csv':
+        'Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value\nNifty 50,13-10-2026,1,1,1,25000.00',
+      'ind_close_all_14102026.csv':
+        'Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value\nNifty 50,14-10-2026,1,1,1,25500.00',
+    };
+    if (name.startsWith('ind_close_all_') && opts.badIndex)
+      return { ok: true, status: 200, text: async () => '<html>busy</html>' };
+    if (name.startsWith('ind_close_all_'))
+      return idx[name]
+        ? { ok: true, status: 200, text: async () => idx[name]! }
+        : { ok: false, status: 404, text: async () => '' };
     if (lists[name] && opts.noLists) return { ok: false, status: 404, text: async () => '' };
     if (lists[name]) return { ok: true, status: 200, text: async () => lists[name]! };
     // everyDay: a file for whatever day is asked (tests that use the real date).
@@ -107,7 +121,13 @@ describe('daily prices from NSE', () => {
 
     await call('PUT', '/api/family', { livePrices: true });
     status = await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
-    expect(nse.urls.filter((u) => u.includes('/sec_')).map((u) => u.split('/').at(-1))).toEqual([
+    // the newest published day first (older ones are filled in afterwards)
+    expect(
+      nse.urls
+        .filter((u) => u.includes('/sec_'))
+        .slice(0, 2)
+        .map((u) => u.split('/').at(-1)),
+    ).toEqual([
       'sec_bhavdata_full_15102026.csv', // not yet published
       'sec_bhavdata_full_14102026.csv',
     ]);
@@ -216,7 +236,7 @@ describe('daily prices from NSE', () => {
   it('learns each company’s industry and size group, about once a month', async () => {
     await call('PUT', '/api/family', { livePrices: true });
     await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
-    const lists = () => nse.urls.filter((u) => u.includes('/ind_')).length;
+    const lists = () => nse.urls.filter((u) => u.includes('/ind_nifty')).length;
     expect(lists()).toBe(5);
     const h = await value(infy);
     expect(h).toMatchObject({ industry: 'Information Technology', cap: 'large' });
@@ -236,5 +256,104 @@ describe('daily prices from NSE', () => {
     );
     expect(status).toMatchObject({ asOf: '2026-10-14', updated: 1, lastError: null });
     expect(status.warning).toMatch(/sectors/i);
+  });
+
+  it('keeps Nifty 50 and gold for each day, and fills in the days since the first trade', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const b = (await call('GET', '/api/holdings/benchmarks')).json().data;
+    expect(b.nifty50).toEqual([
+      { date: '2026-10-13', value: 25000 },
+      { date: '2026-10-14', value: 25500 },
+    ]);
+    expect(b.gold.map((p: { date: string }) => p.date)).toEqual(['2026-10-13', '2026-10-14']);
+    // the 13th's close was saved for the holding too (value over time fills in)
+    const prices = (await value(infy)).prices.map((p: { date: string }) => p.date);
+    expect(prices).toEqual(['2026-10-14', '2026-10-13']);
+    // weekdays since the first trade (1 Oct) were asked once; days without a file are not again
+    const asked = () => nse.urls.filter((u) => u.includes('/sec_')).length;
+    const before = asked();
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    expect(asked() - before).toBe(1); // only today's, still unpublished
+  });
+
+  it('says when the comparison could not be updated, even when sectors are fine', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    const status = await refreshLivePrices(
+      prisma,
+      fakeNse({ badIndex: true }).fetchText,
+      '2026-10-15',
+    );
+    expect(status).toMatchObject({ lastError: null, updated: 1 });
+    expect(status.warning).toMatch(/Nifty 50/);
+  });
+
+  it('a holding added later with older trades gets its past closes too', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const late = (
+      await call('POST', '/api/holdings', {
+        name: 'TCS',
+        kind: 'stock',
+        symbol: 'GOLDBEES',
+        currency: 'INR',
+      })
+    ).json().data;
+    await call('POST', `/api/holdings/${late.id}/trades`, {
+      date: '2026-10-12',
+      type: 'buy',
+      units: '1',
+      amount: 10_000,
+    });
+    forgetLivePrices(); // a later run (e.g. after a restart)
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const h = (await call('GET', '/api/holdings'))
+      .json()
+      .data.holdings.find((x: { id: string }) => x.id === late.id);
+    expect(h.prices.map((p: { date: string }) => p.date)).toContain('2026-10-13');
+  });
+
+  it('fills in only from the first trade of a holding still held, with a symbol', async () => {
+    await call('PUT', '/api/family', { livePrices: true });
+    // sold long ago, and an old one without a symbol: neither makes the backfill reach back
+    const old = (
+      await call('POST', '/api/holdings', {
+        name: 'OLD',
+        kind: 'stock',
+        symbol: 'OLD',
+        currency: 'INR',
+      })
+    ).json().data;
+    await call('POST', `/api/holdings/${old.id}/trades`, {
+      date: '2025-01-06',
+      type: 'buy',
+      units: '1',
+      amount: 100,
+    });
+    await call('POST', `/api/holdings/${old.id}/trades`, {
+      date: '2025-02-03',
+      type: 'sell',
+      units: '1',
+      amount: 100,
+    });
+    const plain = (
+      await call('POST', '/api/holdings', { name: 'Chit fund', kind: 'other', currency: 'INR' })
+    ).json().data;
+    await call('POST', `/api/holdings/${plain.id}/trades`, {
+      date: '2025-03-03',
+      type: 'buy',
+      units: '1',
+      amount: 100,
+    });
+    await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
+    const days = nse.urls
+      .filter((u) => u.includes('/sec_'))
+      .map((u) => u.match(/_(\d{2})(\d{2})(\d{4})\.csv/)!)
+      .map((m) => `${m[3]}-${m[2]}-${m[1]}`);
+    expect(days.every((d) => d >= '2026-10-01')).toBe(true);
+  });
+
+  it('refuses a date that does not exist', async () => {
+    expect((await call('GET', '/api/holdings/benchmarks?from=2026-02-30')).statusCode).toBe(400);
   });
 });

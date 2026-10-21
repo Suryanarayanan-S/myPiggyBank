@@ -262,3 +262,82 @@ export function sliceColors(grouping: Grouping, slices: { label: string }[]): st
     return slot ? `var(--c-cat-${slot})` : 'var(--c-rest)';
   });
 }
+
+/**
+ * The portfolio's performance as an index (1 = the first day), time-weighted: money bought or
+ * sold on a day is taken out of that day's change, so adding money never looks like a gain.
+ * One currency only (like `valueHistory`).
+ */
+export function returnIndex(holdings: Holding[]): { date: string; index: number }[] {
+  const flows = new Map<string, number>();
+  for (const h of holdings.filter((x) => !x.archived)) {
+    for (const t of h.trades) {
+      // Like valueHistory: only trades that move units move money in or out.
+      if (t.type === 'dividend' || !t.units) continue;
+      const money = t.type === 'buy' ? t.amount + t.fees : -(t.amount - t.fees);
+      flows.set(t.date, (flows.get(t.date) ?? 0) + money);
+    }
+  }
+  const out: { date: string; index: number }[] = [];
+  let index = 0;
+  let before = 0;
+  for (const p of valueHistory(holdings)) {
+    if (before > 0) {
+      index *= (p.value - (flows.get(p.date) ?? 0)) / before;
+      out.push({ date: p.date, index: Math.round(index * 1e10) / 1e10 });
+    } else if (p.value > 0 && out.length === 0) {
+      index = 1;
+      out.push({ date: p.date, index });
+    }
+    before = p.value;
+  }
+  return out;
+}
+
+export type ComparisonRow = {
+  date: string;
+  /** change since the start, basis points (null: no point that day) */
+  portfolio: number | null;
+  nifty50: number | null;
+  gold: number | null;
+};
+
+/**
+ * Portfolio, Nifty 50 and gold as % change since the first day all three are known (each
+ * measured from its last value on or before that day).
+ */
+export function compareSince(
+  portfolio: { date: string; index: number }[],
+  nifty50: { date: string; value: number }[],
+  gold: { date: string; value: number }[],
+): ComparisonRow[] {
+  const series = {
+    portfolio: portfolio.map((p) => ({ date: p.date, value: p.index })),
+    nifty50,
+    gold,
+  };
+  if (Object.values(series).some((s) => s.length === 0)) return [];
+  const start = Object.values(series)
+    .map((s) => s[0]!.date)
+    .sort()
+    .at(-1)!;
+  const base = (s: { date: string; value: number }[]) =>
+    s.filter((p) => p.date <= start).at(-1)!.value;
+  const bases = {
+    portfolio: base(series.portfolio),
+    nifty50: base(series.nifty50),
+    gold: base(series.gold),
+  };
+  const at = (key: keyof typeof series, day: string) => {
+    const p = series[key].find((x) => x.date === day);
+    return p && bases[key] > 0 ? Math.round((p.value / bases[key] - 1) * 10_000) : null;
+  };
+  const days = [...new Set(Object.values(series).flatMap((s) => s.map((p) => p.date)))]
+    .filter((d) => d >= start)
+    .sort();
+  return days.map((d) =>
+    d === start
+      ? { date: d, portfolio: 0, nifty50: 0, gold: 0 }
+      : { date: d, portfolio: at('portfolio', d), nifty50: at('nifty50', d), gold: at('gold', d) },
+  );
+}

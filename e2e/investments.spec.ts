@@ -86,6 +86,34 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   ).toContainText('12,40 €');
   await shot(page, '26-investments');
 
+  // Compared with Nifty 50 and gold: daily NSE data stands in (the test server is offline).
+  const days = [90, 60, 30, 5, 0].map(daysAgo);
+  await page.route('**/api/holdings/benchmarks', (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          nifty50: days.map((date, i) => ({ date, value: 24_000 + i * 300 })),
+          gold: days.map((date, i) => ({ date, value: 60 + i * 4 })),
+        },
+      },
+    }),
+  );
+  await page.getByLabel('Daily closing prices from NSE').click();
+  await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
+  const compare = page.locator('section', { has: page.getByText(/^Change since/) });
+  await expect(compare).toContainText('Nifty 50');
+  await expect(compare).toContainText('Gold (GOLDBEES)');
+  await compare.getByRole('button', { name: 'Show table' }).click();
+  // gold 60 → 76 by the last day, in the gold column; the view switch stays in table view
+  await expect(compare.getByRole('row').last().getByRole('cell').nth(3)).toHaveText('+26.7 %');
+  await expect(compare.getByRole('button', { name: 'Value (₹)' })).toBeVisible();
+  await compare.getByRole('button', { name: 'Show chart' }).click();
+  await shot(page, '35-investments-vs-nifty-gold');
+  await page.getByRole('button', { name: 'Value (₹)' }).click();
+  await page.getByLabel('Daily closing prices from NSE').click();
+
   await page.getByRole('button', { name: 'Switch to retro look' }).click();
   await page.getByRole('dialog', { name: 'myPiggyBank start screen' }).press('Enter');
   await page.screenshot({ path: 'e2e/screenshots/27-retro-investments.png', fullPage: true });
@@ -195,5 +223,15 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await daily.click();
   await expect(daily).toBeChecked();
   await expect(page.getByText(/Could not update: .*The last prices are kept/)).toBeVisible();
+
+  // Value over time: the comparison with Nifty 50 and gold needs NSE data (none here).
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'vs Nifty 50 & gold' }).click();
+  await expect(page.getByRole('button', { name: 'vs Nifty 50 & gold' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByText(/comparison starts once there are two trading days/)).toBeVisible();
+  await page.getByRole('button', { name: 'Value (₹)' }).click();
   await expect(value).toContainText('₹6,37,036.40');
 });

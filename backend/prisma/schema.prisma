@@ -469,3 +469,14 @@ model InstrumentInfo {
   cap       String?
   updatedAt DateTime @updatedAt
 }
+
+/// Public market series to compare investments with (Nifty 50, gold), one point per trading day.
+model BenchmarkPoint {
+  /// nifty50 | gold
+  series String
+  date   DateTime
+  /// closing value in micros (index points, or rupees per unit of the gold ETF)
+  value  BigInt
+
+  @@id([series, date])
+}

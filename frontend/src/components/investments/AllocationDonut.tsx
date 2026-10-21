@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import clsx from 'clsx';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
@@ -7,6 +6,7 @@ import { SURFACE } from '../../lib/chart';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
+import { useRemembered } from '../../lib/remember';
 import {
   allGroups,
   allocation,
@@ -35,7 +35,12 @@ export function AllocationDonut({
   currency: string;
   subtitle?: string;
 }) {
-  const [measure, setMeasure] = useState<Measure>('value');
+  // each donut remembers its own switch on this browser
+  const [measure, setMeasure] = useRemembered<Measure>(
+    `pb-donut-${grouping.title}`,
+    ['value', 'cost'],
+    'value',
+  );
   const slices = allocation(holdings, grouping, 4, measure);
   const everyGroup = allGroups(holdings, grouping);
   const putIn = new Map(allGroups(holdings, grouping, 'cost').map((g) => [g.label, g]));

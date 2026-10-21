@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import clsx from 'clsx';
 import { Card } from '../ui/Card';
 import { gainClass, signed, type Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
+import { useRemembered } from '../../lib/remember';
 import {
   ACCOUNT,
   CAP,
@@ -39,10 +39,10 @@ export function PortfolioOverview({
   const top = ranked(holdings, currency).slice(0, 10);
   const overall = contributors(holdings, 5);
   const day = dayMovers(holdings, 5);
-  // The day chosen; a new day (or none) starts on Overall again.
-  const [picked, setPicked] = useState<string | null>(null);
+  // Overall or the day, remembered on this browser (Overall while there is no day to show).
+  const [span, setSpan] = useRemembered('pb-contributors', ['overall', 'day'] as const, 'overall');
   const hasDay = day.performers.length + day.decliners.length > 0;
-  const shown = hasDay && picked === day.date ? day : null;
+  const shown = hasDay && span === 'day' ? day : null;
   const performers = shown
     ? shown.performers
     : overall.performers.map((r) => ({ ...r, changeBp: r.holding.returnBp }));
@@ -119,7 +119,7 @@ export function PortfolioOverview({
                   key={key}
                   type="button"
                   aria-pressed={(shown ? 'day' : 'overall') === key}
-                  onClick={() => setPicked(key === 'day' ? day.date : null)}
+                  onClick={() => setSpan(key)}
                   className={clsx(
                     'rounded-md px-3 py-1',
                     (shown ? 'day' : 'overall') === key

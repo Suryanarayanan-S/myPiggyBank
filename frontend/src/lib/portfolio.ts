@@ -343,6 +343,19 @@ export function dayChanges(holdings: Holding[]) {
   };
 }
 
+/**
+ * The whole portfolio's move on the latest market day (summary currency): against the value
+ * the day before of the holdings that moved. Null without a day.
+ */
+export function dayTotal(holdings: Holding[]) {
+  const { date, rows } = dayChanges(holdings);
+  const counted = rows.filter((r) => r.inSummary);
+  if (!date || counted.length === 0) return null;
+  const pnl = counted.reduce((s, r) => s + r.pnl, 0);
+  const before = counted.reduce((s, r) => s + r.value, 0) - pnl;
+  return { date, pnl, changeBp: before > 0 ? Math.round((pnl * 10_000) / before) : 0 };
+}
+
 /** The day's biggest movers each way (see `dayChanges`). */
 export function dayMovers(holdings: Holding[], n: number) {
   const { date, rows } = dayChanges(holdings);

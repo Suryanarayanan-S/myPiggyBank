@@ -9,6 +9,7 @@ import {
   contributors,
   dayChanges,
   dayMovers,
+  dayTotal,
   returnIndex,
   sliceColors,
   isSoldOut,
@@ -335,6 +336,29 @@ describe('portfolio', () => {
       ['Down', -5_000, -500],
     ]);
     expect(dayMovers([h('A')], 5)).toEqual({ date: null, performers: [], decliners: [] });
+  });
+
+  it("adds up the day's move of what is in the summary currency", () => {
+    const px = (...list: [string, string][]) =>
+      list.map(([date, price], i) => ({ id: String(i), date, price }));
+    const at = (value: number) => ({ value, inView: { value, cost: value } });
+    expect(
+      dayTotal([
+        // 10 units 100 → 110: +10,000 on a value of 110,000 (100,000 the day before)
+        h('Up', { ...at(110_000), prices: px(['2026-10-19', '100'], ['2026-10-21', '110']) }),
+        // 10 units 100 → 95: −5,000 (100,000 before)
+        h('Down', { ...at(95_000), prices: px(['2026-10-19', '100'], ['2026-10-21', '95']) }),
+        // no day move: not part of the base
+        h('Still', at(500_000)),
+        // no exchange rate: not added up
+        h('Usd', {
+          currency: 'USD',
+          inView: null,
+          prices: px(['2026-10-19', '100'], ['2026-10-21', '200']),
+        }),
+      ]),
+    ).toEqual({ date: '2026-10-21', pnl: 5_000, changeBp: 250 }); // 5,000 of 200,000
+    expect(dayTotal([h('Still')])).toBeNull();
   });
 
   it('takes the day most holdings share, on market days, against a recent price', () => {

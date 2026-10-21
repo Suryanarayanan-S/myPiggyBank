@@ -104,6 +104,16 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('+31,25 €');
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('2.1 %');
   await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
+  // The Dashboard shows the day's move too (in euros, the summary currency here).
+  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  const invest = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Investments' }),
+  });
+  await expect(invest).toContainText('1.506,25 €');
+  await expect(invest).toContainText('+31,25 €');
+  await page.getByRole('link', { name: 'Investments' }).first().click();
+  // …and the Day choice is remembered.
+  await expect(contrib.getByLabel('Top performers of the day')).toBeVisible();
   await contrib.getByRole('button', { name: 'Overall' }).click();
   // …and in the holdings table, next to the overall change.
   await page.getByRole('tab', { name: /Holdings/ }).click();
@@ -248,6 +258,16 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await card('Account').getByRole('button', { name: 'Show table' }).click();
   await expect(card('Account').getByRole('row', { name: /Gold/ })).toContainText('₹3,12,899.59');
   await card('Account').getByRole('button', { name: 'Show chart' }).click();
+  // Each donut remembers its switch; the other donuts keep their own.
+  await page.reload();
+  await expect(card('Account').getByRole('button', { name: 'Invested' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(card('Sectors').getByRole('button', { name: 'Current' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await card('Account').getByRole('button', { name: 'Current' }).click();
   await expect(card('Account')).toContainText('94.5 %');
   await expect(card('Sectors')).toContainText('Not classified');

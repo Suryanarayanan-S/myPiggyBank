@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { CashFlowChart } from '../components/dashboard/CashFlowChart';
 import { Insights } from '../components/dashboard/Insights';
+import { InvestmentsSummary } from '../components/dashboard/InvestmentsSummary';
 import { PeriodFilter } from '../components/dashboard/PeriodFilter';
 import { CategoryBars, MemberBars } from '../components/dashboard/RankBars';
 import { StatTiles } from '../components/dashboard/StatTiles';
@@ -151,6 +152,7 @@ export function DashboardPage() {
             <MemberBars d={d} />
           </div>
           <GoalsSummary />
+          <InvestmentsSummary />
           {d.accounts.length > 0 && (
             <Card title="Account balances today">
               <dl className="flex flex-wrap gap-x-8 gap-y-2">

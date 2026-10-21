@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CartesianGrid,
@@ -13,7 +13,15 @@ import { useMe } from '../../auth/auth';
 import { Card } from '../ui/Card';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
-import { AXIS, GRID, SURFACE, axisTick, niceTicks, spreadLabels } from '../../lib/chart';
+import {
+  AXIS,
+  GRID,
+  SURFACE,
+  axisTick,
+  nearGroups,
+  niceTicks,
+  spreadLabels,
+} from '../../lib/chart';
 import { api } from '../../lib/api';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
@@ -174,6 +182,14 @@ function Picker({
  */
 export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
   const me = useMe();
+  // The chart's width, to tell which end labels sit close enough side by side to touch.
+  const [width, setWidth] = useState(0);
+  const measure = useCallback((el: HTMLDivElement | null) => {
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const watch = new ResizeObserver(([e]) => setWidth(e?.contentRect.width ?? 0));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   const on = me.data?.family.livePrices ?? false;
   // Adding up day by day needs one currency; the markets can still be compared without yours.
   const single = oneCurrency(holdings);
@@ -279,18 +295,24 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
   const lastOf: Record<string, number> = Object.fromEntries(
     keys.map((k) => [k, rows.reduce((at, x, i) => (x.change[k] != null ? i : at), -1)]),
   );
-  // Labels ending on the same day are spread apart so none overlap (e.g. 22K and 24K gold,
-  // which move alike). Pixels follow the plot: 256 high, 8 margin on top, a 30 high x axis.
-  const PLOT = { top: 8, height: 256 - 8 - 30 };
+  // End labels close enough to touch are spread apart (e.g. 22K and 24K gold, which move
+  // alike), also when their lines end on different days. Pixels follow the plot: 256 high, 8
+  // margin on top, a 30 high x axis; 52 for the y axis on the left, 72 for labels on the right.
+  // Until the width is known, only labels ending on the same day count as close.
+  const PLOT = { top: 8, height: 256 - 8 - 30, left: 52, width: Math.max(0, width - 52 - 72) };
   const [low, high] = [ticks[0]!, ticks.at(-1)!];
+  const ended = keys.filter((k) => lastOf[k]! >= 0);
+  const xOf = (k: LineKey) =>
+    width > 0
+      ? PLOT.left + (lastOf[k]! / Math.max(1, rows.length - 1)) * PLOT.width
+      : lastOf[k]! * 1_000;
+  const yOf = (k: LineKey) =>
+    PLOT.top + ((high - (rows[lastOf[k]!]!.change[k] ?? 0)) / (high - low || 1)) * PLOT.height;
   const shift: Record<string, number> = {};
-  for (const at of new Set(Object.values(lastOf))) {
-    const group = keys.filter((k) => lastOf[k] === at && at >= 0);
-    const ys = group.map(
-      (k) => PLOT.top + ((high - (rows[at]!.change[k] ?? 0)) / (high - low || 1)) * PLOT.height,
-    );
+  for (const group of nearGroups(ended.map(xOf), 60)) {
+    const ys = group.map((i) => yOf(ended[i]!));
     const placed = spreadLabels(ys, 12, PLOT.top, PLOT.top + PLOT.height);
-    group.forEach((k, i) => (shift[k] = placed[i]! - ys[i]!));
+    group.forEach((i, j) => (shift[ended[i]!] = placed[j]! - ys[j]!));
   }
   const data = rows.map((r) => ({ date: r.date, ...r.change }));
   /** The value itself next to its change, e.g. "₹13,400/g (+3.1 %)". */
@@ -329,7 +351,7 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
         />
       }
     >
-      <div className="h-64">
+      <div className="h-64" ref={measure}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 72, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke={GRID} />

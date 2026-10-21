@@ -115,14 +115,23 @@ describe('portfolio', () => {
       h('Down', { prices: px(['2026-10-19', '100'], ['2026-10-21', '95']) }),
       h('Flat', { prices: px(['2026-10-19', '100'], ['2026-10-21', '100']) }),
       h('None'),
+      // no exchange rate: its % still shows, its money stays in its own currency
+      h('Usd', {
+        currency: 'USD',
+        inView: null,
+        prices: px(['2026-10-19', '100'], ['2026-10-21', '102']),
+      }),
     ];
     const day = dayChanges(list);
     expect(day.date).toBe('2026-10-21');
     expect(Object.fromEntries(day.byId)).toEqual({
-      Up: { pnl: 10_000, changeBp: 1_000 },
-      Down: { pnl: -5_000, changeBp: -500 },
-      Flat: { pnl: 0, changeBp: 0 },
+      Up: { pnl: 10_000, changeBp: 1_000, inSummary: true },
+      Down: { pnl: -5_000, changeBp: -500, inSummary: true },
+      Flat: { pnl: 0, changeBp: 0, inSummary: true },
+      Usd: { pnl: 2_000, changeBp: 200, inSummary: false },
     });
+    // the day's top lists compare money: only what is in the summary currency
+    expect(dayMovers(list, 5).performers.map((r) => r.holding.name)).toEqual(['Up']);
     const rows = ranked(list);
     expect(sortHoldings(rows, 'dayPct', 'desc', day.byId).map((r) => r.holding.name)).toEqual([
       'Up',

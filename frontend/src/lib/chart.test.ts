@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { niceTicks, shortMonth, spreadLabels } from './chart';
+import { nearGroups, niceTicks, shortMonth, spreadLabels } from './chart';
 
 describe('niceTicks', () => {
   it('covers the data with round steps from zero', () => {
@@ -36,5 +36,13 @@ describe('spreadLabels', () => {
   it('keeps them inside the plot', () => {
     expect(spreadLabels([0, 1], 12, 0, 100)).toEqual([0, 12]);
     expect(spreadLabels([100, 99], 12, 0, 100)).toEqual([100, 88]);
+  });
+});
+
+describe('nearGroups', () => {
+  it('groups labels close enough side by side to touch', () => {
+    expect(nearGroups([300, 100, 290, 295], 60)).toEqual([[1], [2, 3, 0]]);
+    expect(nearGroups([0, 50, 100, 200], 60)).toEqual([[0, 1, 2], [3]]);
+    expect(nearGroups([], 60)).toEqual([]);
   });
 });

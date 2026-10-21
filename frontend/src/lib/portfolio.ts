@@ -82,7 +82,13 @@ export function profitSplit(holdings: Holding[]) {
 export type SortKey =
   'name' | 'units' | 'invested' | 'value' | 'pnl' | 'pnlPct' | 'dayPct' | 'weight';
 /** A holding's move on the latest market day (see `dayChanges`). */
-export type DayChange = { pnl: number; changeBp: number };
+export type DayChange = {
+  /** in the summary currency, or the holding's own without an exchange rate */
+  pnl: number;
+  changeBp: number;
+  /** pnl is in the summary currency (comparable, counted in totals) */
+  inSummary: boolean;
+};
 // Money columns only compare amounts in the summary currency; other rows sort last.
 const inSummary = (r: RankedHolding, n: number) => (r.weightBp === null ? null : n);
 const sortValue: Record<
@@ -273,7 +279,9 @@ const DAY_MS = 86_400_000;
  * before (the move would mix in the trade).
  */
 export function dayChanges(holdings: Holding[]) {
-  const rows = ranked(holdings).flatMap((r) => {
+  // Holdings without an exchange rate are included too: their % needs no rate.
+  const rows = listed(holdings, '').flatMap((r) => {
+    if (r.empty || !isHeld(r.holding)) return [];
     const prices = r.holding.prices
       .filter((p) => !weekend(p.date))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -287,9 +295,10 @@ export function dayChanges(holdings: Holding[]) {
     const from = Number(before.price);
     if (gap > 5 * DAY_MS || traded || from <= 0) return [];
     const step = Number(last.price) - from;
-    // in the summary currency, like the rest of the overview
+    // in the summary currency, like the rest of the overview (or its own: then r.value is too)
     const pnl = Math.round(Number(r.holding.units) * step * 100 * (r.value / r.holding.value));
-    return [{ ...r, date: last.date, pnl, changeBp: Math.round((step / from) * 10_000) }];
+    const changeBp = Math.round((step / from) * 10_000);
+    return [{ ...r, date: last.date, pnl, changeBp, inSummary: r.weightBp !== null }];
   });
   const count = new Map<string, number>();
   for (const r of rows) count.set(r.date, (count.get(r.date) ?? 0) + 1);
@@ -300,14 +309,19 @@ export function dayChanges(holdings: Holding[]) {
     date,
     rows: today,
     byId: new Map<string, DayChange>(
-      today.map((r) => [r.holding.id, { pnl: r.pnl, changeBp: r.changeBp }]),
+      today.map((r) => [
+        r.holding.id,
+        { pnl: r.pnl, changeBp: r.changeBp, inSummary: r.inSummary },
+      ]),
     ),
   };
 }
 
 /** The day's biggest movers each way (see `dayChanges`). */
 export function dayMovers(holdings: Holding[], n: number) {
-  const { date, rows: today } = dayChanges(holdings);
+  const { date, rows } = dayChanges(holdings);
+  // money is only compared in the summary currency
+  const today = rows.filter((r) => r.inSummary);
   return {
     date,
     performers: today

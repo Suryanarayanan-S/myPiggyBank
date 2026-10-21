@@ -84,6 +84,8 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
 
   // Totals follow "Show in"; without an EUR→INR rate the INR default lists them separately.
   await expect(page.getByText(/Not in the totals/)).toBeVisible();
+  // …but its day's move needs no rate.
+  await expect(row.getByRole('cell').nth(8)).toHaveText('2.1 %');
   await page
     .getByRole('combobox', { name: 'Show amounts in' })
     .filter({ visible: true })

@@ -66,3 +66,17 @@ export function spreadLabels(ys: number[], gap: number, min = -Infinity, max = I
   for (const c of clusters) c.members.forEach((m, j) => (out[m.i] = c.top + j * gap));
   return out;
 }
+
+/** Indexes of items whose x positions chain within `within` of each other (labels that could
+ *  touch side by side), each group in x order. */
+export function nearGroups(xs: number[], within: number): number[][] {
+  const order = xs.map((x, i) => ({ x, i })).sort((a, b) => a.x - b.x || a.i - b.i);
+  const groups: number[][] = [];
+  let lastX = -Infinity;
+  for (const o of order) {
+    if (o.x - lastX < within && groups.length) groups.at(-1)!.push(o.i);
+    else groups.push([o.i]);
+    lastX = o.x;
+  }
+  return groups;
+}

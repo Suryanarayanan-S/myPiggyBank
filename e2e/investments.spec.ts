@@ -97,7 +97,9 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   const value = page.locator('section', { has: page.getByText('Value', { exact: true }) }).first();
   await expect(value).toContainText('1.506,25 €');
   await expect(
-    page.locator('section', { has: page.getByText('Dividends', { exact: true }) }).first(),
+    page
+      .locator('section', { has: page.getByText('Dividends & interest', { exact: true }) })
+      .first(),
   ).toContainText('12,40 €');
   await shot(page, '26-investments');
   // Contributors to returns: overall, or the latest market day.
@@ -275,7 +277,9 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(income.getByRole('row').filter({ hasText: '₹750.00' })).toHaveCount(1);
   await income.getByRole('button', { name: 'Show chart' }).click();
   await expect(
-    page.locator('section', { has: page.getByText('Dividends', { exact: true }) }).first(),
+    page
+      .locator('section', { has: page.getByText('Dividends & interest', { exact: true }) })
+      .first(),
   ).toContainText('₹1,388.00');
   // The same report again: nothing new.
   await page.getByRole('button', { name: 'Import dividends' }).click();
@@ -442,6 +446,10 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(
     page.locator('section', { has: page.getByText('XIRR', { exact: true }) }).first(),
   ).toContainText(/[+−-]\d+\.\d %/);
+  // Bought and sold entirely: archived, with what the sale booked (10 × (682.04 − 745.83))
+  const adani = page.getByRole('row').filter({ hasText: 'ADANIPORTS' });
+  await expect(adani).toContainText('−₹637.90');
+  await expect(adani).toContainText('booked');
 
   // Past dividends from NSE's history (offline here: none found, nothing added).
   await page.getByRole('button', { name: 'Add past dividends' }).click();

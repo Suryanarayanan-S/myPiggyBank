@@ -64,6 +64,9 @@ export function InvestmentsPage() {
   const open = useMemo(() => data.data?.holdings.filter((h) => !h.archived) ?? [], [data.data]);
   const archived = data.data?.holdings.filter((h) => h.archived) ?? [];
   const soldOut = open.filter(isSoldOut);
+  const paidOut = (data.data?.holdings ?? []).some((h) =>
+    h.trades.some((t) => t.type === 'dividend' || t.type === 'interest'),
+  );
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'holdings' ? 'holdings' : 'overview';
   const split = profitSplit(open);
@@ -135,9 +138,9 @@ export function InvestmentsPage() {
               tone={s.unrealised}
             />
             <Tile
-              label="Dividends"
+              label="Dividends & interest"
               value={formatMoney(s.dividends, s.currency)}
-              hint={`sold: ${signed(s.realised, s.currency)}`}
+              hint={`profit booked on sales: ${signed(s.realised, s.currency)}`}
             />
             {xirr && (
               <Tile
@@ -207,6 +210,20 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
+            {!paidOut && (
+              <Card title="Dividends, interest, splits and mergers">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    None recorded yet. Add past dividends works out every dividend and gold bond
+                    interest since your first trade, and lists each split, bonus, demerger and
+                    merger with your shares before and after.
+                  </p>
+                  <Button variant="secondary" onClick={() => setDialog({ kind: 'past' })}>
+                    <History size={16} aria-hidden /> Add past dividends
+                  </Button>
+                </div>
+              </Card>
+            )}
             {/* Sold holdings' payouts count too (archived ones included). */}
             <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
             <CorporateHistory />
@@ -301,6 +318,32 @@ export function InvestmentsPage() {
   );
 }
 
+/**
+ * A holding sold out shows what the sales booked (a gain on ₹0 left says nothing), with the
+ * dividends it paid; one still held its gain on paper.
+ */
+function gainOf(h: Holding) {
+  const sold = Number(h.units) === 0 && h.trades.some((t) => t.type === 'sell');
+  if (!sold) return { amount: h.unrealised, bp: h.returnBp, note: null };
+  return {
+    amount: h.realised,
+    bp: h.realisedBp,
+    note:
+      h.dividends > 0 ? `booked · +${formatMoney(h.dividends, h.currency)} dividends` : 'booked',
+  };
+}
+
+function Gain({ h }: { h: Holding }) {
+  const g = gainOf(h);
+  return (
+    <span className={clsx('tabular-nums', gainClass(g.amount))}>
+      {g.amount === null ? '—' : signed(g.amount, h.currency)}
+      {g.bp !== null && <span className="block text-xs">{formatPercent(g.bp)}</span>}
+      {g.note && <span className="block text-xs text-slate-500">{g.note}</span>}
+    </span>
+  );
+}
+
 function HoldingsTable({
   list,
   owner,
@@ -341,9 +384,8 @@ function HoldingsTable({
                 <span className="text-lg font-semibold tabular-nums">
                   {h.value === null ? '—' : formatMoney(h.value, h.currency)}
                 </span>
-                <span className={clsx('text-right text-sm tabular-nums', gainClass(h.unrealised))}>
-                  {h.unrealised === null ? '—' : signed(h.unrealised, h.currency)}
-                  {h.returnBp !== null && ` · ${formatPercent(h.returnBp)}`}
+                <span className="text-right text-sm">
+                  <Gain h={h} />
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
@@ -414,13 +456,8 @@ function HoldingsTable({
                   <td className="px-3 py-3 text-right font-medium tabular-nums">
                     {h.value === null ? '—' : formatMoney(h.value, h.currency)}
                   </td>
-                  <td
-                    className={clsx('px-3 py-3 text-right tabular-nums', gainClass(h.unrealised))}
-                  >
-                    {h.unrealised === null ? '—' : signed(h.unrealised, h.currency)}
-                    {h.returnBp !== null && (
-                      <span className="block text-xs">{formatPercent(h.returnBp)}</span>
-                    )}
+                  <td className="px-3 py-3 text-right">
+                    <Gain h={h} />
                   </td>
                   <td className="px-3 py-3 text-right whitespace-nowrap">
                     <Button

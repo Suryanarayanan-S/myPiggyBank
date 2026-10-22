@@ -355,6 +355,8 @@ model RecurringRule {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   transactions     Transaction[]
+  /// the recurring deposit whose instalment this rule books
+  deposit          Deposit?
 
   @@index([familyId])
 }
@@ -409,9 +411,9 @@ model GoalEntry {
 
 /// A security held by the family (stock, ETF, fund, gold…), valued from trades and prices.
 model Holding {
-  id            String         @id @default(uuid())
+  id            String          @id @default(uuid())
   familyId      String
-  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family        Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
   name          String
   /// stock | etf | fund | gold | other
   kind          String
@@ -419,14 +421,14 @@ model Holding {
   symbol        String?
   currency      String
   ownerMemberId String?
-  owner         FamilyMember?  @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  owner         FamilyMember?   @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
   /// the depot account it sits in (informational)
   accountId     String?
-  account       Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account       Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
   note          String?
-  archived      Boolean        @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  archived      Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   trades        HoldingTrade[]
   prices        HoldingPrice[]
   actions       HoldingAction[]
@@ -530,33 +532,36 @@ model FetchMark {
 
 /// A fixed deposit at a bank (recurring deposits later): valued each day from its terms.
 model Deposit {
-  id            String        @id @default(uuid())
-  familyId      String
-  family        Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  /// fd
-  kind          String        @default("fd")
-  name          String
-  currency      String
-  ownerMemberId String?
-  owner         FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  id              String         @id @default(uuid())
+  familyId        String
+  family          Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /// fd | rd (recurring: `principal` is the monthly instalment; matures `months` after the start)
+  kind            String         @default("fd")
+  name            String
+  currency        String
+  ownerMemberId   String?
+  owner           FamilyMember?  @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
   /// the bank account the money came from and is paid back to
-  accountId     String?
-  account       Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accountId       String?
+  account         Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
   /// minor units
-  principal     BigInt
+  principal       BigInt
   /// yearly rate in basis points (7.25 % = 725)
-  rateBp        Int
-  startDate     DateTime
-  maturityDate  DateTime
+  rateBp          Int
+  startDate       DateTime
+  maturityDate    DateTime
   /// monthly | quarterly | half-yearly | yearly
-  compounding   String        @default("quarterly")
+  compounding     String         @default("quarterly")
   /// reinvest (added, paid at maturity) | payout (paid out each period)
-  interest      String        @default("reinvest")
+  interest        String         @default("reinvest")
   /// paid out and closed: no longer counted
-  closedAt      DateTime?
-  note          String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  closedAt        DateTime?
+  /// a recurring deposit's monthly instalment, booked from its account by this rule
+  recurringRuleId String?        @unique
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  note            String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([familyId])
 }

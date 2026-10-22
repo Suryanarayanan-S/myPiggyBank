@@ -12,11 +12,12 @@ export type Compounding = keyof typeof COMPOUNDING;
 
 export type Deposit = {
   id: string;
-  kind: 'fd';
+  kind: 'fd' | 'rd';
   name: string;
   currency: string;
   ownerMemberId: string | null;
   accountId: string | null;
+  /** put in: a fixed deposit's amount; a recurring one's instalments due so far */
   principal: number;
   rateBp: number;
   startDate: string;
@@ -30,11 +31,28 @@ export type Deposit = {
   interestEarned: number | null;
   maturityAmount: number;
   payoutPerPeriod: number | null;
+  /** recurring deposits: the monthly instalment, for how many months, how many due so far */
+  instalment: number | null;
+  months: number | null;
+  instalmentsDue: number | null;
+  /** booked from the account each month, in this category */
+  book: { categoryId: string | null } | null;
   daysLeft: number;
   status: 'upcoming' | 'active' | 'matured' | 'closed';
   /** value and principal in the summary currency; null without an exchange rate or when closed */
   inView: { value: number; principal: number } | null;
 };
+export const KIND_LABEL = { fd: 'fixed deposit', rd: 'recurring deposit' } as const;
+
+/** "2 fixed deposits, 1 recurring deposit" */
+export function depositCount(list: { kind: Deposit['kind'] }[]): string {
+  return (['fd', 'rd'] as const)
+    .map((k) => [k, list.filter((d) => d.kind === k).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${KIND_LABEL[k]}${n === 1 ? '' : 's'}`)
+    .join(', ');
+}
+
 export type DepositsResponse = {
   deposits: Deposit[];
   summary: {

@@ -34,6 +34,10 @@ const INVESTMENT_TABS: SectionTab[] = [
   { to: '/investments/market', label: 'Market' },
   { to: '/investments/deposits', label: 'Deposits' },
 ];
+const DEPOSIT_TABS: SectionTab[] = [
+  { to: '/investments/deposits', label: 'Fixed', end: true },
+  { to: '/investments/deposits/recurring', label: 'Recurring' },
+];
 const REPORT_TABS: SectionTab[] = [
   { to: '/reports', label: 'Year report', end: true },
   { to: '/reports/insights', label: 'Insights' },
@@ -73,7 +77,10 @@ export function App() {
           >
             <Route index element={<InvestmentsOverviewPage />} />
             <Route path="market" element={<InvestmentsPage />} />
-            <Route path="deposits" element={<DepositsPage />} />
+            <Route path="deposits" element={<SectionLayout name="Deposits" tabs={DEPOSIT_TABS} />}>
+              <Route index element={<DepositsPage kind="fd" />} />
+              <Route path="recurring" element={<DepositsPage kind="rd" />} />
+            </Route>
           </Route>
           <Route path="goals" element={<GoalsPage />} />
           <Route path="reports" element={<SectionLayout name="Reports" tabs={REPORT_TABS} />}>

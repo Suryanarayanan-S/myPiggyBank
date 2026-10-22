@@ -41,8 +41,28 @@ const STATUS: Record<Deposit['status'], { label: string; tone: string }> = {
   },
 };
 
-/** Fixed deposits: what each is worth today, what it pays at maturity, and when. */
-export function DepositsPage() {
+const TEXT = {
+  fd: {
+    title: 'Fixed deposits',
+    intro: 'valued each day from their rate',
+    add: 'Add fixed deposit',
+    edit: 'Edit fixed deposit',
+    empty:
+      'No fixed deposits yet. Add one with its amount, rate and dates: its value today and at maturity are worked out for you.',
+  },
+  rd: {
+    title: 'Recurring deposits',
+    intro: 'a monthly instalment, each one earning from its month',
+    add: 'Add recurring deposit',
+    edit: 'Edit recurring deposit',
+    empty:
+      'No recurring deposits yet. Add one with its monthly instalment, rate and months; the instalment can be booked from its account each month.',
+  },
+} as const;
+
+/** Fixed or recurring deposits: what each is worth today, what it pays at maturity, and when. */
+export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
+  const text = TEXT[kind];
   const me = useMe();
   const q = useDeposits();
   const accounts = useAccounts();
@@ -57,9 +77,18 @@ export function DepositsPage() {
     onSuccess: refresh,
   });
   const data = q.data;
-  const s = data?.summary;
-  const open = data?.deposits.filter((d) => d.status !== 'closed') ?? [];
-  const closed = data?.deposits.filter((d) => d.status === 'closed') ?? [];
+  const mine = data?.deposits.filter((d) => d.kind === kind) ?? [];
+  const open = mine.filter((d) => d.status !== 'closed');
+  const closed = mine.filter((d) => d.status === 'closed');
+  // This kind's totals in the summary currency (and what has no exchange rate to it).
+  const s = data && {
+    currency: data.summary.currency,
+    value: mine.reduce((t, d) => t + (d.inView?.value ?? 0), 0),
+    principal: mine.reduce((t, d) => t + (d.inView?.principal ?? 0), 0),
+    unconverted: mine
+      .filter((d) => d.value !== null && d.inView === null)
+      .map((d) => ({ currency: d.currency, amount: d.value! })),
+  };
   const accountName = (id: string | null) => accounts.data?.find((a) => a.id === id)?.name;
   const owner = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? 'Shared') : 'Shared';
@@ -79,10 +108,19 @@ export function DepositsPage() {
               {[accountName(d.accountId), owner(d.ownerMemberId)].filter(Boolean).join(' · ')}
             </p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              {formatMoney(d.principal, d.currency)} at {formatRateBp(d.rateBp)} ·{' '}
-              {COMPOUNDING[d.compounding].toLowerCase()} · {dayLabel(d.startDate)} →{' '}
-              {dayLabel(d.maturityDate)}
+              {d.kind === 'rd'
+                ? `${formatMoney(d.instalment!, d.currency)} a month × ${d.months}`
+                : formatMoney(d.principal, d.currency)}{' '}
+              at {formatRateBp(d.rateBp)} · {COMPOUNDING[d.compounding].toLowerCase()} ·{' '}
+              {dayLabel(d.startDate)} → {dayLabel(d.maturityDate)}
             </p>
+            {d.kind === 'rd' && d.status !== 'closed' && (
+              <p className="text-xs text-slate-500">
+                {d.instalmentsDue} of {d.months} instalments paid ·{' '}
+                {formatMoney(d.principal, d.currency)} put in
+                {d.book ? ' · booked from the account each month' : ''}
+              </p>
+            )}
             {d.payoutPerPeriod !== null && (
               <p className="text-xs text-slate-500">
                 Pays out {formatMoney(d.payoutPerPeriod, d.currency)} interest{' '}
@@ -135,14 +173,13 @@ export function DepositsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Deposits</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{text.title}</h1>
           <p className="text-sm text-slate-500">
-            Fixed deposits, valued each day from their rate. They count in net worth as investments
-            until paid out.
+            {text.title}, {text.intro}. They count in net worth as investments until paid out.
           </p>
         </div>
         <Button onClick={() => setDialog({})}>
-          <Plus size={16} aria-hidden /> Add fixed deposit
+          <Plus size={16} aria-hidden /> {text.add}
         </Button>
       </div>
       <FormError error={q.error ?? paidOut.error} />
@@ -163,12 +200,9 @@ export function DepositsPage() {
           />
         </div>
       )}
-      {data && data.deposits.length === 0 && (
+      {data && mine.length === 0 && (
         <Card>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            No deposits yet. Add a fixed deposit with its amount, rate and dates: its value today
-            and at maturity are worked out for you.
-          </p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{text.empty}</p>
         </Card>
       )}
       {open.length > 0 && <ul className="space-y-3">{open.map(row)}</ul>}
@@ -179,12 +213,10 @@ export function DepositsPage() {
         </section>
       )}
       {dialog && (
-        <Modal
-          title={dialog.deposit ? 'Edit fixed deposit' : 'Add fixed deposit'}
-          onClose={() => setDialog(null)}
-        >
+        <Modal title={dialog.deposit ? text.edit : text.add} onClose={() => setDialog(null)}>
           <DepositForm
             deposit={dialog.deposit}
+            kind={kind}
             defaultCurrency={me.data?.family.wealthCurrency ?? 'INR'}
             onDone={() => setDialog(null)}
           />

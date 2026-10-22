@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   addMonths,
   depositValue,
+  instalmentsDue,
   maturityAmount,
+  recurringMaturity,
+  recurringValue,
   payoutPerPeriod,
   type DepositTerms,
+  type RecurringTerms,
 } from '../../src/domain/deposits.js';
 
 // ₹1,00,000 at 7 % for a year, compounded quarterly (as most Indian banks do)
@@ -66,5 +70,41 @@ describe('fixed deposits', () => {
     expect(depositValue(payout, '2026-11-01')).toBe(10_000_000);
     expect(maturityAmount(payout)).toBe(10_000_000);
     expect(payoutPerPeriod(payout)).toBe(175_000);
+  });
+
+  describe('recurring deposits', () => {
+    // ₹1,000 a month for a year at 7 %, compounded quarterly
+    const rd: RecurringTerms = {
+      instalment: 100_000,
+      rateBp: 700,
+      start: '2026-01-15',
+      months: 12,
+      compounding: 'quarterly',
+    };
+
+    it('matures a month after the last instalment, with each instalment’s interest', () => {
+      expect(recurringMaturity(rd)).toBe('2027-01-15');
+      // Σ 1,000 × 1.0175^(i/3), i = 1…12
+      expect(recurringValue(rd, '2027-01-15')).toBe(1_246_213);
+      expect(recurringValue(rd, '2027-06-01')).toBe(1_246_213);
+    });
+
+    it('counts the instalments due so far', () => {
+      expect(recurringValue(rd, '2026-01-10')).toBeNull();
+      expect(instalmentsDue(rd, '2026-01-10')).toBe(0);
+      expect(recurringValue(rd, '2026-01-15')).toBe(100_000);
+      // on the 4th instalment's day: three that grew 3, 2 and 1 months, and the new one
+      expect(instalmentsDue(rd, '2026-04-15')).toBe(4);
+      expect(recurringValue(rd, '2026-04-15')).toBe(403_493);
+      expect(instalmentsDue(rd, '2027-03-01')).toBe(12);
+    });
+
+    it('keeps month ends in step (an RD started on the 31st)', () => {
+      const end = { ...rd, start: '2026-01-31', months: 3 };
+      expect(recurringMaturity(end)).toBe('2026-04-30');
+      expect(instalmentsDue(end, '2026-02-28')).toBe(2);
+      // 1,000 × (1.0175^(3/3) + 1.0175^(2/3) + 1.0175^(1/3))
+      expect(recurringValue(end, '2026-04-30')).toBe(303_493);
+    });
   });
 });

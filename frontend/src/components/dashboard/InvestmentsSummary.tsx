@@ -83,7 +83,7 @@ export function InvestmentsSummary() {
         )}
         {hasDeposits && (
           <div>
-            <dt className="text-xs text-slate-500">Fixed deposits</dt>
+            <dt className="text-xs text-slate-500">Deposits</dt>
             <dd className="text-lg font-semibold tabular-nums">
               {/* without an exchange rate: in their own currency */}
               {[

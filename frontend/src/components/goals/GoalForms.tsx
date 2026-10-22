@@ -12,7 +12,7 @@ import { localDay } from '../../lib/months';
 import { useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 import type { HoldingsResponse } from '../../lib/investments';
-import { useDeposits } from '../../lib/deposits';
+import { KIND_LABEL, useDeposits } from '../../lib/deposits';
 import type { Asset } from '../../lib/wealthTypes';
 
 const asInput = (cents: number) => String(cents / 100).replace('.', ',');
@@ -224,7 +224,7 @@ export function GoalForm({
                     checked={f.links.has(`deposit:${d.id}`)}
                     onChange={() => toggle(`deposit:${d.id}`)}
                   />
-                  {d.name} <span className="text-xs text-slate-400">fixed deposit</span>
+                  {d.name} <span className="text-xs text-slate-400">{KIND_LABEL[d.kind]}</span>
                 </span>
                 <span className="text-xs text-slate-500 tabular-nums">
                   {formatMoney(d.value ?? d.principal, d.currency)}

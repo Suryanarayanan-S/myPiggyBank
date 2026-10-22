@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { addDays, todayLocal } from '../src/lib/dates.js';
+import { addMonths } from '../src/domain/deposits.js';
 import { client, makeApp, resetDb, signUp } from './helpers.js';
 
 describe('fixed deposits', () => {
@@ -154,5 +155,151 @@ describe('fixed deposits', () => {
     const goal = (await call('GET', '/api/goals')).json().data[0];
     expect(goal.links).toMatchObject([{ kind: 'deposit', id, name: 'HDFC FD', amount: value }]);
     expect(goal.saved).toBe(value);
+  });
+
+  describe('recurring deposits', () => {
+    let rdCategory: string;
+    const rd = (extra: object = {}) => ({
+      kind: 'rd',
+      name: 'Post office RD',
+      currency: 'INR',
+      accountId: savings,
+      principal: 100_000, // ₹1,000 a month
+      rateBp: 700,
+      startDate: today,
+      months: 12,
+      compounding: 'quarterly',
+      ...extra,
+    });
+    const rules = async () => (await call('GET', '/api/recurring')).json().data;
+    const instalments = async () =>
+      (await call('GET', `/api/transactions?accountId=${savings}`))
+        .json()
+        .data.items.filter((t: { merchant: string | null; notes: string | null }) =>
+          JSON.stringify(t).includes('RD: Post office RD'),
+        );
+    beforeEach(async () => {
+      rdCategory = (
+        await call('POST', '/api/categories', { name: 'RD', kind: 'expense', bucket: 'future' })
+      ).json().data.id;
+    });
+
+    it('is valued from its instalments and books each one from the account', async () => {
+      const res = await call('POST', '/api/deposits', rd({ book: { categoryId: rdCategory } }));
+      expect(res.statusCode).toBe(201);
+      const d = (await call('GET', '/api/deposits')).json().data.deposits[0];
+      expect(d).toMatchObject({
+        kind: 'rd',
+        instalment: 100_000,
+        months: 12,
+        instalmentsDue: 1,
+        principal: 100_000, // put in so far: today's instalment
+        value: 100_000,
+        maturityAmount: 1_246_213, // Σ 1,000 × 1.0175^(i/3)
+        maturityDate: addMonths(today, 12),
+        interest: 'reinvest',
+        book: { categoryId: rdCategory },
+      });
+      // the monthly rule, until the last instalment; today's is booked
+      expect(await rules()).toMatchObject([
+        {
+          name: 'RD: Post office RD',
+          type: 'expense',
+          amount: 100_000,
+          frequency: 'monthly',
+          endDate: addMonths(today, 11),
+        },
+      ]);
+      expect(await instalments()).toHaveLength(1);
+    });
+
+    it('stops booking when unticked, paid out or deleted (what was booked stays)', async () => {
+      const id = (
+        await call('POST', '/api/deposits', rd({ book: { categoryId: rdCategory } }))
+      ).json().data.id;
+      await call('PUT', `/api/deposits/${id}`, { book: null });
+      expect(await rules()).toEqual([]);
+      expect(await instalments()).toHaveLength(1);
+      // booked again: from tomorrow, so today's instalment is not booked twice
+      await call('PUT', `/api/deposits/${id}`, { book: { categoryId: rdCategory } });
+      expect(await rules()).toHaveLength(1);
+      expect(await instalments()).toHaveLength(1);
+      // a new instalment amount follows into the rule
+      await call('PUT', `/api/deposits/${id}`, { principal: 150_000 });
+      expect((await rules())[0]).toMatchObject({ amount: 150_000 });
+      // paid out: the rule stops
+      await call('PUT', `/api/deposits/${id}`, { closedAt: today });
+      expect((await rules())[0]).toMatchObject({ active: false });
+      await call('DELETE', `/api/deposits/${id}`);
+      expect(await rules()).toEqual([]);
+      expect(await instalments()).toHaveLength(1);
+    });
+
+    it('books the last instalment of an RD started on the 31st', async () => {
+      await call(
+        'POST',
+        '/api/deposits',
+        rd({ startDate: '2026-03-31', months: 6, book: { categoryId: rdCategory } }),
+      );
+      expect((await rules())[0]).toMatchObject({ endDate: '2026-08-31' });
+    });
+
+    it('resumes booking when reopened; nothing is saved when booking cannot work', async () => {
+      const id = (
+        await call('POST', '/api/deposits', rd({ book: { categoryId: rdCategory } }))
+      ).json().data.id;
+      await call('PUT', `/api/deposits/${id}`, { closedAt: today });
+      expect((await call('GET', '/api/deposits')).json().data.deposits[0].book).toBeNull();
+      await call('PUT', `/api/deposits/${id}`, { closedAt: null });
+      expect((await rules())[0]).toMatchObject({ active: true });
+      expect((await call('GET', '/api/deposits')).json().data.deposits[0].book).toEqual({
+        categoryId: rdCategory,
+      });
+      // no account to book from: refused, and the deposit keeps its account
+      const res = await call('PUT', `/api/deposits/${id}`, { accountId: null });
+      expect(res.statusCode).toBe(400);
+      expect((await call('GET', '/api/deposits')).json().data.deposits[0].accountId).toBe(savings);
+      // an income category cannot take the instalment
+      const income = (
+        await call('POST', '/api/categories', { name: 'RD test income', kind: 'income' })
+      ).json().data.id;
+      const before = (await rules()).length;
+      expect(
+        (await call('POST', '/api/deposits', rd({ name: 'X', book: { categoryId: income } })))
+          .statusCode,
+      ).toBe(400);
+      expect((await call('GET', '/api/deposits')).json().data.deposits).toHaveLength(1);
+      expect(await rules()).toHaveLength(before);
+    });
+
+    it('cannot be made shorter than the instalments already paid', async () => {
+      const id = (
+        await call('POST', '/api/deposits', rd({ startDate: addMonths(today, -5) }))
+      ).json().data.id;
+      expect((await call('PUT', `/api/deposits/${id}`, { months: 4 })).statusCode).toBe(400);
+      expect((await call('PUT', `/api/deposits/${id}`, { months: 6 })).statusCode).toBe(200);
+    });
+
+    it('needs an account to book from, and the number of months', async () => {
+      const bad = async (body: object) =>
+        (await call('POST', '/api/deposits', rd(body))).statusCode;
+      expect(await bad({ accountId: null, book: { categoryId: rdCategory } })).toBe(400);
+      expect(await bad({ months: undefined })).toBe(400);
+      expect(await bad({ months: 0 })).toBe(400);
+      expect(await rules()).toEqual([]);
+      // without booking, no account is needed
+      expect(await bad({ accountId: null })).toBe(201);
+    });
+
+    it('counts in net worth at its value, or at the instalments paid', async () => {
+      await call('POST', '/api/deposits', rd({ startDate: addMonths(today, -3) }));
+      const d = (await call('GET', '/api/deposits')).json().data.deposits[0];
+      expect(d.instalmentsDue).toBe(4);
+      expect(d.principal).toBe(400_000);
+      const worth = async () => (await call('GET', '/api/net-worth')).json().data.current.assets;
+      expect(await worth()).toBe(d.value);
+      await call('PUT', '/api/family', { investmentsAt: 'invested' });
+      expect(await worth()).toBe(400_000);
+    });
   });
 });

@@ -74,3 +74,52 @@ export const maturityAmount = (d: DepositTerms) => depositValue(d, d.maturity)!;
 /** Interest paid out each period, for deposits that pay it out. */
 export const payoutPerPeriod = (d: DepositTerms) =>
   Math.round((d.principal * d.rateBp) / 10_000 / PER_YEAR[d.compounding]);
+
+/** A recurring deposit: the same instalment each month from `start`, for `months` months. */
+export type RecurringTerms = {
+  /** minor units, each month */
+  instalment: number;
+  rateBp: number;
+  /** YYYY-MM-DD of the first instalment */
+  start: string;
+  months: number;
+  compounding: Compounding;
+};
+
+/** Matures a month after the last instalment. */
+export const recurringMaturity = (t: RecurringTerms) => addMonths(t.start, t.months);
+
+/** Months from `start` to `day`, with the running month as a share of its days. */
+function monthsSince(start: string, day: string): number {
+  let m = 0;
+  while (addMonths(start, m + 1) <= day) m++;
+  const from = addMonths(start, m);
+  return m + days(from, day) / days(from, addMonths(start, m + 1));
+}
+
+/** Instalments due by `day` (all of them once the last one's day has come). */
+export function instalmentsDue(t: RecurringTerms, day: string): number {
+  if (day < t.start) return 0;
+  let k = 0;
+  while (k < t.months && addMonths(t.start, k) <= day) k++;
+  return k;
+}
+
+/**
+ * Worth on `day`: each instalment due so far grows from its own month, compounded like the
+ * bank does (quarterly: (1 + r/4) for every three months, fractions included). Null before the
+ * first instalment; the maturity amount from maturity on.
+ */
+export function recurringValue(t: RecurringTerms, day: string): number | null {
+  if (day < t.start) return null;
+  const maturity = recurringMaturity(t);
+  const to = day < maturity ? day : maturity;
+  const n = PER_YEAR[t.compounding];
+  const growth = 1 + t.rateBp / 10_000 / n;
+  const elapsed = monthsSince(t.start, to);
+  let value = 0;
+  for (let k = 0; k < instalmentsDue(t, to); k++) {
+    value += t.instalment * growth ** ((n * (elapsed - k)) / 12);
+  }
+  return Math.round(value);
+}

@@ -26,11 +26,23 @@ export function InvestmentsOverviewPage() {
   if (params.get('tab') === 'holdings')
     return <Navigate to="/investments/market?tab=holdings" replace />;
   const market = holdings.data?.summary;
+  // each kind of deposit on its own (in the summary currency)
+  const inView = (kind: 'fd' | 'rd') =>
+    (deposits.data?.deposits ?? [])
+      .filter((d) => d.kind === kind)
+      .reduce((t, d) => t + (d.inView?.value ?? 0), 0);
   const dep = deposits.data?.summary;
   const currency = market?.currency ?? dep?.currency ?? 'INR';
+  const open = (kind: 'fd' | 'rd') =>
+    (deposits.data?.deposits ?? []).some((d) => d.kind === kind && d.status !== 'closed');
   const parts = [
-    { label: 'Market (shares, funds, ETFs)', value: market?.value ?? 0, to: '/investments/market' },
-    { label: 'Fixed deposits', value: dep?.value ?? 0, to: '/investments/deposits' },
+    {
+      label: 'Market (shares, funds, ETFs)',
+      value: market?.value ?? 0,
+      has: (holdings.data?.holdings ?? []).some((h) => !h.archived),
+    },
+    { label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
+    { label: 'Recurring deposits', value: inView('rd'), has: open('rd') },
   ];
   const total = parts.reduce((s, p) => s + p.value, 0);
   const soon = maturingSoon(deposits.data?.deposits ?? []);
@@ -60,7 +72,7 @@ export function InvestmentsOverviewPage() {
             <Link to="/investments/market" className="font-medium text-indigo-600 underline">
               Market
             </Link>{' '}
-            (or import them from Zerodha), and fixed deposits under{' '}
+            (or import them from Zerodha), and fixed and recurring deposits under{' '}
             <Link to="/investments/deposits" className="font-medium text-indigo-600 underline">
               Deposits
             </Link>
@@ -70,15 +82,17 @@ export function InvestmentsOverviewPage() {
       )}
       {loaded && anything && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
               label="Total, worth today"
               value={formatMoney(total, currency)}
               hint={atCost ? 'net worth counts what was put in' : undefined}
             />
-            {parts.map((p) => (
-              <Tile key={p.label} label={p.label} value={formatMoney(p.value, currency)} />
-            ))}
+            {parts
+              .filter((p) => p.has || p.value > 0)
+              .map((p) => (
+                <Tile key={p.label} label={p.label} value={formatMoney(p.value, currency)} />
+              ))}
           </div>
           {unconverted.length > 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-400">

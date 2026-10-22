@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import { COMPOUNDING, parseRatePercent, type Compounding, type Deposit } from '../../lib/deposits';
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
-import { useAccounts, useMembers } from '../../lib/queries';
+import { useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 
 /** Deposits count in net worth (and show on their account), so refresh those with them. */
@@ -25,16 +25,26 @@ export const useDepositRefresh = () => {
 
 const addYear = (day: string) => `${Number(day.slice(0, 4)) + 1}${day.slice(4)}`;
 
-/** A fixed deposit: amount, rate and dates; the money comes from (and returns to) an account. */
+/**
+ * A fixed deposit (amount, rate, dates) or a recurring one (monthly instalment for some months,
+ * optionally booked from its account each month). The money comes from, and returns to, an
+ * account.
+ */
 export function DepositForm({
   deposit,
+  kind: newKind = 'fd',
   defaultCurrency,
   onDone,
 }: {
   deposit?: Deposit;
+  /** for a new deposit */
+  kind?: Deposit['kind'];
   defaultCurrency: string;
   onDone: () => void;
 }) {
+  const kind = deposit?.kind ?? newKind;
+  const rd = kind === 'rd';
+  const categories = useCategories();
   const refresh = useDepositRefresh();
   const members = useMembers();
   const accounts = useAccounts();
@@ -44,9 +54,17 @@ export function DepositForm({
     accountId: deposit?.accountId ?? '',
     currency: deposit?.currency ?? defaultCurrency,
     ownerMemberId: deposit?.ownerMemberId ?? '',
+    // a recurring deposit's amount is its monthly instalment
     principal: deposit
-      ? formatMoney(deposit.principal, deposit.currency).replace(/[^\d.,]/g, '')
+      ? formatMoney(rd ? deposit.instalment! : deposit.principal, deposit.currency).replace(
+          /[^\d.,]/g,
+          '',
+        )
       : '',
+    months: String(deposit?.months ?? 12),
+    // booking is opted into, never assumed
+    book: deposit ? deposit.book !== null : false,
+    categoryId: deposit?.book?.categoryId ?? '',
     rate: deposit ? String(deposit.rateBp / 100) : '',
     startDate: deposit?.startDate ?? today,
     maturityDate: deposit?.maturityDate ?? addYear(today),
@@ -77,10 +95,19 @@ export function DepositForm({
         e.preventDefault();
         const principal = parseMoneyInput(f.principal);
         const rateBp = parseRatePercent(f.rate);
-        if (principal === null || principal <= 0) return setProblem('Enter the amount deposited.');
+        const months = Number(f.months);
+        if (principal === null || principal <= 0)
+          return setProblem(rd ? 'Enter the monthly instalment.' : 'Enter the amount deposited.');
         if (rateBp === null) return setProblem('Enter the yearly rate in %, e.g. 7.25.');
+        if (rd && !(Number.isInteger(months) && months >= 1 && months <= 120))
+          return setProblem('Enter for how many months, from 1 to 120.');
+        const book = rd && f.book && f.accountId;
         setProblem(null);
         save.mutate({
+          ...(!deposit && { kind }),
+          ...(rd
+            ? { months, book: book ? { categoryId: f.categoryId || null } : null }
+            : { maturityDate: f.maturityDate, interest: f.interest }),
           name: f.name,
           currency: f.currency,
           accountId: f.accountId || null,
@@ -88,9 +115,7 @@ export function DepositForm({
           principal,
           rateBp,
           startDate: f.startDate,
-          maturityDate: f.maturityDate,
           compounding: f.compounding,
-          interest: f.interest,
           note: f.note || null,
         });
       }}
@@ -100,7 +125,7 @@ export function DepositForm({
           id="d-name"
           required
           maxLength={60}
-          placeholder="HDFC FD 2026"
+          placeholder={rd ? 'Post office RD' : 'HDFC FD 2026'}
           value={f.name}
           onChange={(e) => setF({ ...f, name: e.target.value })}
         />
@@ -108,7 +133,11 @@ export function DepositForm({
       <Field
         label="Bank account (optional)"
         htmlFor="d-account"
-        hint="Where the money came from and is paid back to."
+        hint={
+          rd
+            ? 'Where the instalments come from and the money is paid back to.'
+            : 'Where the money came from and is paid back to.'
+        }
       >
         <Select
           id="d-account"
@@ -127,13 +156,44 @@ export function DepositForm({
           ))}
         </Select>
       </Field>
+      {rd && (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              disabled={!f.accountId}
+              checked={f.book && !!f.accountId}
+              onChange={(e) => setF({ ...f, book: e.target.checked })}
+            />
+            Book the instalment from this account each month
+          </label>
+          {f.book && f.accountId && (
+            <Field label="Category of the instalment" htmlFor="d-category">
+              <Select
+                id="d-category"
+                value={f.categoryId}
+                onChange={(e) => setF({ ...f, categoryId: e.target.value })}
+              >
+                <option value="">—</option>
+                {categories.data
+                  ?.filter((c) => c.kind === 'expense')
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount deposited" htmlFor="d-principal">
+        <Field label={rd ? 'Monthly instalment' : 'Amount deposited'} htmlFor="d-principal">
           <Input
             id="d-principal"
             required
             inputMode="decimal"
-            placeholder="1,00,000"
+            placeholder={rd ? '5,000' : '1,00,000'}
             value={f.principal}
             onChange={(e) => setF({ ...f, principal: e.target.value })}
           />
@@ -177,7 +237,7 @@ export function DepositForm({
             ))}
           </Select>
         </Field>
-        <Field label="Start date" htmlFor="d-start">
+        <Field label={rd ? 'First instalment' : 'Start date'} htmlFor="d-start">
           <Input
             id="d-start"
             type="date"
@@ -186,25 +246,41 @@ export function DepositForm({
             onChange={(e) => setF({ ...f, startDate: e.target.value })}
           />
         </Field>
-        <Field label="Maturity date" htmlFor="d-maturity">
-          <Input
-            id="d-maturity"
-            type="date"
-            required
-            value={f.maturityDate}
-            onChange={(e) => setF({ ...f, maturityDate: e.target.value })}
-          />
-        </Field>
-        <Field label="Interest" htmlFor="d-interest">
-          <Select
-            id="d-interest"
-            value={f.interest}
-            onChange={(e) => setF({ ...f, interest: e.target.value as Deposit['interest'] })}
-          >
-            <option value="reinvest">Added, paid at maturity</option>
-            <option value="payout">Paid out each period</option>
-          </Select>
-        </Field>
+        {rd ? (
+          <Field label="Months" htmlFor="d-months" hint="It matures a month after the last.">
+            <Input
+              id="d-months"
+              required
+              type="number"
+              min={1}
+              max={120}
+              value={f.months}
+              onChange={(e) => setF({ ...f, months: e.target.value })}
+            />
+          </Field>
+        ) : (
+          <>
+            <Field label="Maturity date" htmlFor="d-maturity">
+              <Input
+                id="d-maturity"
+                type="date"
+                required
+                value={f.maturityDate}
+                onChange={(e) => setF({ ...f, maturityDate: e.target.value })}
+              />
+            </Field>
+            <Field label="Interest" htmlFor="d-interest">
+              <Select
+                id="d-interest"
+                value={f.interest}
+                onChange={(e) => setF({ ...f, interest: e.target.value as Deposit['interest'] })}
+              >
+                <option value="reinvest">Added, paid at maturity</option>
+                <option value="payout">Paid out each period</option>
+              </Select>
+            </Field>
+          </>
+        )}
         <Field label="Belongs to" htmlFor="d-owner">
           <Select
             id="d-owner"

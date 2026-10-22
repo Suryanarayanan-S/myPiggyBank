@@ -110,6 +110,8 @@ export async function createRecurring(
   prisma: PrismaClient,
   familyId: string,
   input: z.output<typeof RecurringCreate>,
+  /** occurrences before this day are not booked (e.g. already booked by an earlier rule) */
+  bookFrom?: string,
 ) {
   await checkRefs(prisma, familyId, input.type, input);
   const { backfill, startDate, endDate, ...rest } = input;
@@ -119,7 +121,9 @@ export async function createRecurring(
       familyId,
       startDate: parseDay(startDate)!,
       endDate: endDate ? parseDay(endDate) : null,
-      generateFrom: parseDay(backfill ? startDate : maxDay(today(), startDate))!,
+      generateFrom: parseDay(
+        bookFrom ? maxDay(bookFrom, startDate) : backfill ? startDate : maxDay(today(), startDate),
+      )!,
     },
   });
   await generateDue(prisma, today(), familyId);

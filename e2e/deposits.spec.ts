@@ -87,6 +87,38 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(card).toContainText('Paid out');
   await expect(page.getByRole('heading', { name: 'Paid out' })).toBeVisible();
 
+  // A recurring deposit: 100 € a month for a year, booked from the account each month.
+  await tabs.getByRole('link', { name: 'Deposits' }).click();
+  await page
+    .getByRole('navigation', { name: 'Deposits pages' })
+    .getByRole('link', { name: 'Recurring' })
+    .click();
+  await expect(page.getByText('No recurring deposits yet')).toBeVisible();
+  await page.getByRole('button', { name: 'Add recurring deposit' }).click();
+  const rd = page.getByRole('dialog', { name: 'Add recurring deposit' });
+  await rd.getByLabel('Name').fill('Post RD');
+  await rd.getByLabel(/Bank account/).selectOption({ label: 'Savings (EUR)' });
+  const book = rd.getByLabel('Book the instalment from this account each month');
+  await expect(book).not.toBeChecked();
+  await book.click();
+  await expect(book).toBeChecked();
+  await rd.getByLabel('Monthly instalment').fill('100,00');
+  await rd.getByLabel('Yearly rate (%)').fill('7');
+  await rd.getByLabel('Months').fill('12');
+  await rd.getByRole('button', { name: 'Save' }).click();
+  await expect(rd).toBeHidden();
+  const rdCard = page.getByRole('listitem').filter({ hasText: 'Post RD' });
+  await expect(rdCard).toContainText('100,00 € a month × 12');
+  await expect(rdCard).toContainText('1.246,21 €'); // Σ 100 × 1.0175^(i/3) at maturity
+  await expect(rdCard).toContainText('1 of 12 instalments paid');
+  await expect(rdCard).toContainText('booked from the account each month');
+  await shot(page, '38-recurring-deposits');
+  // today's instalment is booked, and the rule is among the recurring transactions
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await expect(page.getByText('RD: Post RD').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Recurring' }).first().click();
+  await expect(page.getByText('RD: Post RD').first()).toBeVisible();
+
   // Old addresses of the holdings list still work.
   await page.goto('/investments?tab=holdings');
   await expect(page).toHaveURL(/\/investments\/market\?tab=holdings$/);

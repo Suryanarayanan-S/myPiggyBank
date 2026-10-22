@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatRateBp, maturingSoon, parseRatePercent, whenLeft, type Deposit } from './deposits';
+import {
+  depositCount,
+  formatRateBp,
+  maturingSoon,
+  parseRatePercent,
+  whenLeft,
+  type Deposit,
+} from './deposits';
 
 const d = (name: string, status: Deposit['status'], daysLeft: number) =>
   ({ name, status, daysLeft }) as Deposit;
@@ -36,5 +43,12 @@ describe('deposits', () => {
       '1 day ago',
       '3 days ago',
     ]);
+  });
+
+  it('counts deposits by kind', () => {
+    const k = (kind: Deposit['kind']) => ({ kind });
+    expect(depositCount([k('fd')])).toBe('1 fixed deposit');
+    expect(depositCount([k('fd'), k('rd'), k('fd')])).toBe('2 fixed deposits, 1 recurring deposit');
+    expect(depositCount([])).toBe('');
   });
 });

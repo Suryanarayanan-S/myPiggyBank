@@ -10,6 +10,7 @@ import { bhavcopyName, priceFor, readBhavcopy, type Bhavcopy } from '../domain/b
 import { plainSymbol } from '../domain/brokerHoldings.js';
 import { formerSymbols, readNseHistory, readSymbolChanges } from '../domain/corporateActions.js';
 import { addMonths } from '../domain/deposits.js';
+import { goldBond, goldBondInterest, interestPaise } from '../domain/goldBonds.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import type { Db } from '../lib/db.js';
 import { assertMember } from './ownership.js';
@@ -303,8 +304,23 @@ async function plan(prisma: PrismaClient, familyId: string, owner: string | null
         kind: 'dividend',
       });
     }
-    // gold bonds: the last recorded interest, every six months back to the buy
-    if (h.nse.startsWith('SGB')) {
+    // gold bonds: from the series' issue price and date
+    const coupons = goldBondInterest(h.nse, addDays(start, 1), today);
+    for (const c of coupons) {
+      const units = unitsOn(h, addDays(c.exDate, -1), []);
+      if (units <= 0) continue;
+      add({
+        holdingId: h.id,
+        symbol: h.nse,
+        date: c.exDate,
+        units,
+        perShare: c.perUnit,
+        amount: interestPaise(units, c.perUnit),
+        kind: 'interest',
+      });
+    }
+    // a series not in the list: the last recorded interest, every six months back to the buy
+    if (h.nse.startsWith('SGB') && !goldBond(h.nse)) {
       const last = [...h.trades].reverse().find((t) => t.type === 'interest');
       if (!last) continue;
       const lastDay = formatDay(last.date);

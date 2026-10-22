@@ -299,6 +299,29 @@ describe('importing broker holdings', () => {
       expect(sgb.trades).toMatchObject([{ type: 'interest', date: '2026-02-06', amount: 62_630 }]);
     });
 
+    it('takes gold bond interest recorded a few days off as the same coupon', async () => {
+      // worked out from the series' dates on Feb 6; Console has two coupons, one moved by a holiday
+      await income('commit', interest);
+      const sgb = (await call('GET', '/api/holdings')).json().data.holdings[0];
+      await call('POST', `/api/holdings/${sgb.id}/trades`, {
+        date: '2025-08-06',
+        type: 'interest',
+        amount: 62_630,
+      });
+      const p = (
+        await income(
+          'preview',
+          report(
+            'Symbol,Ex-date,Qty,Interest per share,Total interest',
+            'SGBFEB32IV,2025-08-08,8,78.2875,626.3',
+            'SGBFEB32IV,2026-02-06,8,78.2875,626.3',
+            'SGBFEB32IV,2026-08-06,8,78.2875,626.3',
+          ),
+        )
+      ).json().data;
+      expect(p.rows.map((r: { status: string }) => r.status)).toEqual(['recorded', 'recorded', 'new']);
+    });
+
     it('matches Kite symbols written with their market (PGINVIT-IV, SGBFEB32IV-GB)', async () => {
       await commit(
         file(

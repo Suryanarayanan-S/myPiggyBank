@@ -74,8 +74,9 @@ export function PastDividends({ onDone }: { onDone: () => void }) {
       <p className="text-sm text-slate-500">
         Looks up each share’s dividends in NSE’s history and works them out from the shares held on
         the day before each ex-date (before a split or bonus, the shares held then) — the way a
-        broker’s report does. Gold bond interest is carried back from the last one recorded. Payouts
-        already recorded are skipped. Amounts are before tax (TDS).
+        broker’s report does. Gold bond interest comes from each series’ issue price: 2.5% a year, paid
+        every six months (record a bond redeemed early as a sale first). Payouts already recorded are
+        skipped. Amounts are before tax (TDS).
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Whose holdings?" htmlFor="pd-owner">

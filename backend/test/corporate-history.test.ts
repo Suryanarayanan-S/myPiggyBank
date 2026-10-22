@@ -117,7 +117,7 @@ describe('past dividends and corporate-action history', () => {
   it('works out each past dividend from the shares held then, and gold bond interest', async () => {
     const p = (await lookup('preview')).json().data;
     expect(p.failed).toEqual(['SCTL']); // BSE only: no NSE history
-    expect(p.recorded).toBe(1);
+    expect(p.recorded).toBe(2); // the Console dividend and the gold bond's latest interest
     expect(p.rows).toEqual([
       // 20 shares × 16.50
       {
@@ -173,7 +173,7 @@ describe('past dividends and corporate-action history', () => {
     ]);
     expect(p.years.find((y: { year: string }) => y.year === '2026')).toMatchObject({
       count: 1,
-      recorded: 1,
+      recorded: 2,
     });
 
     expect((await lookup('commit')).json().data).toMatchObject({ added: 6 });
@@ -297,6 +297,42 @@ describe('past dividends and corporate-action history', () => {
     expect(events.filter((e: { symbol: string }) => e.symbol === 'ADANIPOWER')).toHaveLength(1);
   });
 
+  it('works out gold bond interest from the series’ issue, with none recorded', async () => {
+    const aug = await holding('SGBAUG28V-GB', 'gold');
+    await trade(aug, '2025-06-01', 'buy', '2', 1_900_000);
+    await trade(aug, '2026-03-01', 'buy', '1', 1_500_000);
+    const rows = (await lookup('preview'))
+      .json()
+      .data.rows.filter((r: { symbol: string }) => r.symbol === 'SGBAUG28V');
+    // 66.675 a bond (5,334 × 1.25%), 15 days before Feb 11 and Aug 11; rounded down
+    expect(rows).toEqual([
+      {
+        symbol: 'SGBAUG28V',
+        date: '2025-07-27',
+        units: 2,
+        perShare: 66.675,
+        amount: 13_335,
+        kind: 'interest',
+      },
+      {
+        symbol: 'SGBAUG28V',
+        date: '2026-01-27',
+        units: 2,
+        perShare: 66.675,
+        amount: 13_335,
+        kind: 'interest',
+      },
+      {
+        symbol: 'SGBAUG28V',
+        date: '2026-07-27',
+        units: 3,
+        perShare: 66.675,
+        amount: 20_002,
+        kind: 'interest',
+      },
+    ]);
+  });
+
   it('says why when NSE refuses, and keeps gold bond interest paid a few days off', async () => {
     const refusing: typeof nse.fetchText = async (url) =>
       url.includes('/history')
@@ -320,7 +356,7 @@ describe('past dividends and corporate-action history', () => {
     const p = (await lookup('preview')).json().data;
     expect(p.problem).toBe('NSE answered 403');
     expect(p.failed).toEqual(['INFY']);
-    // 2025-08-06 is the one recorded on 2025-08-08: nothing to add
-    expect(p.rows).toEqual([]);
+    // 2025-08-06 is the one recorded on 2025-08-08; only the latest is left
+    expect(p.rows.map((r: { date: string }) => r.date)).toEqual(['2026-08-06']);
   });
 });

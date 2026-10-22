@@ -83,11 +83,31 @@ async function plan(db: Db, familyId: string, input: Input) {
       recordedCount.set(key, (recordedCount.get(key) ?? 0) + 1);
     }
   }
+  // Gold bond interest the lookup worked out from the series' dates: a record date a holiday moved
+  // is the same coupon, so interest within ten days counts too (each recorded one only once).
+  const interestDays = new Map<string, string[]>();
+  for (const [symbol, list] of mine) {
+    const days = list.flatMap((h) => h.trades).filter((t) => t.type === 'interest');
+    interestDays.set(symbol, days.map((t) => formatDay(t.date)));
+  }
+  const takeInterest = (symbol: string, day: string, near: boolean) => {
+    const days = interestDays.get(symbol) ?? [];
+    const i = days.findIndex(
+      (d) => d === day || (near && Math.abs(Date.parse(d) - Date.parse(day)) <= 10 * 86_400_000),
+    );
+    if (i >= 0) days.splice(i, 1);
+    return i >= 0;
+  };
   const rows = file.rows.map((r) => {
     const key = `${r.symbol}|${payoutKey(r.date, file.kind, r.amount)}`;
     const left = recordedCount.get(key) ?? 0;
     if (left > 0) recordedCount.set(key, left - 1);
-    return { ...r, holdingId: mine.get(r.symbol)?.[0]?.id ?? null, recorded: left > 0 };
+    let recorded = left > 0;
+    if (file.kind === 'interest') {
+      if (recorded) takeInterest(r.symbol, r.date, false);
+      else recorded = takeInterest(r.symbol, r.date, true);
+    }
+    return { ...r, holdingId: mine.get(r.symbol)?.[0]?.id ?? null, recorded };
   });
   // Not the person's but someone else's in the family: perhaps the wrong person was chosen.
   const heldByOthers = [

@@ -30,6 +30,7 @@ import { bankImportRoutes } from './routes/bankImport.js';
 import { recurringRoutes } from './routes/recurring.js';
 import { goalRoutes } from './routes/goals.js';
 import { holdingRoutes } from './routes/holdings.js';
+import { DEFAULT_HISTORY_URL } from './services/corporateHistoryService.js';
 import { depositRoutes } from './routes/deposits.js';
 import { goldRoutes } from './routes/gold.js';
 import { reportRoutes } from './routes/reports.js';
@@ -50,6 +51,9 @@ export interface AppOptions {
   /** Downloads NSE closing prices; without it the server never goes online for prices. */
   fetchPrices?: FetchText;
   pricesUrl?: string;
+  historyUrl?: string;
+  /** pause between requests to NSE's website (be gentle); 0 in tests */
+  nsePauseMs?: number;
   /** Indian (IBJA) and world gold price sources. */
   goldSources?: GoldSources;
 }
@@ -78,6 +82,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
           fetch: opts.fetchPrices,
           url: opts.pricesUrl ?? DEFAULT_PRICES_URL,
           gold: opts.goldSources ?? DEFAULT_GOLD_SOURCES,
+          historyUrl: opts.historyUrl ?? DEFAULT_HISTORY_URL,
+          pauseMs: opts.nsePauseMs ?? 300,
         }
       : null,
   );

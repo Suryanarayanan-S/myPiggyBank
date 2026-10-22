@@ -494,11 +494,15 @@ model CorporateAction {
   symbol  String
   exDate  DateTime
   purpose String
-  /// split | bonus | consolidation | review (demerger, rights…: checked by the user)
+  /// split | bonus | consolidation | review (demerger, rights…: checked by the user) | dividend
   kind    String
   /// units × num / den from the ex-date (null for review)
   num     Int?
   den     Int?
+  /// dividends: micros of a rupee per share or unit
+  amount  BigInt?
+  /// list (NSE's daily list: applied to holdings) | history (looked back on: never applied)
+  source  String   @default("list")
 
   @@id([symbol, exDate, purpose])
 }
@@ -590,4 +594,22 @@ model GoldItem {
   updatedAt     DateTime      @updatedAt
 
   @@index([familyId])
+}
+
+/// A day's closing price of an NSE symbol (public), kept for looking back at corporate actions.
+model MarketClose {
+  symbol String
+  date   DateTime
+  /// micros of a rupee per share
+  close  BigInt
+
+  @@id([symbol, date])
+}
+
+/// A former NSE symbol of a share (TATAMOTORS → TMPV), for prices and history before the rename.
+model SymbolAlias {
+  symbol String
+  former String
+
+  @@id([symbol, former])
 }

@@ -19,6 +19,8 @@ export async function resetDb() {
   await prisma.benchmarkPoint.deleteMany(); // public market series
   await prisma.corporateAction.deleteMany(); // public splits and bonus issues
   await prisma.fetchMark.deleteMany(); // how far public downloads got
+  await prisma.marketClose.deleteMany(); // public closing prices
+  await prisma.symbolAlias.deleteMany(); // public symbol renames
 }
 
 export async function signUp(

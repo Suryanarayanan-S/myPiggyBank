@@ -7,6 +7,7 @@ import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
 import * as inc from '../services/holdingIncomeService.js';
 import * as tb from '../services/holdingTradebookService.js';
+import * as ch from '../services/corporateHistoryService.js';
 import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
 import { AppError } from '../lib/errors.js';
 import { parseDay, todayLocal } from '../lib/dates.js';
@@ -71,6 +72,38 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       fam(req),
       parse(tb.TradebookImportInput, req.body),
     ),
+  }));
+  // Looking back with NSE's corporate-action history: past dividends, splits and mergers.
+  const sources = () => {
+    if (!app.livePrices) {
+      throw new AppError(503, 'LIVE_PRICES_OFF', 'This server is not set up to download from NSE');
+    }
+    return {
+      fetch: app.livePrices.fetch,
+      historyUrl: app.livePrices.historyUrl,
+      pricesUrl: app.livePrices.url,
+      pauseMs: app.livePrices.pauseMs,
+    };
+  };
+  app.post('/holdings/past-dividends/preview', async (req) => ({
+    data: await ch.previewPastDividends(
+      app.prisma,
+      fam(req),
+      parse(ch.LookbackInput, req.body).ownerMemberId,
+      sources(),
+    ),
+  }));
+  app.post('/holdings/past-dividends/commit', async (req) => ({
+    data: await ch.commitPastDividends(
+      app.prisma,
+      fam(req),
+      parse(ch.LookbackInput, req.body).ownerMemberId,
+      sources(),
+    ),
+  }));
+  app.get('/holdings/events', async (req) => ({
+    // only the prices kept by a lookup: a page view never goes to NSE
+    data: await ch.corporateEvents(app.prisma, fam(req), undefined, null),
   }));
   // Daily closing prices from NSE (opt-in per family).
   app.get('/holdings/live-prices', async (req) => ({ data: livePriceStatus(fam(req)) }));

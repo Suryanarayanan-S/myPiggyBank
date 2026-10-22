@@ -32,6 +32,7 @@ const app = await buildApp({
       signal: AbortSignal.timeout(20_000),
     }),
   pricesUrl: config.PRICES_URL,
+  historyUrl: config.NSE_HISTORY_URL,
   goldSources: { ibja: config.IBJA_URL, usd: config.GOLD_PRICE_URL },
 });
 

@@ -119,7 +119,13 @@ export async function applyCorporateActions(
   upTo: string,
 ) {
   const actions = await prisma.corporateAction.findMany({
-    where: { exDate: { lte: parseDay(upTo)!, gte: parseDay(addDays(upTo, -APPLY_DAYS))! } },
+    // dividends are income, not a change of units
+    where: {
+      exDate: { lte: parseDay(upTo)!, gte: parseDay(addDays(upTo, -APPLY_DAYS))! },
+      kind: { not: 'dividend' },
+      // what was looked back on (the history) is never applied: only NSE's daily list
+      source: 'list',
+    },
     orderBy: [{ exDate: 'asc' }, { purpose: 'asc' }],
   });
   if (actions.length === 0) return;

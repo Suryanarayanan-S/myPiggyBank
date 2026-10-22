@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { prName, readCorporateActions } from '../../src/domain/corporateActions.js';
+import {
+  dividendPerShare,
+  formerSymbols,
+  prName,
+  readCorporateActions,
+  readNseHistory,
+  readSymbolChanges,
+} from '../../src/domain/corporateActions.js';
 
 // Lines as NSE writes them in its daily bc file (Oct 2026).
 const FILE = [
@@ -127,5 +134,111 @@ describe('NSE corporate actions (bc file)', () => {
         den: 1,
       },
     ]);
+  });
+});
+
+describe('NSE corporate-action history', () => {
+  it('reads what each dividend pays per share, special ones and InvIT distributions included', () => {
+    const per = (s: string) => dividendPerShare(s);
+    expect(per(' Interim Dividend - Rs 5 Per Share')).toBe(5_000_000);
+    expect(per('Annual General Meeting/Dividend - Rs  19 Per Share')).toBe(19_000_000);
+    expect(per('Dividend - Re 0.25 Per Share')).toBe(250_000);
+    expect(per('Interim Dividend - Rs 10 Per Share Special Dividend - Rs 66 Per Share')).toBe(
+      76_000_000,
+    );
+    expect(
+      per('Annual General Meeting/Special Dividend - Rs 8 Per Share /Dividend - Rs 20 Per Share'),
+    ).toBe(28_000_000);
+    expect(
+      per(
+        'Distribution - Rs 3 Per Unit Consist Of Rs 1.71 Per Unit As Interest/ Re 0.50 Per Unit As Dividend/ Re 0.77 Per Unit As Repayment Of Spv Debt/ Re 0.02 Per Unit As Treasury Income',
+      ),
+    ).toBe(3_000_000);
+    expect(
+      per(
+        'Interest- Rs 1.97 Per Unit/ Dividend - Rs 0.78 Per Unit/Spv Debt- Rs 0.24 Per Unit/Treasury Income Rs 0.01 Per Unit',
+      ),
+    ).toBe(3_000_000);
+    expect(per('Bonus 1:1 And Dividend - Rs 5 Per Share')).toBe(5_000_000);
+    for (const no of [
+      'Annual General Meeting',
+      'Buy Back',
+      'Interest Payment',
+      'Bonus 1:1',
+      'Demerger',
+      'Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share',
+    ])
+      expect(per(no)).toBeNull();
+  });
+
+  it('reads the history: dividends, splits, bonuses, demergers', () => {
+    const r = readNseHistory([
+      { symbol: 'ITC', exDate: '22-Feb-2021', subject: ' Interim Dividend - Rs 5 Per Share' },
+      {
+        symbol: 'ADANIPOWER',
+        exDate: '22-Sep-2025',
+        subject: 'Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share',
+      },
+      { symbol: 'HDFCBANK', exDate: '26-Aug-2025', subject: 'Bonus 1:1' },
+      { symbol: 'TMPV', exDate: '14-Oct-2025', subject: 'Demerger' },
+      { symbol: 'TCS', exDate: '01-Jul-2025', subject: 'Annual General Meeting' },
+      { symbol: 'X', exDate: 'soon', subject: 'Dividend - Rs 1 Per Share' },
+    ]);
+    expect(r).toEqual([
+      {
+        symbol: 'ITC',
+        exDate: '2021-02-22',
+        purpose: 'Interim Dividend - Rs 5 Per Share',
+        kind: 'dividend',
+        num: null,
+        den: null,
+        amount: 5_000_000,
+      },
+      {
+        symbol: 'ADANIPOWER',
+        exDate: '2025-09-22',
+        purpose: 'Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share',
+        kind: 'split',
+        num: 5,
+        den: 1,
+        amount: null,
+      },
+      {
+        symbol: 'HDFCBANK',
+        exDate: '2025-08-26',
+        purpose: 'Bonus 1:1',
+        kind: 'bonus',
+        num: 2,
+        den: 1,
+        amount: null,
+      },
+      {
+        symbol: 'TMPV',
+        exDate: '2025-10-14',
+        purpose: 'Demerger',
+        kind: 'review',
+        num: null,
+        den: null,
+        amount: null,
+      },
+    ]);
+    expect(() => readNseHistory('<html>')).toThrow(/list of corporate actions/);
+  });
+});
+
+describe('NSE symbol changes', () => {
+  it('follows a share back through its former symbols', () => {
+    const changes = readSymbolChanges(
+      [
+        'NAME OF THE COMPANY,OLD SYMBOL,NEW SYMBOL,EFFECTIVE DATE',
+        'IDFC First Bank Limited,IDFCBANK,IDFCFIRSTB,16-JAN-2019',
+        'Tata Motors Limited,TELCO,TATAMOTORS,26-DEC-2003',
+        'Tata Motors Passenger Vehicles Limited,TATAMOTORS,TMPV,24-OCT-2025',
+      ].join('\n'),
+    );
+    expect(formerSymbols(changes, 'TMPV')).toEqual(['TATAMOTORS', 'TELCO']);
+    expect(formerSymbols(changes, 'IDFCFIRSTB')).toEqual(['IDFCBANK']);
+    expect(formerSymbols(changes, 'INFY')).toEqual([]);
+    expect(() => readSymbolChanges('<html>')).toThrow(/symbol changes/);
   });
 });

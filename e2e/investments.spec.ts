@@ -442,4 +442,12 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(
     page.locator('section', { has: page.getByText('XIRR', { exact: true }) }).first(),
   ).toContainText(/[+−-]\d+\.\d %/);
+
+  // Past dividends from NSE's history (offline here: none found, nothing added).
+  await page.getByRole('button', { name: 'Add past dividends' }).click();
+  const past = page.getByRole('dialog', { name: 'Add past dividends' });
+  await past.getByRole('button', { name: 'Look up' }).click();
+  await expect(past.getByText(/No history on NSE for/)).toBeVisible();
+  await expect(past.getByRole('button', { name: 'Nothing to add' })).toBeDisabled();
+  await page.keyboard.press('Escape');
 });

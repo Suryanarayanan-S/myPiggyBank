@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { AlertTriangle, Pencil, Plus, Upload } from 'lucide-react';
+import { AlertTriangle, History, Pencil, Plus, Upload } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { HoldingActivity, HoldingForm } from '../components/investments/HoldingDialogs';
 import { HoldingsImport } from '../components/investments/HoldingsImport';
@@ -11,6 +11,8 @@ import { CorporateActions } from '../components/investments/CorporateActions';
 import { IncomeChart } from '../components/investments/IncomeChart';
 import { IncomeImport } from '../components/investments/IncomeImport';
 import { TradebookImport } from '../components/investments/TradebookImport';
+import { PastDividends } from '../components/investments/PastDividends';
+import { CorporateHistory } from '../components/investments/CorporateHistory';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
@@ -51,6 +53,7 @@ export function InvestmentsPage() {
     | { kind: 'import' }
     | { kind: 'income' }
     | { kind: 'tradebook' }
+    | { kind: 'past' }
     | null
   >(null);
   const close = () => setDialog(null);
@@ -91,6 +94,9 @@ export function InvestmentsPage() {
           </Button>
           <Button variant="secondary" onClick={() => setDialog({ kind: 'tradebook' })}>
             <Upload size={16} aria-hidden /> Import tradebook
+          </Button>
+          <Button variant="secondary" onClick={() => setDialog({ kind: 'past' })}>
+            <History size={16} aria-hidden /> Add past dividends
           </Button>
           <Button onClick={() => setDialog({ kind: 'form' })}>
             <Plus size={16} aria-hidden /> Add holding
@@ -203,6 +209,7 @@ export function InvestmentsPage() {
             />
             {/* Sold holdings' payouts count too (archived ones included). */}
             <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
+            <CorporateHistory />
             {/* The account split is in the donuts; by person only when there is more than one. */}
             {s.byMember.length > 1 && (
               <Shares
@@ -263,6 +270,11 @@ export function InvestmentsPage() {
               close();
             }}
           />
+        </Modal>
+      )}
+      {dialog?.kind === 'past' && (
+        <Modal title="Add past dividends" onClose={close}>
+          <PastDividends onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'tradebook' && (

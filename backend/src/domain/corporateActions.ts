@@ -12,9 +12,11 @@ export type CorporateAction = {
   purpose: string;
   /** split / bonus / consolidation change units by num/den; review: the user checks units and
    *  cost (demerger, rights issue, capital reduction, a split that cannot be read) */
-  kind: 'split' | 'bonus' | 'consolidation' | 'review';
+  kind: 'split' | 'bonus' | 'consolidation' | 'review' | 'dividend';
   num: number | null;
   den: number | null;
+  /** dividends: micros of a rupee per share (or unit) */
+  amount?: number | null;
 };
 
 /** PR081026.zip for 8 Oct 2026. */
@@ -88,6 +90,91 @@ export function readCorporateActions(text: string): CorporateAction[] {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ symbol, exDate, purpose, ...m });
+  }
+  return out;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const RUPEES = /R[se]\.?\s*-?\s*(\d+(?:\.\d+)?)/gi;
+
+/**
+ * What a dividend announcement pays per share (or InvIT/REIT unit), in micros; null when it is
+ * not one. "Interim Dividend - Rs 10 Per Share Special Dividend - Rs 66 Per Share" pays 76; an
+ * InvIT's "Distribution - Rs 3 Per Unit Consist Of …" pays 3, and one listed in parts (interest,
+ * dividend, repayment of debt…) pays their sum — as brokers count it.
+ */
+export function dividendPerShare(subject: string): number | null {
+  const s = subject.replace(/\s+/g, ' ').trim();
+  const total = s.match(/Distribution\s*-\s*R[se]\.?\s*-?\s*(\d+(?:\.\d+)?)/i);
+  if (total) return Math.round(Number(total[1]) * 1_000_000);
+  if (!/dividend|distribution|interest/i.test(s) || /interest payment/i.test(s)) return null;
+  // Announced with a bonus or split ("Bonus 1:1 And Dividend - Rs 5"): only the dividend's own
+  // amounts (not the face value of the split).
+  if (/split|bonus|buy ?back|demerger|amalgamation|rights|arrangement/i.test(s)) {
+    const own = [...s.matchAll(/dividend\s*-?\s*R[se]\.?\s*-?\s*(\d+(?:\.\d+)?)/gi)].map((m) =>
+      Number(m[1]),
+    );
+    return own.length ? Math.round(own.reduce((t, n) => t + n, 0) * 1_000_000) : null;
+  }
+  const parts = [...s.matchAll(RUPEES)].map((m) => Number(m[1]));
+  if (parts.length === 0) return null;
+  return Math.round(parts.reduce((t, n) => t + n, 0) * 1_000_000);
+}
+
+/**
+ * NSE's corporate-action history for a symbol (its website's JSON: symbol, exDate "22-Feb-2021",
+ * subject): dividends with their amount, and splits, bonuses and the like (as in the daily list).
+ */
+export function readNseHistory(json: unknown): CorporateAction[] {
+  if (!Array.isArray(json)) throw new Error('NSE did not send a list of corporate actions');
+  const out: CorporateAction[] = [];
+  const seen = new Set<string>();
+  for (const r of json as { symbol?: string; exDate?: string; subject?: string }[]) {
+    const m = (r.exDate ?? '').match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/);
+    const month = m
+      ? MONTHS.indexOf(m[2]!.slice(0, 1).toUpperCase() + m[2]!.slice(1).toLowerCase())
+      : -1;
+    const symbol = (r.symbol ?? '').trim().toUpperCase();
+    const purpose = (r.subject ?? '').replace(/\s+/g, ' ').trim();
+    if (!m || month < 0 || !symbol || !purpose) continue;
+    const exDate = `${m[3]}-${String(month + 1).padStart(2, '0')}-${m[1]}`;
+    const amount = dividendPerShare(purpose);
+    const kind =
+      amount !== null ? { kind: 'dividend' as const, num: null, den: null } : meaning(purpose);
+    if (!kind) continue;
+    const key = `${symbol}|${exDate}|${purpose}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ symbol, exDate, purpose, ...kind, amount });
+  }
+  return out;
+}
+
+/** NSE's list of symbol changes (symbolchange.csv): which symbols a share was known by before. */
+export function readSymbolChanges(text: string): { from: string; to: string }[] {
+  const rows = parseCsv(text).rows;
+  const head = (rows[0] ?? []).map((h) => h.trim().toUpperCase());
+  const [iOld, iNew] = [head.indexOf('OLD SYMBOL'), head.indexOf('NEW SYMBOL')];
+  if (iOld < 0 || iNew < 0) throw new Error('NSE did not send its list of symbol changes');
+  return rows
+    .slice(1)
+    .map((r) => ({
+      from: (r[iOld] ?? '').trim().toUpperCase(),
+      to: (r[iNew] ?? '').trim().toUpperCase(),
+    }))
+    .filter((c) => c.from && c.to && c.from !== c.to);
+}
+
+/** Every former symbol of `symbol`, following renames back (TMPV → TATAMOTORS → TELCO). */
+export function formerSymbols(changes: { from: string; to: string }[], symbol: string): string[] {
+  const out: string[] = [];
+  let current = [symbol];
+  while (current.length) {
+    const next = changes
+      .filter((c) => current.includes(c.to) && !out.includes(c.from) && c.from !== symbol)
+      .map((c) => c.from);
+    out.push(...next);
+    current = next;
   }
   return out;
 }

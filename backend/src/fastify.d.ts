@@ -9,7 +9,14 @@ declare module 'fastify' {
     prisma: PrismaClient;
     appConfig: AppConfig;
     liveRates: { fetch: FetchRates; url: string } | null;
-    livePrices: { fetch: FetchText; url: string; gold: GoldSources } | null;
+    livePrices: {
+      fetch: FetchText;
+      url: string;
+      gold: GoldSources;
+      /** NSE's corporate-action history */
+      historyUrl: string;
+      pauseMs: number;
+    } | null;
   }
   interface FastifyRequest {
     user: AuthUser | null;

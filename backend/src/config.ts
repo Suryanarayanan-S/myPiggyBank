@@ -14,6 +14,8 @@ const EnvSchema = z.object({
   RATES_URL: z.url().default('https://api.frankfurter.dev/v1'),
   /** NSE's archive of daily price files (tests point it elsewhere). */
   PRICES_URL: z.url().default('https://nsearchives.nseindia.com/products/content'),
+  /** NSE's corporate-action history (past dividends, splits, mergers) */
+  NSE_HISTORY_URL: z.url().default('https://www.nseindia.com/api/corporates-corporateActions'),
   /** Indian gold rates page (IBJA) and the world gold price (US dollars per ounce). */
   IBJA_URL: z.url().default('https://ibjarates.com/'),
   GOLD_PRICE_URL: z.url().default('https://api.gold-api.com/price/XAU'),

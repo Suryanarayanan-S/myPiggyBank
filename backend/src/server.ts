@@ -5,6 +5,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { livePricesWanted, refreshLivePrices } from './services/livePriceService.js';
+import { checkAllDividends } from './services/corporateHistoryService.js';
 import { generateDue } from './services/recurringService.js';
 import { todayLocal } from './lib/dates.js';
 
@@ -81,6 +82,21 @@ const runPrices = async () => {
   );
   if (status.lastError) app.log.warn({ error: status.lastError }, 'NSE price download failed');
   if (status.warning) app.log.warn({ warning: status.warning }, 'market data partly updated');
+  // then dividends and gold bond interest from NSE's history (once a day per family)
+  const { added } = await checkAllDividends(
+    prisma,
+    {
+      fetch: app.livePrices.fetch,
+      historyUrl: app.livePrices.historyUrl,
+      pricesUrl: app.livePrices.url,
+      pauseMs: app.livePrices.pauseMs,
+    },
+    (familyId, err) => app.log.error({ err, familyId }, 'dividend check failed'),
+  );
+  if (added) app.log.info({ added }, 'dividends and interest added');
 };
 void runPrices().catch((err) => app.log.error(err, 'NSE price download failed'));
-setInterval(() => void runPrices().catch(() => {}), 6 * 60 * 60 * 1000).unref();
+setInterval(
+  () => void runPrices().catch((err) => app.log.error(err, 'NSE price download failed')),
+  6 * 60 * 60 * 1000,
+).unref();

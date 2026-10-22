@@ -248,31 +248,22 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(d.getByRole('button', { name: 'Done' })).toBeFocused();
   await d.getByRole('button', { name: 'Done' }).click();
 
-  // Console's dividend report: payouts on the holdings, and on a share sold since.
-  await page.getByRole('button', { name: 'Import dividends' }).click();
-  const inc = page.getByRole('dialog', { name: 'Import dividends and interest' });
-  const dividendReport = {
-    name: 'dividends.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(
-      [
-        'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
-        `HDBFS,${daysAgo(200)},20,2,40`,
-        `INFY#,${daysAgo(130)},26,23,598`,
-        `INFY#,${daysAgo(10)},30,25,750`,
-      ].join('\n'),
-    ),
-  };
-  await inc.getByLabel('Dividend or interest report (CSV)').setInputFiles(dividendReport);
-  await expect(inc.getByText('3 dividends', { exact: true })).toBeVisible();
-  await expect(inc.getByText(/Not among the holdings \(sold since\): HDBFS/)).toBeVisible();
-  await inc.getByRole('button', { name: 'Record 3 dividends' }).click();
-  await expect(inc.getByText(/Done: 3 dividends recorded/)).toBeVisible();
-  await inc.getByRole('button', { name: 'Done' }).click();
+  // Dividends (worked out from NSE each day; offline here, so two are recorded directly).
+  const held = (await (await page.request.get('/api/holdings')).json()).data.holdings;
+  const infyId = held.find((h: { symbol: string }) => h.symbol === 'INFY').id;
+  for (const [ago, amount] of [
+    [130, 59_800],
+    [10, 75_000],
+  ]) {
+    await page.request.post(`/api/holdings/${infyId}/trades`, {
+      data: { date: daysAgo(ago), type: 'dividend', amount },
+    });
+  }
+  await page.reload();
   const income = page.locator('section', {
     has: page.getByRole('heading', { name: 'Dividend and interest' }),
   });
-  await expect(income).toContainText('₹1,388.00 from 3 payouts');
+  await expect(income).toContainText('₹1,348.00 from 2 payouts');
   await income.getByRole('button', { name: 'Show table' }).click();
   await expect(income.getByRole('row').filter({ hasText: '₹750.00' })).toHaveCount(1);
   await income.getByRole('button', { name: 'Show chart' }).click();
@@ -280,13 +271,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
     page
       .locator('section', { has: page.getByText('Dividends & interest', { exact: true }) })
       .first(),
-  ).toContainText('₹1,388.00');
-  // The same report again: nothing new.
-  await page.getByRole('button', { name: 'Import dividends' }).click();
-  await inc.getByLabel('Dividend or interest report (CSV)').setInputFiles(dividendReport);
-  await expect(inc.getByText('All of them are already recorded.')).toBeVisible();
-  await expect(inc.getByRole('button', { name: 'Nothing to record' })).toBeDisabled();
-  await page.keyboard.press('Escape');
+  ).toContainText('₹1,348.00');
 
   // Overview: what weighs most, and what moved most.
   const biggest = page.locator('section', {
@@ -451,11 +436,11 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(adani).toContainText('−₹637.90');
   await expect(adani).toContainText('booked');
 
-  // Past dividends from NSE's history (offline here: none found, nothing added).
-  await page.getByRole('button', { name: 'Add past dividends' }).click();
-  const past = page.getByRole('dialog', { name: 'Add past dividends' });
-  await past.getByRole('button', { name: 'Look up' }).click();
-  await expect(past.getByText(/No history on NSE for/)).toBeVisible();
-  await expect(past.getByRole('button', { name: 'Nothing to add' })).toBeDisabled();
-  await page.keyboard.press('Escape');
+  // The tradebook started a dividend check on NSE (offline here: it says so), and one can be
+  // asked for again.
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByText(/NSE did not answer as expected/)).toBeVisible();
+  await page.getByRole('button', { name: 'Check now' }).click();
+  await expect(page.getByText(/Dividends and gold bond interest are checked on NSE/)).toBeVisible();
+  await expect(page.getByText(/NSE did not answer as expected/)).toBeVisible();
 });

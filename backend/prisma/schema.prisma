@@ -413,29 +413,42 @@ model GoalEntry {
 
 /// A security held by the family (stock, ETF, fund, gold…), valued from trades and prices.
 model Holding {
-  id            String          @id @default(uuid())
-  familyId      String
-  family        Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  name          String
+  id             String          @id @default(uuid())
+  familyId       String
+  family         Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name           String
   /// stock | etf | fund | gold | other
-  kind          String
+  kind           String
   /// ticker or ISIN
-  symbol        String?
-  currency      String
-  ownerMemberId String?
-  owner         FamilyMember?   @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  symbol         String?
+  currency       String
+  ownerMemberId  String?
+  owner          FamilyMember?   @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
   /// the depot account it sits in (informational)
-  accountId     String?
-  account       Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  note          String?
-  archived      Boolean         @default(false)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  trades        HoldingTrade[]
-  prices        HoldingPrice[]
-  actions       HoldingAction[]
+  accountId      String?
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  note           String?
+  archived       Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  trades         HoldingTrade[]
+  prices         HoldingPrice[]
+  actions        HoldingAction[]
+  removedPayouts RemovedPayout[]
 
   @@index([familyId])
+}
+
+/// A dividend or interest payment the person deleted: the daily check never adds it again.
+model RemovedPayout {
+  holdingId String
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  /// dividend | interest
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@id([holdingId, date, kind])
 }
 
 model HoldingTrade {

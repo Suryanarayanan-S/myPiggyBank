@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { FetchText } from '../src/services/livePriceService.js';
+import { todayLocal } from '../src/lib/dates.js';
+import { checkAllDividends, checkDividends } from '../src/services/corporateHistoryService.js';
 import { client, makeApp, prisma, resetDb, signUp } from './helpers.js';
 
 const HEAD =
@@ -111,13 +113,13 @@ describe('past dividends and corporate-action history', () => {
   });
   afterEach(() => app.close());
 
-  const lookup = (kind: 'preview' | 'commit') =>
-    call('POST', `/api/holdings/past-dividends/${kind}`, { ownerMemberId: surya });
+  const check = () => call('POST', '/api/holdings/dividend-check');
 
   it('works out each past dividend from the shares held then, and gold bond interest', async () => {
-    const p = (await lookup('preview')).json().data;
+    const p = (await check()).json().data;
     expect(p.failed).toEqual(['SCTL']); // BSE only: no NSE history
-    expect(p.recorded).toBe(2); // the Console dividend and the gold bond's latest interest
+    // (not the dividend from Console, nor the gold bond's latest interest: recorded already)
+    expect(p).toMatchObject({ added: 6, amount: 33_000 + 4 * 62_630 + 6_600 });
     expect(p.rows).toEqual([
       // 20 shares × 16.50
       {
@@ -171,20 +173,127 @@ describe('past dividends and corporate-action history', () => {
         kind: 'interest',
       },
     ]);
-    expect(p.years.find((y: { year: string }) => y.year === '2026')).toMatchObject({
-      count: 1,
-      recorded: 2,
-    });
-
-    expect((await lookup('commit')).json().data).toMatchObject({ added: 6 });
     // again: everything is there; and the history is not asked again within a week
     const asked = nse.urls.filter((u) => u.includes('/history')).length;
-    expect((await lookup('preview')).json().data.toAdd.count).toBe(0);
+    expect((await check()).json().data.added).toBe(0);
     expect(nse.urls.filter((u) => u.includes('/history')).length).toBe(asked + 1); // only SCTL again
+    expect((await call('GET', '/api/holdings/dividend-check')).json().data).toEqual({
+      checkedOn: todayLocal(),
+      running: false,
+      daily: false, // NSE prices are off for this family: no daily check, only on request
+      available: true,
+      failed: ['SCTL'],
+      problem: null,
+    });
+  });
+
+  it('checks each family with NSE prices once a day', async () => {
+    const src = {
+      fetch: nse.fetchText,
+      historyUrl: 'http://nse.test/history',
+      pricesUrl: 'http://nse.test/products/content',
+      pauseMs: 0,
+    };
+    expect(await checkAllDividends(prisma, src)).toEqual({ added: 0 }); // NSE prices are off
+    await prisma.family.updateMany({ data: { livePrices: true } });
+    expect(await checkAllDividends(prisma, src)).toEqual({ added: 6 });
+    expect(await checkAllDividends(prisma, src)).toEqual({ added: 0 }); // done for today
+  });
+
+  it('takes a dividend entered on its payment day, or after tax, as the same one', async () => {
+    const infy = (await call('GET', '/api/holdings'))
+      .json()
+      .data.holdings.find((h: { symbol: string }) => h.symbol === 'INFY').id;
+    // paid on 3 Nov for the 21 Oct ex-date, 10% TDS taken off
+    await trade(infy, '2021-11-03', 'dividend', null, 29_700);
+    const rows = (await check()).json().data.rows;
+    expect(rows.filter((r: { symbol: string }) => r.symbol === 'INFY')).toEqual([]);
+  });
+
+  it('does not add a payout again once it was deleted', async () => {
+    await check();
+    const infy = (await call('GET', '/api/holdings'))
+      .json()
+      .data.holdings.find((h: { symbol: string }) => h.symbol === 'INFY');
+    const paid = infy.trades.find((t: { type: string }) => t.type === 'dividend');
+    await call('DELETE', `/api/holdings/${infy.id}/trades/${paid.id}`);
+    expect((await check()).json().data.added).toBe(0);
+  });
+
+  it('adds nothing from a split left to check on, as the units then are not known', async () => {
+    const hdfc = (await call('GET', '/api/holdings'))
+      .json()
+      .data.holdings.find((h: { symbol: string }) => h.symbol === 'HDFCBANK').id;
+    await prisma.holdingAction.create({
+      data: {
+        holdingId: hdfc,
+        exDate: new Date('2025-08-26'),
+        purpose: 'Bonus 1:1',
+        kind: 'bonus',
+        status: 'review',
+        unitsBefore: 6_000_000n,
+        unitsAfter: 6_000_000n,
+      },
+    });
+    const rows = (await check()).json().data.rows;
+    // the one before it only
+    expect(
+      rows
+        .filter((r: { symbol: string }) => r.symbol === 'HDFCBANK')
+        .map((r: { date: string }) => r.date),
+    ).toEqual(['2025-06-27']);
+  });
+
+  it('follows a running check with another when asked after a change', async () => {
+    let open = () => {};
+    let asked = () => {};
+    const gate = new Promise<void>((r) => (open = r));
+    const reading = new Promise<void>((r) => (asked = r));
+    const slow: typeof nse.fetchText = async (url) => {
+      asked(); // the holdings are read by now
+      await gate;
+      return nse.fetchText(url);
+    };
+    const src = {
+      fetch: slow,
+      historyUrl: 'http://nse.test/history',
+      pricesUrl: 'http://nse.test/products/content',
+      pauseMs: 0,
+    };
+    const familyId = (await prisma.family.findFirstOrThrow()).id;
+    await prisma.holdingTrade.deleteMany({ where: { type: { not: 'buy' } } });
+    const first = checkDividends(prisma, familyId, src);
+    await reading;
+    // a WIPRO bought while that check runs: the next one sees it
+    const wipro = await holding('WIPRO');
+    await trade(wipro, '2024-01-01', 'buy', '10', 400_000);
+    const second = checkDividends(prisma, familyId, src, true);
+    expect(checkDividends(prisma, familyId, src, true)).toBe(second); // one follow-up is enough
+    open();
+    await first;
+    expect((await second).rows.map((r: { symbol: string }) => r.symbol)).toContain('WIPRO');
+  });
+
+  it('gives each person their own dividend, even the same amount on the same day', async () => {
+    const appa = (await call('POST', '/api/members', { name: 'Appa' })).json().data.id;
+    const theirs = (
+      await call('POST', '/api/holdings', {
+        name: 'INFY',
+        kind: 'stock',
+        symbol: 'INFY',
+        currency: 'INR',
+        ownerMemberId: appa,
+      })
+    ).json().data.id;
+    await trade(theirs, '2021-03-01', 'buy', '20', 2_600_000);
+    const rows = (await check())
+      .json()
+      .data.rows.filter((r: { date: string }) => r.date === '2021-10-21');
+    expect(rows.map((r: { amount: number }) => r.amount)).toEqual([33_000, 33_000]);
   });
 
   it('lists the bonus with the shares and value before and after', async () => {
-    await lookup('preview');
+    await check();
     const events = (await call('GET', '/api/holdings/events')).json().data;
     expect(events).toEqual([
       {
@@ -223,7 +332,7 @@ describe('past dividends and corporate-action history', () => {
     await trade(tmpv, '2024-01-10', 'buy', '78', 5_000_000);
     const tmcv = await holding('TMCV');
     await trade(tmcv, '2025-10-14', 'buy', '78', 2_067_234);
-    const p = (await lookup('preview')).json().data;
+    const p = (await check()).json().data;
     // the dividend before the bonus on the 60 shares held then (not 30)
     expect(p.rows).toContainEqual(
       expect.objectContaining({ symbol: 'WIPRO', date: '2024-07-01', units: 60, amount: 6_000 }),
@@ -288,7 +397,7 @@ describe('past dividends and corporate-action history', () => {
         { name: 'nse-history-from:ADANIPOWER', day: new Date('2020-01-01') },
       ],
     });
-    const p = (await lookup('preview')).json().data;
+    const p = (await check()).json().data;
     // 15 shares before the split (75 ÷ 5, not ÷ 25)
     expect(p.rows).toContainEqual(
       expect.objectContaining({ symbol: 'ADANIPOWER', units: 15, amount: 3_000 }),
@@ -301,7 +410,7 @@ describe('past dividends and corporate-action history', () => {
     const aug = await holding('SGBAUG28V-GB', 'gold');
     await trade(aug, '2025-06-01', 'buy', '2', 1_900_000);
     await trade(aug, '2026-03-01', 'buy', '1', 1_500_000);
-    const rows = (await lookup('preview'))
+    const rows = (await check())
       .json()
       .data.rows.filter((r: { symbol: string }) => r.symbol === 'SGBAUG28V');
     // 66.675 a bond (5,334 × 1.25%), 15 days before Feb 11 and Aug 11; rounded down
@@ -353,7 +462,7 @@ describe('past dividends and corporate-action history', () => {
     await trade(sgb, '2026-02-06', 'interest', null, 62_630);
     const infy = await holding('INFY');
     await trade(infy, '2021-03-01', 'buy', '20', 2_600_000);
-    const p = (await lookup('preview')).json().data;
+    const p = (await check()).json().data;
     expect(p.problem).toBe('NSE answered 403');
     expect(p.failed).toEqual(['INFY']);
     // 2025-08-06 is the one recorded on 2025-08-08; only the latest is left

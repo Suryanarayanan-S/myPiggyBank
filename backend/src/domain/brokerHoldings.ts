@@ -49,6 +49,13 @@ export function plainSymbol(symbol: string): string {
     .replace(/-(EQ|BE)$/, '');
 }
 
+/** NSE market (series) codes Kite may append ("PGINVIT-IV", "SGBFEB32IV-GB"); not RE (a rights
+ * entitlement, a different instrument from the share). */
+const MARKET_SUFFIX = /-(EQ|BE|BZ|BL|GB|IV|RR|SM|ST|N[0-9A-Z])$/;
+
+/** The symbol as NSE and Console write it: no exchange prefix, no market suffix. */
+export const nseSymbol = (s: string) => plainSymbol(s).replace(MARKET_SUFFIX, '');
+
 export function readBrokerHoldings(rows: string[][]): {
   rows: BrokerHolding[];
   errors: BrokerRowError[];
@@ -111,61 +118,6 @@ const realDay = (d: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(d) &&
   !Number.isNaN(Date.parse(d)) &&
   new Date(d).toISOString().slice(0, 10) === d;
-
-/** A dividend or an interest payment from a broker's report (Zerodha Console). */
-export type BrokerIncome = {
-  line: number;
-  symbol: string;
-  /** ex-date, YYYY-MM-DD */
-  date: string;
-  /** paise */
-  amount: number;
-};
-
-/**
- * Console's dividend report (Symbol, Ex-date, Qty, Dividend per share, Total dividend) or its
- * interest report (… Interest per share, Total interest — Sovereign Gold Bonds). Console marks
- * some symbols ("INFY#", "BAJAJ-AUTO*"); the marks are dropped.
- */
-export function readBrokerIncome(rows: string[][]): {
-  kind: 'dividend' | 'interest';
-  rows: BrokerIncome[];
-  errors: BrokerRowError[];
-} {
-  // The header may follow a title line or two.
-  const start = Math.max(
-    0,
-    rows.slice(0, 10).findIndex((r) => r.some((c) => c.trim().toLowerCase() === 'ex-date')),
-  );
-  const head = (rows[start] ?? []).map((h) => h.trim().toLowerCase());
-  const at = (name: string) => head.indexOf(name);
-  const kind =
-    at('total dividend') >= 0 ? 'dividend' : at('total interest') >= 0 ? 'interest' : null;
-  const [iSym, iDate] = [at('symbol'), at('ex-date')];
-  if (!kind || iSym < 0 || iDate < 0) {
-    throw new Error(
-      'This is not a dividend or interest report from Zerodha Console (Symbol, Ex-date, … Total dividend / Total interest)',
-    );
-  }
-  const iTotal = at(`total ${kind}`);
-  const out: BrokerIncome[] = [];
-  const errors: BrokerRowError[] = [];
-  rows.slice(start + 1).forEach((r, i) => {
-    const line = start + i + 2;
-    const symbol = plainSymbol((r[iSym] ?? '').trim().replace(/[#*]+$/, ''));
-    if (!symbol) return;
-    const date = (r[iDate] ?? '').trim();
-    const total = Number((r[iTotal] ?? '').trim().replace(/,/g, ''));
-    if (!realDay(date)) {
-      errors.push({ line, symbol, message: 'The ex-date is not a date (YYYY-MM-DD)' });
-    } else if (!(total > 0)) {
-      errors.push({ line, symbol, message: `The total ${kind} is not an amount above zero` });
-    } else {
-      out.push({ line, symbol, date, amount: Math.round(total * 100) });
-    }
-  });
-  return { kind, rows: out, errors };
-}
 
 /** A trade from a broker's tradebook (Zerodha Console's format). */
 export type BrokerTrade = {

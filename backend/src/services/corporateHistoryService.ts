@@ -5,27 +5,20 @@
  * did to a holding (shares and value just before and just after).
  */
 import type { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
 import { bhavcopyName, priceFor, readBhavcopy, type Bhavcopy } from '../domain/bhavcopy.js';
-import { plainSymbol } from '../domain/brokerHoldings.js';
+import { nseSymbol } from '../domain/brokerHoldings.js';
 import { formerSymbols, readNseHistory, readSymbolChanges } from '../domain/corporateActions.js';
 import { addMonths } from '../domain/deposits.js';
 import { goldBond, goldBondInterest, interestPaise } from '../domain/goldBonds.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import type { Db } from '../lib/db.js';
-import { assertMember } from './ownership.js';
 import type { FetchText } from './livePriceService.js';
 
 /** NSE's website API for a symbol's corporate actions. */
 export const DEFAULT_HISTORY_URL = 'https://www.nseindia.com/api/corporates-corporateActions';
 /** A symbol's history is asked again after a week. */
 const REFRESH_DAYS = 7;
-/** NSE market codes Kite may append ("PGINVIT-IV"); not RE (a rights entitlement). */
-const MARKET_SUFFIX = /-(EQ|BE|BZ|BL|GB|IV|RR|SM|ST|N[0-9A-Z])$/;
-const nseSymbol = (s: string) => plainSymbol(s).replace(MARKET_SUFFIX, '');
 const CURRENCY = 'INR';
-
-export const LookbackInput = z.object({ ownerMemberId: z.uuid().nullable() });
 
 export type Sources = {
   fetch: FetchText;
@@ -41,18 +34,18 @@ const dmy = (day: string) => `${day.slice(8, 10)}-${day.slice(5, 7)}-${day.slice
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The person's (or, undefined, everyone's) rupee holdings with a symbol, and their NSE name. */
-async function holdingsOf(db: Db, familyId: string, owner: string | null | undefined) {
+async function holdingsOf(db: Db, familyId: string) {
   const rows = await db.holding.findMany({
     where: {
       familyId,
       currency: CURRENCY,
       symbol: { not: null },
-      ...(owner !== undefined && { ownerMemberId: owner }),
     },
     include: {
       trades: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
       // splits the app could not apply (left to check): the trades may be in the old units
       actions: { where: { status: 'review' }, select: { exDate: true } },
+      removedPayouts: { select: { date: true, kind: true } },
     },
   });
   return rows.map((h) => ({ ...h, nse: nseSymbol(h.symbol!) }));
@@ -239,10 +232,60 @@ type Payout = {
   recorded: boolean;
 };
 
-async function plan(prisma: PrismaClient, familyId: string, owner: string | null, src: Sources) {
-  if (owner) await assertMember(prisma, familyId, owner);
+const DAY = 86_400_000;
+const daysBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / DAY;
+
+/**
+ * Which payouts are there already: recorded, or taken out by the person. Each entry stands for one
+ * payout. The same day counts first (also on another holding of the person's when the amount
+ * matches: the share renamed, or archived); then a dividend entered up to 45 days after
+ * its ex-date (when it was paid, perhaps after tax), or interest within ten days (a holiday).
+ */
+function markRecorded(holdings: Held[], payouts: Payout[]) {
+  type Entry = { day: string; kind: string; amount: number | null };
+  const entries = new Map<string, Entry[]>();
+  for (const h of holdings) {
+    entries.set(h.id, [
+      ...h.trades
+        .filter((t) => t.type === 'dividend' || t.type === 'interest')
+        .map((t) => ({ day: formatDay(t.date), kind: t.type, amount: Number(t.amount) })),
+      ...h.removedPayouts.map((r) => ({ day: formatDay(r.date), kind: r.kind, amount: null })),
+    ]);
+  }
+  const byId = new Map(holdings.map((h) => [h.id, h]));
+  // the person's other holdings (the share renamed, or archived and bought again)
+  const othersOf = (p: Payout) =>
+    holdings.filter(
+      (h) => h.id !== p.holdingId && h.ownerMemberId === byId.get(p.holdingId)!.ownerMemberId,
+    );
+  const take = (list: Entry[] | undefined, ok: (e: Entry) => boolean) => {
+    const i = list?.findIndex(ok) ?? -1;
+    if (i >= 0) list!.splice(i, 1);
+    return i >= 0;
+  };
+  for (const p of payouts) {
+    p.recorded =
+      take(entries.get(p.holdingId), (e) => e.kind === p.kind && e.day === p.date) ||
+      othersOf(p).some((h) =>
+        take(
+          entries.get(h.id),
+          (e) => e.kind === p.kind && e.day === p.date && e.amount === p.amount,
+        ),
+      );
+  }
+  for (const p of payouts) {
+    if (p.recorded) continue;
+    p.recorded = take(entries.get(p.holdingId), (e) => {
+      if (e.kind !== p.kind) return false;
+      const d = daysBetween(p.date, e.day);
+      return p.kind === 'dividend' ? d >= -3 && d <= 45 : Math.abs(d) <= 10;
+    });
+  }
+}
+
+async function plan(prisma: PrismaClient, familyId: string, src: Sources) {
   const today = todayLocal();
-  const holdings = (await holdingsOf(prisma, familyId, owner)).filter((h) => h.trades.some(moves));
+  const holdings = (await holdingsOf(prisma, familyId)).filter((h) => h.trades.some(moves));
   const firstTrade = (h: Held) => formatDay(h.trades.find(moves)!.date);
   const symbols = [...new Set(holdings.filter((h) => !h.nse.startsWith('SGB')).map((h) => h.nse))];
   const from = holdings.map(firstTrade).sort()[0] ?? today;
@@ -254,42 +297,23 @@ async function plan(prisma: PrismaClient, familyId: string, owner: string | null
       orderBy: [{ exDate: 'asc' }, { purpose: 'asc' }],
     }),
   );
-  // What the person already has: per holding and day, and per day and amount (a payout may sit
-  // on a renamed or archived holding of the same share).
-  const recordedOn = new Set<string>();
-  const recordedAmount = new Set<string>();
-  for (const h of holdings) {
-    for (const t of h.trades) {
-      if (t.type !== 'dividend' && t.type !== 'interest') continue;
-      recordedOn.add(`${h.id}|${formatDay(t.date)}`);
-      recordedAmount.add(`${formatDay(t.date)}|${Number(t.amount)}`);
-    }
-  }
   const payouts: Payout[] = [];
-  // gold bond interest recorded a few days off (a holiday moves the payment): the same one
-  const interestNear = (holdingId: string, day: string) =>
-    holdings
-      .find((h) => h.id === holdingId)!
-      .trades.some(
-        (t) =>
-          t.type === 'interest' &&
-          Math.abs(Date.parse(formatDay(t.date)) - Date.parse(day)) <= 10 * 86_400_000,
-      );
   const add = (p: Omit<Payout, 'recorded'>) => {
-    if (p.amount <= 0) return;
-    const recorded =
-      recordedOn.has(`${p.holdingId}|${p.date}`) ||
-      recordedAmount.has(`${p.date}|${p.amount}`) ||
-      (p.kind === 'interest' && interestNear(p.holdingId, p.date));
-    payouts.push({ ...p, recorded });
+    if (p.amount > 0) payouts.push({ ...p, recorded: false });
   };
   for (const h of holdings) {
     const start = firstTrade(h);
+    // Archived while still held (no sale recorded): nothing after its last trade. A split left to
+    // check: nothing from it on, as the units then are not known.
+    const lastMove = formatDay(h.trades.filter(moves).at(-1)!.date);
+    const held = h.archived && unitsOn(h, today, []) > 0 ? lastMove : today;
+    const review = h.actions.map((x) => formatDay(x.exDate)).sort()[0];
+    const until = review && addDays(review, -1) < held ? addDays(review, -1) : held;
     // dividends: shares held at the close before the ex-date
     for (const a of actions) {
       if (a.kind !== 'dividend' || a.symbol !== h.nse || a.amount === null) continue;
       const ex = formatDay(a.exDate);
-      if (ex <= start || ex > today) continue;
+      if (ex <= start || ex > until) continue;
       const units = unitsOn(h, addDays(ex, -1), actions);
       if (units <= 0) continue;
       const perShare = Number(a.amount);
@@ -305,7 +329,7 @@ async function plan(prisma: PrismaClient, familyId: string, owner: string | null
       });
     }
     // gold bonds: from the series' issue price and date
-    const coupons = goldBondInterest(h.nse, addDays(start, 1), today);
+    const coupons = goldBondInterest(h.nse, addDays(start, 1), until);
     for (const c of coupons) {
       const units = unitsOn(h, addDays(c.exDate, -1), []);
       if (units <= 0) continue;
@@ -345,60 +369,36 @@ async function plan(prisma: PrismaClient, familyId: string, owner: string | null
     }
   }
   payouts.sort((a, b) => a.date.localeCompare(b.date) || a.symbol.localeCompare(b.symbol));
+  markRecorded(holdings, payouts);
   return { payouts, failed };
 }
 
-/** What would be added, by year (nothing is saved). */
-export async function previewPastDividends(
-  prisma: PrismaClient,
-  familyId: string,
-  owner: string | null,
-  src: Sources,
-) {
-  const { payouts, failed } = await plan(prisma, familyId, owner, src);
-  // the prices around splits and mergers, looked up now (the history page only reads them)
-  await corporateEvents(prisma, familyId, owner, { ...src, files: new Map() });
-  const years = new Map<
-    string,
-    { year: string; count: number; amount: number; recorded: number }
-  >();
-  for (const p of payouts) {
-    const y = p.date.slice(0, 4);
-    const row = years.get(y) ?? { year: y, count: 0, amount: 0, recorded: 0 };
-    if (p.recorded) row.recorded++;
-    else {
-      row.count++;
-      row.amount += p.amount;
-    }
-    years.set(y, row);
-  }
-  const fresh = payouts.filter((p) => !p.recorded);
-  return {
-    years: [...years.values()],
-    toAdd: { count: fresh.length, amount: fresh.reduce((t, p) => t + p.amount, 0) },
-    recorded: payouts.length - fresh.length,
-    rows: fresh.map((p) => ({
-      symbol: p.symbol,
-      date: p.date,
-      units: p.units / 1_000_000,
-      perShare: p.perShare / 1_000_000,
-      amount: p.amount,
-      kind: p.kind,
-    })),
-    /** symbols whose history NSE did not give (e.g. listed on BSE only) */
-    failed: failed.map((f) => f.symbol),
-    /** why, when NSE itself failed (not just an unknown symbol) */
-    problem: failed.find((f) => !/ 404$/.test(f.reason))?.reason ?? null,
-  };
-}
+/** Families being checked now, and a check asked for while one ran (the data may have changed). */
+const running = new Map<string, Promise<CheckResult>>();
+const queued = new Map<string, Promise<CheckResult>>();
+/** What the last check of each family could not look up (kept until the server restarts). */
+const lastFailed = new Map<string, { failed: string[]; problem: string | null }>();
+const checkedMark = (familyId: string) => `dividends-checked:${familyId}`;
 
-export async function commitPastDividends(
-  prisma: PrismaClient,
-  familyId: string,
-  owner: string | null,
-  src: Sources,
-) {
-  const { payouts } = await plan(prisma, familyId, owner, src);
+type CheckResult = Awaited<ReturnType<typeof runCheck>>;
+
+/** What a check added. */
+const result = (fresh: Payout[]) => ({
+  added: fresh.length,
+  amount: fresh.reduce((t, p) => t + p.amount, 0),
+  rows: fresh.map((p) => ({
+    symbol: p.symbol,
+    date: p.date,
+    units: p.units / 1_000_000,
+    perShare: p.perShare / 1_000_000,
+    amount: p.amount,
+    kind: p.kind,
+  })),
+});
+
+async function runCheck(prisma: PrismaClient, familyId: string, src: Sources) {
+  const files = new Map<string, Bhavcopy | null>();
+  const { payouts, failed } = await plan(prisma, familyId, { ...src, files });
   const fresh = payouts.filter((p) => !p.recorded);
   await prisma.holdingTrade.createMany({
     data: fresh.map((p) => ({
@@ -409,7 +409,103 @@ export async function commitPastDividends(
       amount: p.amount,
     })),
   });
-  return { added: fresh.length, amount: fresh.reduce((t, p) => t + p.amount, 0) };
+  // the prices around splits and mergers, looked up now (the history page only reads them)
+  await corporateEvents(prisma, familyId, { ...src, files });
+  const day = parseDay(todayLocal())!;
+  const missing = {
+    /** symbols whose history NSE did not give (e.g. listed on BSE only) */
+    failed: failed.map((f) => f.symbol),
+    /** why, when NSE itself failed (not just an unknown symbol) */
+    problem: failed.find((f) => !/ 404$/.test(f.reason))?.reason ?? null,
+  };
+  lastFailed.set(familyId, missing);
+  // NSE failing is tried again with the next prices (6 hours on), not only tomorrow
+  if (missing.problem) return { ...result(fresh), ...missing };
+  await prisma.fetchMark.upsert({
+    where: { name: checkedMark(familyId) },
+    create: { name: checkedMark(familyId), day },
+    update: { day },
+  });
+  return { ...result(fresh), ...missing };
+}
+
+/**
+ * Adds every dividend and gold bond interest not yet recorded, from NSE's history (shares held at
+ * the close before each ex-date), for all the family's holdings; keeps the prices around splits
+ * and mergers for the history.
+ */
+export function checkDividends(
+  prisma: PrismaClient,
+  familyId: string,
+  src: Sources,
+  /** after the data changed: a check already running is followed by another */
+  fresh = false,
+): Promise<CheckResult> {
+  const start = () => {
+    const run = runCheck(prisma, familyId, src)
+      .catch((e: unknown) => {
+        lastFailed.set(familyId, { failed: [], problem: (e as Error).message });
+        throw e;
+      })
+      .finally(() => running.delete(familyId));
+    running.set(familyId, run);
+    return run;
+  };
+  const now = running.get(familyId);
+  if (!now) return start();
+  if (!fresh) return now;
+  const waiting = queued.get(familyId);
+  if (waiting) return waiting;
+  const next = now
+    .catch(() => {})
+    .then(() => {
+      queued.delete(familyId);
+      return start();
+    });
+  queued.set(familyId, next);
+  return next;
+}
+
+/**
+ * When the family's dividends were last checked, whether a check runs now, whether the daily run
+ * includes the family (NSE prices on), and what failed.
+ */
+export async function dividendCheckStatus(prisma: PrismaClient, familyId: string) {
+  const [mark, family] = await Promise.all([
+    prisma.fetchMark.findUnique({ where: { name: checkedMark(familyId) } }),
+    prisma.family.findUnique({ where: { id: familyId }, select: { livePrices: true } }),
+  ]);
+  return {
+    checkedOn: mark ? formatDay(mark.day) : null,
+    running: running.has(familyId) || queued.has(familyId),
+    daily: family?.livePrices ?? false,
+    ...(lastFailed.get(familyId) ?? { failed: [], problem: null }),
+  };
+}
+
+/** The daily run: each family with NSE prices switched on, once a day. */
+export async function checkAllDividends(
+  prisma: PrismaClient,
+  src: Sources,
+  onError: (familyId: string, err: unknown) => void = () => {},
+) {
+  const today = todayLocal();
+  const families = await prisma.family.findMany({
+    where: { livePrices: true },
+    select: { id: true },
+  });
+  let added = 0;
+  for (const f of families) {
+    const mark = await prisma.fetchMark.findUnique({ where: { name: checkedMark(f.id) } });
+    if (mark && formatDay(mark.day) === today) continue;
+    // one family failing does not keep the others from theirs
+    try {
+      added += (await checkDividends(prisma, f.id, src)).added;
+    } catch (err) {
+      onError(f.id, err);
+    }
+  }
+  return { added };
 }
 
 /**
@@ -474,15 +570,9 @@ async function closeNear(
  * the value just before (the last close) and just after (the first close; new shares received
  * that day — e.g. a demerged company — included). Prices are looked up and kept the first time.
  */
-export async function corporateEvents(
-  prisma: PrismaClient,
-  familyId: string,
-  owner: string | null | undefined,
-  src: Sources | null,
-) {
-  if (owner) await assertMember(prisma, familyId, owner);
+export async function corporateEvents(prisma: PrismaClient, familyId: string, src: Sources | null) {
   const today = todayLocal();
-  const holdings = (await holdingsOf(prisma, familyId, owner)).filter((h) => h.trades.some(moves));
+  const holdings = (await holdingsOf(prisma, familyId)).filter((h) => h.trades.some(moves));
   const actions = distinct(
     await prisma.corporateAction.findMany({
       where: {

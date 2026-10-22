@@ -358,9 +358,24 @@ export async function deleteTrade(
   tradeId: string,
 ) {
   const h = await owned(prisma, familyId, id);
-  if (!h.trades.some((t) => t.id === tradeId)) throw notFound('Trade');
+  const trade = h.trades.find((t) => t.id === tradeId);
+  if (!trade) throw notFound('Trade');
   if (oversold(asTrades(h.trades.filter((t) => t.id !== tradeId)))) throw notEnough();
-  await prisma.holdingTrade.delete({ where: { id: tradeId } });
+  await prisma.$transaction([
+    prisma.holdingTrade.delete({ where: { id: tradeId } }),
+    // a payout taken out stays out: the daily dividend check does not add it again
+    ...(trade.type === 'dividend' || trade.type === 'interest'
+      ? [
+          prisma.removedPayout.upsert({
+            where: {
+              holdingId_date_kind: { holdingId: id, date: trade.date, kind: trade.type },
+            },
+            create: { holdingId: id, date: trade.date, kind: trade.type },
+            update: {},
+          }),
+        ]
+      : []),
+  ]);
   return computed(await owned(prisma, familyId, id));
 }
 

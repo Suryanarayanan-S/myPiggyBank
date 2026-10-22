@@ -2,16 +2,15 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { AlertTriangle, History, Pencil, Plus, Upload } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, Upload } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { HoldingActivity, HoldingForm } from '../components/investments/HoldingDialogs';
 import { HoldingsImport } from '../components/investments/HoldingsImport';
 import { CountAt } from '../components/investments/CountAt';
 import { CorporateActions } from '../components/investments/CorporateActions';
 import { IncomeChart } from '../components/investments/IncomeChart';
-import { IncomeImport } from '../components/investments/IncomeImport';
 import { TradebookImport } from '../components/investments/TradebookImport';
-import { PastDividends } from '../components/investments/PastDividends';
+import { DividendCheck } from '../components/investments/DividendCheck';
 import { CorporateHistory } from '../components/investments/CorporateHistory';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
@@ -51,9 +50,7 @@ export function InvestmentsPage() {
     | { kind: 'form'; holding?: Holding }
     | { kind: 'activity'; id: string }
     | { kind: 'import' }
-    | { kind: 'income' }
     | { kind: 'tradebook' }
-    | { kind: 'past' }
     | null
   >(null);
   const close = () => setDialog(null);
@@ -92,14 +89,8 @@ export function InvestmentsPage() {
           <Button variant="secondary" onClick={() => setDialog({ kind: 'import' })}>
             <Upload size={16} aria-hidden /> Import from Zerodha
           </Button>
-          <Button variant="secondary" onClick={() => setDialog({ kind: 'income' })}>
-            <Upload size={16} aria-hidden /> Import dividends
-          </Button>
           <Button variant="secondary" onClick={() => setDialog({ kind: 'tradebook' })}>
             <Upload size={16} aria-hidden /> Import tradebook
-          </Button>
-          <Button variant="secondary" onClick={() => setDialog({ kind: 'past' })}>
-            <History size={16} aria-hidden /> Add past dividends
           </Button>
           <Button onClick={() => setDialog({ kind: 'form' })}>
             <Plus size={16} aria-hidden /> Add holding
@@ -210,20 +201,7 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            {!paidOut && (
-              <Card title="Dividends, interest, splits and mergers">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    None recorded yet. Add past dividends works out every dividend and gold bond
-                    interest since your first trade, and lists each split, bonus, demerger and
-                    merger with your shares before and after.
-                  </p>
-                  <Button variant="secondary" onClick={() => setDialog({ kind: 'past' })}>
-                    <History size={16} aria-hidden /> Add past dividends
-                  </Button>
-                </div>
-              </Card>
-            )}
+            <DividendCheck empty={!paidOut} />
             {/* Sold holdings' payouts count too (archived ones included). */}
             <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
             <CorporateHistory />
@@ -289,19 +267,9 @@ export function InvestmentsPage() {
           />
         </Modal>
       )}
-      {dialog?.kind === 'past' && (
-        <Modal title="Add past dividends" onClose={close}>
-          <PastDividends onDone={close} />
-        </Modal>
-      )}
       {dialog?.kind === 'tradebook' && (
         <Modal title="Import tradebook" onClose={close}>
           <TradebookImport onDone={close} />
-        </Modal>
-      )}
-      {dialog?.kind === 'income' && (
-        <Modal title="Import dividends and interest" onClose={close}>
-          <IncomeImport onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'import' && (

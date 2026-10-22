@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
+import { checkDividends } from './DividendCheck';
 import { dayLabel } from '../../lib/deposits';
 import { fileToBase64 } from '../../lib/files';
 import { useMembers } from '../../lib/queries';
@@ -42,8 +43,11 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
   });
   const commit = useMutation({
     mutationFn: (previewed: Request) => api.post<Result>('/holdings/tradebook/commit', previewed),
-    // trades change investments, net worth and goals
-    onSuccess: () => queryClient.invalidateQueries(),
+    // trades change investments, net worth and goals; and the dividends of the shares held then
+    onSuccess: () => {
+      void queryClient.invalidateQueries();
+      checkDividends(queryClient).catch(() => {});
+    },
   });
   useEffect(() => {
     if (commit.data) done.current?.focus();
@@ -79,7 +83,8 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
       <p className="text-sm text-slate-500">
         In Zerodha Console open Reports → Tradebook and download the CSV (a combined file in the
         same columns works too). Each holding the file adds up to gets its real buy and sell dates;
-        dividends, interest and prices stay. Importing again changes nothing.
+        then its dividends and gold bond interest are worked out from NSE. Importing again changes
+        nothing.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Whose demat is this?" htmlFor="tb-owner">

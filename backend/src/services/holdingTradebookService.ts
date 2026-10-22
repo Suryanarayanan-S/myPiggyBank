@@ -6,18 +6,36 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { kindOf, readBrokerTrades, type BrokerTrade } from '../domain/brokerHoldings.js';
+import { kindOf, nseSymbol, readBrokerTrades, type BrokerTrade } from '../domain/brokerHoldings.js';
 import { decodeText, parseCsv } from '../domain/csv.js';
 import { formatRate } from '../domain/currency.js';
 import { parseDay } from '../lib/dates.js';
 import type { Db } from '../lib/db.js';
 import { AppError } from '../lib/errors.js';
 import { MAX_FILE_CHARS } from './holdingImportService.js';
-import { bySymbol, rupeeHoldings } from './holdingIncomeService.js';
 import { assertMember } from './ownership.js';
 
 const CURRENCY = 'INR';
 const MAX_ROWS = 20_000;
+
+/** Every rupee holding in the family. */
+function rupeeHoldings(db: Db, familyId: string) {
+  return db.holding.findMany({
+    where: { familyId, currency: CURRENCY, symbol: { not: null } },
+    orderBy: [{ archived: 'asc' }, { createdAt: 'asc' }],
+  });
+}
+type Held = Awaited<ReturnType<typeof rupeeHoldings>>[number];
+
+/** Holdings by symbol as Console writes it (Kite's market suffix dropped), open ones first. */
+function bySymbol(rows: Held[]) {
+  const map = new Map<string, Held[]>();
+  for (const h of rows) {
+    const key = nseSymbol(h.symbol!);
+    map.set(key, [...(map.get(key) ?? []), h]);
+  }
+  return map;
+}
 
 export const TradebookImportInput = z.object({
   fileName: z.string().max(200),

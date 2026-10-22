@@ -242,156 +242,6 @@ describe('importing broker holdings', () => {
     expect(trades.filter((t) => t.type === 'sell')).toHaveLength(0);
   });
 
-  describe('dividend and interest reports (Console)', () => {
-    const report = (head: string, ...lines: string[]) =>
-      Buffer.from([head, ...lines].join('\n')).toString('base64');
-    const dividends = report(
-      'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
-      'INFY#,2025-10-27,26,23,598',
-      'HDBFS,2025-10-24,20,2,40', // sold since: not among the holdings
-      'INFY#,2026-06-10,30,25,750',
-    );
-    const interest = report(
-      'Symbol,Ex-date,Qty,Interest per share,Total interest',
-      'SGBFEB32IV,2026-02-06,8,78.2875,626.3',
-    );
-    const income = (kind: 'preview' | 'commit', data: string) =>
-      call('POST', `/api/holdings/income/${kind}`, {
-        fileName: 'dividends.csv',
-        data,
-        ownerMemberId: surya,
-      });
-
-    it('previews, records each payout once, and puts payouts of sold shares on archived holdings', async () => {
-      await commit(first);
-      const p = (await income('preview', dividends)).json().data;
-      expect(p).toMatchObject({
-        kind: 'dividend',
-        total: 138_800,
-        toAdd: { count: 3, amount: 138_800 },
-        newHoldings: ['HDBFS'],
-      });
-      expect(p.rows[1]).toMatchObject({ symbol: 'HDBFS', held: false, status: 'new' });
-
-      expect((await income('commit', dividends)).json().data).toMatchObject({
-        added: 3,
-        skipped: 0,
-        newHoldings: ['HDBFS'],
-      });
-      // again: nothing new
-      expect((await income('commit', dividends)).json().data).toMatchObject({
-        added: 0,
-        skipped: 3,
-      });
-      const data = (await call('GET', '/api/holdings')).json().data;
-      const infy = data.holdings.find((h: { symbol: string }) => h.symbol === 'INFY');
-      expect(infy.dividends).toBe(134_800);
-      const hdbfs = data.holdings.find((h: { symbol: string }) => h.symbol === 'HDBFS');
-      expect(hdbfs).toMatchObject({ archived: true, dividends: 4_000, ownerMemberId: surya });
-      // the year's dividends add up, the sold share's included
-      expect(data.summary.dividends).toBe(138_800);
-    });
-
-    it('records gold bond interest as interest', async () => {
-      await income('commit', interest);
-      const sgb = (await call('GET', '/api/holdings')).json().data.holdings[0];
-      expect(sgb).toMatchObject({ symbol: 'SGBFEB32IV', kind: 'gold', dividends: 62_630 });
-      expect(sgb.trades).toMatchObject([{ type: 'interest', date: '2026-02-06', amount: 62_630 }]);
-    });
-
-    it('takes gold bond interest recorded a few days off as the same coupon', async () => {
-      // worked out from the series' dates on Feb 6; Console has two coupons, one moved by a holiday
-      await income('commit', interest);
-      const sgb = (await call('GET', '/api/holdings')).json().data.holdings[0];
-      await call('POST', `/api/holdings/${sgb.id}/trades`, {
-        date: '2025-08-06',
-        type: 'interest',
-        amount: 62_630,
-      });
-      const p = (
-        await income(
-          'preview',
-          report(
-            'Symbol,Ex-date,Qty,Interest per share,Total interest',
-            'SGBFEB32IV,2025-08-08,8,78.2875,626.3',
-            'SGBFEB32IV,2026-02-06,8,78.2875,626.3',
-            'SGBFEB32IV,2026-08-06,8,78.2875,626.3',
-          ),
-        )
-      ).json().data;
-      expect(p.rows.map((r: { status: string }) => r.status)).toEqual(['recorded', 'recorded', 'new']);
-    });
-
-    it('matches Kite symbols written with their market (PGINVIT-IV, SGBFEB32IV-GB)', async () => {
-      await commit(
-        file(
-          '"PGINVIT-IV",50,100,103.84,5000,5192,192,3.84,0,""',
-          '"SGBFEB32IV-GB",8,5000,15411.53,40000,123292.24,83292.24,208.23,0,""',
-        ),
-      );
-      const p = (
-        await income(
-          'preview',
-          report(
-            'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
-            'PGINVIT,2026-02-12,50,3,150',
-          ),
-        )
-      ).json().data;
-      expect(p.newHoldings).toEqual([]);
-      expect((await income('preview', interest)).json().data.newHoldings).toEqual([]);
-    });
-
-    it('never records a payout twice, even once the sold share is bought again', async () => {
-      await commit(first);
-      await income('commit', dividends); // HDBFS goes on an archived holding
-      // bought again, as a new holding
-      const h = (
-        await call('POST', '/api/holdings', {
-          name: 'HDB Financial',
-          kind: 'stock',
-          symbol: 'HDBFS',
-          currency: 'INR',
-          ownerMemberId: surya,
-        })
-      ).json().data;
-      expect(h.id).toBeDefined();
-      expect((await income('commit', dividends)).json().data).toMatchObject({ added: 0 });
-      // two equal payouts on one day (e.g. two lots) are both kept
-      const twice = report(
-        'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
-        'INFY,2026-09-01,10,5,50',
-        'INFY,2026-09-01,10,5,50',
-      );
-      expect((await income('commit', twice)).json().data).toMatchObject({ added: 2 });
-      expect((await income('commit', twice)).json().data).toMatchObject({ added: 0 });
-    });
-
-    it('warns when the shares belong to someone else in the family', async () => {
-      await commit(first, { ownerMemberId: appa });
-      const p = (await income('preview', dividends)).json().data;
-      expect(p.heldByOthers).toEqual(['Appa']);
-    });
-
-    it('reads a report with a title line above its header, and stray spaces', async () => {
-      const p = (
-        await income(
-          'preview',
-          report(
-            'Dividend report for AB1234',
-            'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
-            '"INFY# ",2025-10-27,26,23,598',
-          ),
-        )
-      ).json().data;
-      expect(p.rows).toMatchObject([{ symbol: 'INFY', amount: 59_800 }]);
-    });
-
-    it('refuses a file that is not such a report', async () => {
-      expect((await income('preview', first)).statusCode).toBe(400);
-    });
-  });
-
   describe('tradebook (Console)', () => {
     const HEAD =
       'symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time';
@@ -462,12 +312,12 @@ describe('importing broker holdings', () => {
 
     it('keeps dividends when the trades are replaced, and can be imported again', async () => {
       await commit(first);
-      await call('POST', '/api/holdings/income/commit', {
-        fileName: 'd.csv',
-        data: Buffer.from(
-          'Symbol,Ex-date,Qty,Dividend per share,Total dividend\nINFY,2025-10-27,26,23,598',
-        ).toString('base64'),
-        ownerMemberId: surya,
+      const held = (await call('GET', '/api/holdings')).json().data.holdings;
+      const infyId = held.find((h: { symbol: string }) => h.symbol === 'INFY').id;
+      await call('POST', `/api/holdings/${infyId}/trades`, {
+        date: '2025-10-27',
+        type: 'dividend',
+        amount: 59_800,
       });
       await tradebook('commit', file);
       await tradebook('commit', file);

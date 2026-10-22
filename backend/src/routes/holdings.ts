@@ -5,7 +5,6 @@ import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
-import * as inc from '../services/holdingIncomeService.js';
 import * as tb from '../services/holdingTradebookService.js';
 import * as ch from '../services/corporateHistoryService.js';
 import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
@@ -43,21 +42,6 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       parse(hi.HoldingImportInput, req.body),
     ),
   }));
-  // Dividend and interest reports from Zerodha Console: preview, then record the payouts.
-  app.post('/holdings/income/preview', { bodyLimit }, async (req) => ({
-    data: await inc.previewIncomeImport(
-      app.prisma,
-      fam(req),
-      parse(inc.IncomeImportInput, req.body),
-    ),
-  }));
-  app.post('/holdings/income/commit', { bodyLimit }, async (req) => ({
-    data: await inc.commitIncomeImport(
-      app.prisma,
-      fam(req),
-      parse(inc.IncomeImportInput, req.body),
-    ),
-  }));
   // A full tradebook (Zerodha Console's format): real buy and sell dates for the holdings.
   app.post('/holdings/tradebook/preview', { bodyLimit }, async (req) => ({
     data: await tb.previewTradebookImport(
@@ -73,7 +57,7 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       parse(tb.TradebookImportInput, req.body),
     ),
   }));
-  // Looking back with NSE's corporate-action history: past dividends, splits and mergers.
+  // NSE's corporate-action history: dividends, gold bond interest, splits and mergers.
   const sources = () => {
     if (!app.livePrices) {
       throw new AppError(503, 'LIVE_PRICES_OFF', 'This server is not set up to download from NSE');
@@ -85,25 +69,18 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       pauseMs: app.livePrices.pauseMs,
     };
   };
-  app.post('/holdings/past-dividends/preview', async (req) => ({
-    data: await ch.previewPastDividends(
-      app.prisma,
-      fam(req),
-      parse(ch.LookbackInput, req.body).ownerMemberId,
-      sources(),
-    ),
+  // Dividends and gold bond interest: checked each day after the prices, or now on request.
+  app.get('/holdings/dividend-check', async (req) => ({
+    // available: this server can reach NSE at all
+    data: { ...(await ch.dividendCheckStatus(app.prisma, fam(req))), available: !!app.livePrices },
   }));
-  app.post('/holdings/past-dividends/commit', async (req) => ({
-    data: await ch.commitPastDividends(
-      app.prisma,
-      fam(req),
-      parse(ch.LookbackInput, req.body).ownerMemberId,
-      sources(),
-    ),
+  // asked for (or after an import): a check already running is followed by a new one
+  app.post('/holdings/dividend-check', async (req) => ({
+    data: await ch.checkDividends(app.prisma, fam(req), sources(), true),
   }));
   app.get('/holdings/events', async (req) => ({
-    // only the prices kept by a lookup: a page view never goes to NSE
-    data: await ch.corporateEvents(app.prisma, fam(req), undefined, null),
+    // only the prices kept by a check: a page view never goes to NSE
+    data: await ch.corporateEvents(app.prisma, fam(req), null),
   }));
   // Daily closing prices from NSE (opt-in per family).
   app.get('/holdings/live-prices', async (req) => ({ data: livePriceStatus(fam(req)) }));

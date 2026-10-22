@@ -70,6 +70,8 @@ function fakeNse(
         : { ok: false, status: 404, text: async () => '' };
     if (lists[name] && opts.noLists) return { ok: false, status: 404, text: async () => '' };
     if (lists[name]) return { ok: true, status: 200, text: async () => lists[name]! };
+    // No daily corporate-actions archive here (see corporate-actions.test.ts).
+    if (name.startsWith('PR')) return { ok: false, status: 404, text: async () => '' };
     // everyDay: a file for whatever day is asked (tests that use the real date).
     const m = name.match(/_(\d{2})(\d{2})(\d{4})\.csv$/)!;
     const months = [
@@ -230,14 +232,15 @@ describe('daily prices from NSE', () => {
     await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
     const before = nse.urls.length;
     await refreshLivePrices(prisma, nse.fetchText, '2026-10-15');
-    // only today's (still unpublished) file is asked again
+    // only today's (still unpublished) file is asked again, and the latest day's list of
+    // corporate actions (not published in this fake, so maybe not out yet)
     // NSE files only (IBJA and the world gold price are one small page each, every run)
     expect(
       nse.urls
         .slice(before)
         .filter((u) => !u.includes('ibjarates') && !u.includes('gold-api'))
         .map((u) => u.split('/').at(-1)),
-    ).toEqual(['sec_bhavdata_full_15102026.csv']);
+    ).toEqual(['sec_bhavdata_full_15102026.csv', 'PR141026.zip']);
     await prisma.holdingTrade.create({
       data: {
         holdingId: infy,

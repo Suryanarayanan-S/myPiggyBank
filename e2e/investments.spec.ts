@@ -240,6 +240,34 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   });
   await expect(biggest.getByRole('listitem').first()).toContainText('GOLDBEES');
   await expect(biggest.getByRole('listitem').first()).toContainText('94.5 %');
+  // A split from NSE's corporate-actions list (offline here: added to the real answer).
+  await page.route(/\/api\/holdings(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    const infy = json.data.holdings.find((h: { name: string }) => h.name === 'INFY');
+    infy.actions = [
+      {
+        exDate: new Date().toISOString().slice(0, 10),
+        purpose: 'FVSPLT FRM RS 10 TO RS 2',
+        kind: 'split',
+        status: 'applied',
+        unitsBefore: '32',
+        unitsAfter: '160',
+      },
+    ];
+    await route.fulfill({ response: res, json });
+  });
+  await page.reload();
+  const actions = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Splits and bonus issues' }),
+  });
+  await expect(actions).toContainText('units 32 → 160, earlier prices adjusted to match');
+  await actions.getByRole('button', { name: 'INFY' }).click();
+  await expect(page.getByRole('dialog', { name: /INFY/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.unroute(/\/api\/holdings(\?.*)?$/);
+  await page.reload();
+  await expect(actions).toHaveCount(0);
   // Donuts: the account split and sectors (no NSE lists here, so INFY is not classified).
   const card = (title: string) =>
     page
@@ -304,7 +332,11 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   // Net worth can count the holdings at what was invested instead; the choice is kept.
   const countAt = page.getByLabel('Count in net worth and goals at');
   await expect(countAt).toHaveValue('value');
-  await countAt.selectOption('invested');
+  // saved before the reload (the page saves in the background)
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/api/family') && r.request().method() === 'PUT'),
+    countAt.selectOption('invested'),
+  ]);
   await page.reload();
   await expect(page.getByLabel('Count in net worth and goals at')).toHaveValue('invested');
 

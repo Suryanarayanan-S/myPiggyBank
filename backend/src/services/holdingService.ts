@@ -1,4 +1,10 @@
-import type { Holding, HoldingPrice, HoldingTrade, PrismaClient } from '@prisma/client';
+import type {
+  Holding,
+  HoldingAction,
+  HoldingPrice,
+  HoldingTrade,
+  PrismaClient,
+} from '@prisma/client';
 import { z } from 'zod';
 import { CurrencySchema, convert, formatRate, parseRate } from '../domain/currency.js';
 import { computeHolding, oversold, type Trade } from '../domain/holdings.js';
@@ -54,7 +60,11 @@ export const TradeInput = z
   });
 export const PriceInput = z.object({ date: pastDay, price: micros('price') });
 
-type Row = Holding & { trades: HoldingTrade[]; prices: HoldingPrice[] };
+type Row = Holding & {
+  trades: HoldingTrade[];
+  prices: HoldingPrice[];
+  actions?: HoldingAction[];
+};
 const asTrades = (rows: HoldingTrade[]): Trade[] =>
   rows.map((t) => ({
     date: formatDay(t.date),
@@ -108,12 +118,24 @@ function computed(h: Row, onDay = todayLocal()) {
     prices: [...h.prices]
       .sort((a, b) => b.date.getTime() - a.date.getTime())
       .map((p) => ({ id: p.id, date: formatDay(p.date), price: formatRate(Number(p.price)) })),
+    /** splits, bonus issues and the like: applied, or for the user to check; newest first */
+    actions: [...(h.actions ?? [])]
+      .sort((a, b) => b.exDate.getTime() - a.exDate.getTime())
+      .map((a) => ({
+        exDate: formatDay(a.exDate),
+        purpose: a.purpose,
+        kind: a.kind,
+        status: a.status,
+        unitsBefore: formatRate(Number(a.unitsBefore)),
+        unitsAfter: formatRate(Number(a.unitsAfter)),
+      })),
   };
 }
 
 const include = {
   trades: { orderBy: [{ date: 'asc' as const }, { createdAt: 'asc' as const }] },
   prices: true,
+  actions: true,
 };
 const load = (prisma: PrismaClient, familyId: string) =>
   prisma.holding.findMany({

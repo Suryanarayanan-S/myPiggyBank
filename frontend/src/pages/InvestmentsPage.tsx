@@ -7,6 +7,7 @@ import { useMe } from '../auth/auth';
 import { HoldingActivity, HoldingForm } from '../components/investments/HoldingDialogs';
 import { HoldingsImport } from '../components/investments/HoldingsImport';
 import { CountAt } from '../components/investments/CountAt';
+import { CorporateActions } from '../components/investments/CorporateActions';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
@@ -85,6 +86,7 @@ export function InvestmentsPage() {
             <CountAt />
             <LivePrices />
           </div>
+          <CorporateActions holdings={open} onOpen={(id) => setDialog({ kind: 'activity', id })} />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile label="Value" value={formatMoney(s.value, s.currency)} />
             <Tile

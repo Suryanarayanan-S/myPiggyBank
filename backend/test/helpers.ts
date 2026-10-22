@@ -17,6 +17,8 @@ export async function resetDb() {
   await prisma.liveRate.deleteMany(); // public rates, not family data
   await prisma.instrumentInfo.deleteMany(); // public company facts
   await prisma.benchmarkPoint.deleteMany(); // public market series
+  await prisma.corporateAction.deleteMany(); // public splits and bonus issues
+  await prisma.fetchMark.deleteMany(); // how far public downloads got
 }
 
 export async function signUp(

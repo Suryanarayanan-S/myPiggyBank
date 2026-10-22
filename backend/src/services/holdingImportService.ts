@@ -14,6 +14,7 @@ import { computeHolding, valueOf, type Trade } from '../domain/holdings.js';
 import { formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertMember } from './ownership.js';
+import { awaitingCredit } from './corporateActionService.js';
 
 /** Zerodha (Kite) holdings are Indian instruments, priced in rupees. */
 const CURRENCY = 'INR';
@@ -54,6 +55,7 @@ async function rupeeHoldings(db: Db, familyId: string) {
       trades: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
       prices: true,
       owner: { select: { name: true } },
+      actions: { where: { status: 'applied' } },
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -71,6 +73,8 @@ async function rupeeHoldings(db: Db, familyId: string) {
       holding: h,
       key: plainSymbol(h.symbol!),
       units: c.units,
+      /** a file showing these units only awaits a split's or bonus's new shares (not a sale) */
+      awaiting: (fileUnits: number) => awaitingCredit(h.actions, fileUnits, today),
       cost: c.cost,
       value: c.value,
     };
@@ -123,11 +127,13 @@ export async function previewHoldingImport(prisma: PrismaClient, familyId: strin
     const had = mine.get(r.symbol);
     const status = !had
       ? ('new' as const)
-      : r.units > had.units
-        ? ('more' as const)
-        : r.units < had.units
-          ? ('less' as const)
-          : ('same' as const);
+      : had.awaiting(r.units)
+        ? ('same' as const)
+        : r.units > had.units
+          ? ('more' as const)
+          : r.units < had.units
+            ? ('less' as const)
+            : ('same' as const);
     // The same instrument held by someone else (another demat) — worth a second look.
     const alsoHeldBy = [
       ...new Set(
@@ -259,7 +265,8 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
           continue;
         }
         const id = had.holding.id;
-        const diff = r.units - had.units;
+        // Just after a split the broker may still show the old count: nothing was sold.
+        const diff = had.awaiting(r.units) ? 0 : r.units - had.units;
         if (diff > 0) {
           // Bought more: what the broker now shows as invested, beyond what was recorded.
           await tx.holdingTrade.create({

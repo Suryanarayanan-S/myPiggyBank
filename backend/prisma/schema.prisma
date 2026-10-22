@@ -426,6 +426,7 @@ model Holding {
   updatedAt     DateTime       @updatedAt
   trades        HoldingTrade[]
   prices        HoldingPrice[]
+  actions       HoldingAction[]
 
   @@index([familyId])
 }
@@ -479,4 +480,47 @@ model BenchmarkPoint {
   value  BigInt
 
   @@id([series, date])
+}
+
+/// Splits, bonus issues and other events from NSE's daily corporate-actions list (bc file).
+model CorporateAction {
+  symbol  String
+  exDate  DateTime
+  purpose String
+  /// split | bonus | consolidation | review (demerger, rights…: checked by the user)
+  kind    String
+  /// units × num / den from the ex-date (null for review)
+  num     Int?
+  den     Int?
+
+  @@id([symbol, exDate, purpose])
+}
+
+/// What a corporate action did to a holding: applied (units and earlier prices adjusted) or
+/// review (the user checks units and cost). Recorded once per holding and action.
+model HoldingAction {
+  id          String   @id @default(uuid())
+  holdingId   String
+  holding     Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  exDate      DateTime
+  purpose     String
+  kind        String
+  /// applied | review
+  status      String
+  num         Int?
+  den         Int?
+  /// micro-units held the day before the ex-date, and after the adjustment
+  unitsBefore BigInt
+  unitsAfter  BigInt
+  createdAt   DateTime @default(now())
+
+  @@unique([holdingId, exDate, purpose])
+  @@index([holdingId])
+}
+
+/// How far a daily public download has got (e.g. NSE's corporate-actions lists), so a server
+/// that was off catches up from there.
+model FetchMark {
+  name String   @id
+  day  DateTime
 }

@@ -42,11 +42,21 @@ export type Holding = {
   dividends: number;
   trades: HoldingTrade[];
   prices: { id: string; date: string; price: string }[];
+  /** Splits, bonus issues and the like from NSE: applied, or for the user to check. */
+  actions?: HoldingAction[];
   /** Value and cost in the summary currency; null without an exchange rate. */
   inView: { value: number; cost: number } | null;
   /** From NSE's index lists, for listed rupee shares (null when not known). */
   industry: string | null;
   cap: 'large' | 'mid' | 'small' | null;
+};
+export type HoldingAction = {
+  exDate: string;
+  purpose: string;
+  kind: 'split' | 'bonus' | 'consolidation' | 'review';
+  status: 'applied' | 'review';
+  unitsBefore: string;
+  unitsAfter: string;
 };
 export type HoldingsResponse = {
   holdings: Holding[];

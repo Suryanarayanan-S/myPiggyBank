@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { todayLocal } from '../src/lib/dates.js';
-import { client, makeApp, resetDb, signUp } from './helpers.js';
+import { client, makeApp, prisma, resetDb, signUp } from './helpers.js';
+import { addDays } from '../src/lib/dates.js';
 
 const HEAD =
   '"Instrument","Qty.","Avg. cost","LTP","Invested","Cur. val","P&L","Net chg.","Day chg.",""';
@@ -210,5 +211,34 @@ describe('importing broker holdings', () => {
     const other = client(app, (await signUp(app)).cookie);
     const theirs = (await other('GET', '/api/members')).json().data[0].id;
     expect((await preview(first, theirs)).statusCode).toBe(404);
+  });
+
+  it('right after a split, a file still showing the old units is no sale', async () => {
+    await commit(first);
+    // A 1:5 split two days ago, applied (32 → 160); the broker credits the new shares later.
+    const infy = await prisma.holding.findFirstOrThrow({ where: { symbol: 'INFY' } });
+    await prisma.holdingTrade.updateMany({
+      where: { holdingId: infy.id },
+      data: { units: 160_000_000n },
+    });
+    await prisma.holdingAction.create({
+      data: {
+        holdingId: infy.id,
+        exDate: new Date(`${addDays(todayLocal(), -2)}T00:00:00Z`),
+        purpose: 'FVSPLT FRM RS 10 TO RS 2',
+        kind: 'split',
+        status: 'applied',
+        num: 5,
+        den: 1,
+        unitsBefore: 32_000_000n,
+        unitsAfter: 160_000_000n,
+      },
+    });
+    const p = (await preview(first)).json().data;
+    expect(p.rows[0]).toMatchObject({ symbol: 'INFY', status: 'same' });
+    await commit(first);
+    expect((await holdings()).find((h) => h.symbol === 'INFY')).toMatchObject({ units: '160' });
+    const trades = await prisma.holdingTrade.findMany({ where: { holdingId: infy.id } });
+    expect(trades.filter((t) => t.type === 'sell')).toHaveLength(0);
   });
 });

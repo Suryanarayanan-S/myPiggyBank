@@ -10,11 +10,21 @@ import {
   type Listed,
 } from '../domain/indexLists.js';
 import { addDays, formatDay, parseDay } from '../lib/dates.js';
+import {
+  adjustedClose,
+  applyCorporateActions,
+  forgetCorporateActions,
+  storeCorporateActions,
+} from './corporateActionService.js';
 
 /** The slice of `fetch` the price download needs (injected so tests never touch the network). */
-export type FetchText = (
-  url: string,
-) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
+export type FetchText = (url: string) => Promise<{
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  /** for zip archives (NSE's daily corporate-actions list) */
+  arrayBuffer?(): Promise<ArrayBuffer>;
+}>;
 
 /** NSE's public archive of end-of-day files: free, no login, published each trading evening. */
 export const DEFAULT_PRICES_URL = 'https://nsearchives.nseindia.com/products/content';
@@ -51,6 +61,7 @@ let cached: Bhavcopy | null = null;
 /** For tests: forget what was downloaded and what the runs did. */
 export function forgetLivePrices() {
   cached = null;
+  forgetCorporateActions();
   noFile.clear();
   noIndex.clear();
   lastFile = null;
@@ -181,6 +192,18 @@ async function run(
     await applyDay(prisma, file, familyIds, outcomes);
     lastFile = file.date;
     lastError = null;
+    // Splits and bonus issues: before older closes are filled in, so those come in adjusted.
+    try {
+      await storeCorporateActions(prisma, fetchText, baseUrl, file.date);
+    } catch (err) {
+      warnings.push(`Splits and bonus issues not checked: ${message(err)}.`);
+    }
+    try {
+      // the actions stored earlier are applied even when today's list could not be had
+      await applyCorporateActions(prisma, familyIds, file.date);
+    } catch (err) {
+      warnings.push(`Splits and bonus issues not applied: ${message(err)}.`);
+    }
     // Nifty 50 and GOLDBEES for comparison, then the days since the first trade that are missing.
     try {
       await storeBenchmarks(prisma, fetchText, baseUrl, file);
@@ -225,7 +248,11 @@ async function applyDay(
   const holdings = await prisma.holding.findMany({
     where: { familyId: { in: familyIds }, archived: false, currency: 'INR', symbol: { not: null } },
     // Trades dated after the file's day do not change what was held that day.
-    include: { trades: { where: { date: { lte: date } } }, prices: { where: { date } } },
+    include: {
+      trades: { where: { date: { lte: date } } },
+      prices: { where: { date } },
+      actions: { where: { status: 'applied' } },
+    },
   });
   for (const h of holdings) {
     const units = h.trades.reduce(
@@ -234,7 +261,9 @@ async function applyDay(
     );
     if (units <= 0) continue;
     const outcome = outcomes?.get(h.familyId);
-    const price = priceFor(file, h.symbol!);
+    const close = priceFor(file, h.symbol!);
+    // a day before an applied split: in the new units, like the prices already there
+    const price = close === null ? null : adjustedClose(close, file.date, h.actions);
     if (price === null) {
       if (outcome && !outcome.notFound.includes(h.symbol!)) outcome.notFound.push(h.symbol!);
       continue;

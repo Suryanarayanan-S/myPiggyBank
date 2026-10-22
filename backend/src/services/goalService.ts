@@ -9,10 +9,11 @@ import { assertMember } from './ownership.js';
 import { loadRates } from './rateService.js';
 import { holdingValues } from './holdingService.js';
 import { depositValues } from './depositService.js';
+import { goldValues } from './goldService.js';
 
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
 const cents = z.number().int('Use whole cents').refine(Number.isSafeInteger, 'Amount is too large');
-const LINK_KINDS = ['account', 'asset', 'holding', 'deposit'] as const;
+const LINK_KINDS = ['account', 'asset', 'holding', 'deposit', 'gold'] as const;
 type LinkKind = (typeof LINK_KINDS)[number];
 
 const fields = {
@@ -51,16 +52,18 @@ async function checkLinks(
   const ids = (kind: LinkKind) => [
     ...new Set(links.filter((l) => l.kind === kind).map((l) => l.id)),
   ];
-  const [accounts, assets, holdings, deposits] = await Promise.all([
+  const [accounts, assets, holdings, deposits, gold] = await Promise.all([
     prisma.account.count({ where: { familyId, id: { in: ids('account') } } }),
     prisma.asset.count({ where: { familyId, id: { in: ids('asset') } } }),
     prisma.holding.count({ where: { familyId, id: { in: ids('holding') } } }),
     prisma.deposit.count({ where: { familyId, id: { in: ids('deposit') } } }),
+    prisma.goldItem.count({ where: { familyId, id: { in: ids('gold') } } }),
   ]);
   if (accounts !== ids('account').length) throw notFound('Account');
   if (assets !== ids('asset').length) throw notFound('Asset');
   if (holdings !== ids('holding').length) throw notFound('Holding');
   if (deposits !== ids('deposit').length) throw notFound('Deposit');
+  if (gold !== ids('gold').length) throw notFound('Gold');
 }
 
 const dedupe = (links: { kind: LinkKind; id: string }[]) => [
@@ -196,33 +199,46 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
   if (goals.length === 0) return [];
   const today = todayLocal();
   const before = addDays(today, -91); // about 3 months ago, for the pace
-  const [accounts, txns, assets, rates, holdingsNow, holdingsBefore, depositsNow, depositsBefore] =
-    await Promise.all([
-      prisma.account.findMany({ where: { familyId } }),
-      prisma.transaction.findMany({
-        where: { familyId },
-        select: {
-          accountId: true,
-          type: true,
-          amount: true,
-          transferAccountId: true,
-          transferAmount: true,
-          date: true,
-        },
-      }),
-      prisma.asset.findMany({
-        where: { familyId },
-        include: { valuations: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
-      }),
-      loadRates(prisma, familyId),
-      // Archived holdings keep counting towards goals, like archived accounts.
-      holdingValues(prisma, familyId, today, { includeArchived: true }),
-      holdingValues(prisma, familyId, before, { includeArchived: true }),
-      // A deposit counts from its start until paid out (then the money is back in its account).
-      depositValues(prisma, familyId, today),
-      depositValues(prisma, familyId, before),
-    ]);
+  const [
+    accounts,
+    txns,
+    assets,
+    rates,
+    holdingsNow,
+    holdingsBefore,
+    depositsNow,
+    depositsBefore,
+    goldNow,
+    goldBefore,
+  ] = await Promise.all([
+    prisma.account.findMany({ where: { familyId } }),
+    prisma.transaction.findMany({
+      where: { familyId },
+      select: {
+        accountId: true,
+        type: true,
+        amount: true,
+        transferAccountId: true,
+        transferAmount: true,
+        date: true,
+      },
+    }),
+    prisma.asset.findMany({
+      where: { familyId },
+      include: { valuations: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] } },
+    }),
+    loadRates(prisma, familyId),
+    // Archived holdings keep counting towards goals, like archived accounts.
+    holdingValues(prisma, familyId, today, { includeArchived: true }),
+    holdingValues(prisma, familyId, before, { includeArchived: true }),
+    // A deposit counts from its start until paid out (then the money is back in its account).
+    depositValues(prisma, familyId, today),
+    depositValues(prisma, familyId, before),
+    goldValues(prisma, familyId, today),
+    goldValues(prisma, familyId, before),
+  ]);
   const depositBefore = new Map(depositsBefore.map((d) => [d.id, d.value ?? 0]));
+  const goldThen = new Map(goldBefore.map((g) => [g.id, g.value ?? 0]));
   const holdingBefore = new Map(holdingsBefore.map((h) => [h.id, h.value ?? 0]));
   const balanceTxns = txns.map((t) => ({
     ...t,
@@ -264,6 +280,20 @@ export async function listGoals(prisma: PrismaClient, familyId: string) {
               currency: a.currency,
               amount: balancesToday.get(a.id) ?? 0,
               before: balancesBefore.get(a.id) ?? 0,
+            },
+          ];
+        }
+        if (l.kind === 'gold') {
+          const g = goldNow.find((x) => x.id === l.refId);
+          if (!g) return [];
+          return [
+            {
+              kind: 'gold' as const,
+              id: g.id,
+              name: g.name,
+              currency: g.currency,
+              amount: g.value ?? 0,
+              before: goldThen.get(g.id) ?? 0,
             },
           ];
         }

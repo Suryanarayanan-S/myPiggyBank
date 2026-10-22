@@ -31,6 +31,7 @@ import { recurringRoutes } from './routes/recurring.js';
 import { goalRoutes } from './routes/goals.js';
 import { holdingRoutes } from './routes/holdings.js';
 import { depositRoutes } from './routes/deposits.js';
+import { goldRoutes } from './routes/gold.js';
 import { reportRoutes } from './routes/reports.js';
 import { insightRoutes } from './routes/insights.js';
 
@@ -159,6 +160,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(goalRoutes);
       await api.register(holdingRoutes);
       await api.register(depositRoutes);
+      await api.register(goldRoutes);
       await api.register(reportRoutes);
       await api.register(insightRoutes);
     },

@@ -45,6 +45,7 @@ model Family {
   goals            Goal[]
   holdings         Holding[]
   deposits         Deposit[]
+  goldItems        GoldItem[]
 }
 
 model User {
@@ -92,6 +93,7 @@ model FamilyMember {
   goals          Goal[]
   holdings       Holding[]
   deposits       Deposit[]
+  goldItems      GoldItem[]
 
   @@unique([familyId, name])
 }
@@ -562,6 +564,30 @@ model Deposit {
   note            String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@index([familyId])
+}
+
+/// Physical gold (jewellery, coins, bars) in grams: valued each day from the IBJA rate.
+model GoldItem {
+  id            String        @id @default(uuid())
+  familyId      String
+  family        Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name          String
+  ownerMemberId String?
+  owner         FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  /// weight in milligrams (12.345 g = 12345)
+  milligrams    Int
+  /// 24k | 22k | 18k | 14k
+  purity        String
+  boughtOn      DateTime?
+  /// what was paid (rupees, minor units), if known
+  boughtFor     BigInt?
+  /// no longer held (sold, given away): not counted from this day
+  closedAt      DateTime?
+  note          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@index([familyId])
 }

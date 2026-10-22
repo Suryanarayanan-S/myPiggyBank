@@ -13,6 +13,7 @@ import { useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 import type { HoldingsResponse } from '../../lib/investments';
 import { KIND_LABEL, useDeposits } from '../../lib/deposits';
+import { useGold } from '../../lib/gold';
 import type { Asset } from '../../lib/wealthTypes';
 
 const asInput = (cents: number) => String(cents / 100).replace('.', ',');
@@ -32,6 +33,7 @@ export function GoalForm({
   const members = useMembers();
   const assets = useQuery({ queryKey: ['assets'], queryFn: () => api.get<Asset[]>('/assets') });
   const deposits = useDeposits();
+  const gold = useGold();
   const holdings = useQuery({
     queryKey: ['holdings', 'default'],
     queryFn: () => api.get<HoldingsResponse>('/holdings'),
@@ -231,10 +233,28 @@ export function GoalForm({
                 </span>
               </label>
             ))}
+          {gold.data?.items
+            .filter((g) => g.status === 'held' || f.links.has(`gold:${g.id}`))
+            .map((g) => (
+              <label key={g.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={f.links.has(`gold:${g.id}`)}
+                    onChange={() => toggle(`gold:${g.id}`)}
+                  />
+                  {g.name} <span className="text-xs text-slate-400">gold</span>
+                </span>
+                <span className="text-xs text-slate-500 tabular-nums">
+                  {g.value === null ? '—' : formatMoney(g.value, g.currency)}
+                </span>
+              </label>
+            ))}
           {accounts.data?.length === 0 &&
             assets.data?.length === 0 &&
             holdings.data?.holdings.length === 0 &&
-            deposits.data?.deposits.length === 0 && (
+            deposits.data?.deposits.length === 0 &&
+            gold.data?.items.length === 0 && (
               <p className="text-sm text-slate-500">No accounts, assets or investments yet.</p>
             )}
         </div>

@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
 import { dayLabel, maturingSoon, useDeposits, whenLeft } from '../lib/deposits';
+import { useGold } from '../lib/gold';
 import type { HoldingsResponse } from '../lib/investments';
 import { formatMoney } from '../lib/money';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
@@ -22,6 +23,7 @@ export function InvestmentsOverviewPage() {
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
   const deposits = useDeposits();
+  const gold = useGold();
   // The holdings list used to live here (…/investments?tab=holdings).
   if (params.get('tab') === 'holdings')
     return <Navigate to="/investments/market?tab=holdings" replace />;
@@ -43,17 +45,32 @@ export function InvestmentsOverviewPage() {
     },
     { label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
     { label: 'Recurring deposits', value: inView('rd'), has: open('rd') },
+    {
+      label: 'Gold (jewellery, coins)',
+      value: gold.data?.summary.value ?? 0,
+      has: (gold.data?.items ?? []).some((g) => g.status === 'held'),
+      hint: !gold.data?.rate
+        ? 'no gold rate yet'
+        : gold.data.rate.stale
+          ? `at the rate of ${dayLabel(gold.data.rate.date)}`
+          : undefined,
+    },
   ];
   const total = parts.reduce((s, p) => s + p.value, 0);
   const soon = maturingSoon(deposits.data?.deposits ?? []);
-  const unconverted = [...(market?.unconverted ?? []), ...(dep?.unconverted ?? [])];
-  const loaded = holdings.data && deposits.data;
+  const unconverted = [
+    ...(market?.unconverted ?? []),
+    ...(dep?.unconverted ?? []),
+    ...(gold.data?.summary.unconverted ?? []),
+  ];
+  const loaded = holdings.data && deposits.data && gold.data;
   // Something is invested even when it cannot be added up (no exchange rate): not "nothing".
   const anything =
     total > 0 ||
     unconverted.length > 0 ||
     (holdings.data?.holdings.some((h) => !h.archived) ?? false) ||
-    (deposits.data?.deposits.some((d) => d.status !== 'closed') ?? false);
+    (deposits.data?.deposits.some((d) => d.status !== 'closed') ?? false) ||
+    parts.some((p) => p.has);
 
   return (
     <div className="space-y-5">
@@ -64,7 +81,7 @@ export function InvestmentsOverviewPage() {
           investments.
         </p>
       </div>
-      <FormError error={holdings.error ?? deposits.error} />
+      <FormError error={holdings.error ?? deposits.error ?? gold.error} />
       {loaded && !anything && (
         <Card>
           <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -75,6 +92,10 @@ export function InvestmentsOverviewPage() {
             (or import them from Zerodha), and fixed and recurring deposits under{' '}
             <Link to="/investments/deposits" className="font-medium text-indigo-600 underline">
               Deposits
+            </Link>
+            , and jewellery and coins under{' '}
+            <Link to="/investments/gold" className="font-medium text-indigo-600 underline">
+              Gold
             </Link>
             .
           </p>
@@ -91,7 +112,12 @@ export function InvestmentsOverviewPage() {
             {parts
               .filter((p) => p.has || p.value > 0)
               .map((p) => (
-                <Tile key={p.label} label={p.label} value={formatMoney(p.value, currency)} />
+                <Tile
+                  key={p.label}
+                  label={p.label}
+                  value={formatMoney(p.value, currency)}
+                  hint={'hint' in p ? p.hint : undefined}
+                />
               ))}
           </div>
           {unconverted.length > 0 && (

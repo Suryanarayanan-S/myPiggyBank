@@ -123,3 +123,53 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await page.goto('/investments?tab=holdings');
   await expect(page).toHaveURL(/\/investments\/market\?tab=holdings$/);
 });
+
+test('physical gold by weight: added, waits for a rate, and stops counting once gone', async ({
+  page,
+}) => {
+  await page.goto('/register');
+  await page.getByLabel('Your name').fill('Surya');
+  await page.getByLabel('Email').fill(`gold-${Date.now()}@example.com`);
+  await page.getByLabel('Password').fill('e2e-test-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Gold' })
+    .click();
+  await expect(page.getByText('No gold yet')).toBeVisible();
+  // the test server downloads nothing, so there is no IBJA rate to value it with
+  await expect(page.getByText(/No gold rate yet/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add gold' }).click();
+  const form = page.getByRole('dialog', { name: 'Add gold' });
+  await form.getByLabel('Name').fill('Wedding necklace');
+  await form.getByLabel('Weight (grams)').fill('10,5');
+  await form.getByLabel('Purity').selectOption('22k');
+  await form.getByLabel('Bought on (optional)').fill('2020-11-14');
+  await form.getByLabel('Paid, ₹ (optional)').fill('45,000');
+  await form.getByRole('button', { name: 'Save' }).click();
+  await expect(form).toBeHidden();
+  const card = page.getByRole('listitem').filter({ hasText: 'Wedding necklace' });
+  await expect(card).toContainText('10.5 g · 22K (916) · bought 14 Nov 2020 for ₹45,000.00');
+  await shot(page, '39-gold');
+
+  // On the overview, as its own kind.
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Overview' })
+    .click();
+  await expect(page.getByText('Gold (jewellery, coins)')).toBeVisible();
+
+  // Sold or given away: kept for the record, no longer counted.
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Gold' })
+    .click();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'No longer have it: Wedding necklace' }).click();
+  await expect(page.getByRole('heading', { name: 'No longer held' })).toBeVisible();
+  await expect(card).toContainText('No longer held since');
+});

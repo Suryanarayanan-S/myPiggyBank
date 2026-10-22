@@ -15,6 +15,7 @@ import { GoalsPage } from './pages/GoalsPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { InvestmentsOverviewPage } from './pages/InvestmentsOverviewPage';
 import { DepositsPage } from './pages/DepositsPage';
+import { GoldPage } from './pages/GoldPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { InsightsPage } from './pages/InsightsPage';
 import { RecurringPage } from './pages/RecurringPage';
@@ -33,6 +34,7 @@ const INVESTMENT_TABS: SectionTab[] = [
   { to: '/investments', label: 'Overview', end: true },
   { to: '/investments/market', label: 'Market' },
   { to: '/investments/deposits', label: 'Deposits' },
+  { to: '/investments/gold', label: 'Gold' },
 ];
 const DEPOSIT_TABS: SectionTab[] = [
   { to: '/investments/deposits', label: 'Fixed', end: true },
@@ -81,6 +83,7 @@ export function App() {
               <Route index element={<DepositsPage kind="fd" />} />
               <Route path="recurring" element={<DepositsPage kind="rd" />} />
             </Route>
+            <Route path="gold" element={<GoldPage />} />
           </Route>
           <Route path="goals" element={<GoalsPage />} />
           <Route path="reports" element={<SectionLayout name="Reports" tabs={REPORT_TABS} />}>

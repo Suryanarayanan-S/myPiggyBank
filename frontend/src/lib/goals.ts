@@ -9,7 +9,7 @@ export type GoalProgress = {
   overdue: boolean;
 };
 export type GoalLink = {
-  kind: 'account' | 'asset' | 'holding' | 'deposit';
+  kind: 'account' | 'asset' | 'holding' | 'deposit' | 'gold';
   id: string;
   name: string;
   currency: string;

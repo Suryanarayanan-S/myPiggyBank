@@ -8,6 +8,7 @@ import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
 import { dayTotal } from '../../lib/portfolio';
 import { maturingSoon, useDeposits, whenLeft } from '../../lib/deposits';
+import { useGold } from '../../lib/gold';
 import { useViewCurrency, withView } from '../../lib/viewCurrency';
 
 const dayLabel = (d: string) =>
@@ -26,13 +27,15 @@ export function InvestmentsSummary() {
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
   const deposits = useDeposits();
+  const gold = useGold().data?.summary;
   const data = q.data;
   const dep = deposits.data?.summary;
   const hasMarket = !!data && data.summary.value !== 0;
   const summary = data?.summary ?? null;
   const hasDeposits = !!dep && (dep.value !== 0 || dep.unconverted.length > 0);
   // Deposits show even while the holdings load (or when they fail).
-  if (!hasMarket && !hasDeposits) return null;
+  const hasGold = !!gold && (gold.value !== 0 || gold.unconverted.length > 0);
+  if (!hasMarket && !hasDeposits && !hasGold) return null;
   // a reminder a month ahead, and for matured deposits not yet marked paid out
   const soon = maturingSoon(deposits.data?.deposits ?? [], 30);
   const day = data ? dayTotal(data.holdings) : null;
@@ -89,6 +92,18 @@ export function InvestmentsSummary() {
               {[
                 ...(dep.value !== 0 ? [formatMoney(dep.value, dep.currency)] : []),
                 ...dep.unconverted.map((u) => formatMoney(u.amount, u.currency)),
+              ].join(' + ')}
+            </dd>
+          </div>
+        )}
+        {hasGold && (
+          <div>
+            <dt className="text-xs text-slate-500">Gold</dt>
+            <dd className="text-lg font-semibold tabular-nums">
+              {/* without an exchange rate: in rupees */}
+              {[
+                ...(gold.value !== 0 ? [formatMoney(gold.value, gold.currency)] : []),
+                ...gold.unconverted.map((u) => formatMoney(u.amount, u.currency)),
               ].join(' + ')}
             </dd>
           </div>

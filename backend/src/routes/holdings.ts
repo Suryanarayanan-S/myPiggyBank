@@ -5,6 +5,7 @@ import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
+import * as inc from '../services/holdingIncomeService.js';
 import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
 import { AppError } from '../lib/errors.js';
 import { parseDay, todayLocal } from '../lib/dates.js';
@@ -38,6 +39,21 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       app.prisma,
       fam(req),
       parse(hi.HoldingImportInput, req.body),
+    ),
+  }));
+  // Dividend and interest reports from Zerodha Console: preview, then record the payouts.
+  app.post('/holdings/income/preview', { bodyLimit }, async (req) => ({
+    data: await inc.previewIncomeImport(
+      app.prisma,
+      fam(req),
+      parse(inc.IncomeImportInput, req.body),
+    ),
+  }));
+  app.post('/holdings/income/commit', { bodyLimit }, async (req) => ({
+    data: await inc.commitIncomeImport(
+      app.prisma,
+      fam(req),
+      parse(inc.IncomeImportInput, req.body),
     ),
   }));
   // Daily closing prices from NSE (opt-in per family).

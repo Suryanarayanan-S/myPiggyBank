@@ -105,3 +105,58 @@ export function kindOf(symbol: string): 'stock' | 'etf' | 'gold' | 'other' {
   if (fund) return 'etf';
   return 'stock';
 }
+
+/** A dividend or an interest payment from a broker's report (Zerodha Console). */
+export type BrokerIncome = {
+  line: number;
+  symbol: string;
+  /** ex-date, YYYY-MM-DD */
+  date: string;
+  /** paise */
+  amount: number;
+};
+
+/**
+ * Console's dividend report (Symbol, Ex-date, Qty, Dividend per share, Total dividend) or its
+ * interest report (… Interest per share, Total interest — Sovereign Gold Bonds). Console marks
+ * some symbols ("INFY#", "BAJAJ-AUTO*"); the marks are dropped.
+ */
+export function readBrokerIncome(rows: string[][]): {
+  kind: 'dividend' | 'interest';
+  rows: BrokerIncome[];
+  errors: BrokerRowError[];
+} {
+  // The header may follow a title line or two.
+  const start = Math.max(
+    0,
+    rows.slice(0, 10).findIndex((r) => r.some((c) => c.trim().toLowerCase() === 'ex-date')),
+  );
+  const head = (rows[start] ?? []).map((h) => h.trim().toLowerCase());
+  const at = (name: string) => head.indexOf(name);
+  const kind =
+    at('total dividend') >= 0 ? 'dividend' : at('total interest') >= 0 ? 'interest' : null;
+  const [iSym, iDate] = [at('symbol'), at('ex-date')];
+  if (!kind || iSym < 0 || iDate < 0) {
+    throw new Error(
+      'This is not a dividend or interest report from Zerodha Console (Symbol, Ex-date, … Total dividend / Total interest)',
+    );
+  }
+  const iTotal = at(`total ${kind}`);
+  const out: BrokerIncome[] = [];
+  const errors: BrokerRowError[] = [];
+  rows.slice(start + 1).forEach((r, i) => {
+    const line = start + i + 2;
+    const symbol = plainSymbol((r[iSym] ?? '').trim().replace(/[#*]+$/, ''));
+    if (!symbol) return;
+    const date = (r[iDate] ?? '').trim();
+    const total = Number((r[iTotal] ?? '').trim().replace(/,/g, ''));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
+      errors.push({ line, symbol, message: 'The ex-date is not a date (YYYY-MM-DD)' });
+    } else if (!(total > 0)) {
+      errors.push({ line, symbol, message: `The total ${kind} is not an amount above zero` });
+    } else {
+      out.push({ line, symbol, date, amount: Math.round(total * 100) });
+    }
+  });
+  return { kind, rows: out, errors };
+}

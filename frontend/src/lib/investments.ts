@@ -12,7 +12,7 @@ export type HoldingKind = keyof typeof HOLDING_KINDS;
 export type HoldingTrade = {
   id: string;
   date: string;
-  type: 'buy' | 'sell' | 'dividend';
+  type: 'buy' | 'sell' | 'dividend' | 'interest';
   /** decimal string, null for dividends */
   units: string | null;
   amount: number;

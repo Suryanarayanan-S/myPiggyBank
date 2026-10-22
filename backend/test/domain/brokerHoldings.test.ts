@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindOf, readBrokerHoldings } from '../../src/domain/brokerHoldings.js';
+import { kindOf, readBrokerHoldings, readBrokerIncome } from '../../src/domain/brokerHoldings.js';
 
 const HEAD = [
   'Instrument',
@@ -85,5 +85,40 @@ describe('amounts', () => {
       ['B', '1', '0', '1', '1,005', '', '', '', '', ''],
     ]);
     expect(r.rows.map((x) => x.invested)).toEqual([29, 101]);
+  });
+});
+
+describe('Console dividend and interest reports', () => {
+  it('reads dividends, dropping Console’s marks on symbols', () => {
+    const r = readBrokerIncome([
+      ['Symbol', 'Ex-date', 'Qty', 'Dividend per share', 'Total dividend'],
+      ['INFY#', '2025-10-27', '26', '23', '598'],
+      ['BAJAJ-AUTO*', '2026-05-29', '1', '150', '150'],
+      ['TATACAP', '2026-07-27', '46', '0.57', '26.22'],
+      ['BAD', '27/10/2025', '1', '1', '1'],
+      ['ZERO', '2026-01-01', '1', '0', '0'],
+    ]);
+    expect(r.kind).toBe('dividend');
+    expect(r.rows).toEqual([
+      { line: 2, symbol: 'INFY', date: '2025-10-27', amount: 59_800 },
+      { line: 3, symbol: 'BAJAJ-AUTO', date: '2026-05-29', amount: 15_000 },
+      { line: 4, symbol: 'TATACAP', date: '2026-07-27', amount: 2_622 },
+    ]);
+    expect(r.errors.map((e) => e.symbol)).toEqual(['BAD', 'ZERO']);
+  });
+
+  it('reads interest (gold bonds)', () => {
+    const r = readBrokerIncome([
+      ['Symbol', 'Ex-date', 'Qty', 'Interest per share', 'Total interest'],
+      ['SGBFEB32IV', '2026-02-06', '8', '78.2875', '626.3'],
+    ]);
+    expect(r).toMatchObject({
+      kind: 'interest',
+      rows: [{ symbol: 'SGBFEB32IV', date: '2026-02-06', amount: 62_630 }],
+    });
+  });
+
+  it('says so for another kind of file', () => {
+    expect(() => readBrokerIncome([['Instrument', 'Qty.']])).toThrow(/dividend or interest report/);
   });
 });

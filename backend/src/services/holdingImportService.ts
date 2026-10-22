@@ -297,7 +297,14 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
           update: { price: r.price, source: 'import' },
         });
         if (had.holding.archived) {
-          await tx.holding.update({ where: { id }, data: { archived: false } });
+          await tx.holding.update({
+            where: { id },
+            data: {
+              archived: false,
+              // held again: the dividend import's "no longer held" note is out of date
+              ...(had.holding.note?.startsWith('Added by the dividend import') && { note: null }),
+            },
+          });
         }
         if (diff !== 0 || had.holding.archived || Number(before?.price) !== r.price) updated++;
         else unchanged++;

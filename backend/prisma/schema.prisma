@@ -443,11 +443,11 @@ model HoldingTrade {
   holdingId String
   holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   date      DateTime
-  /// buy | sell | dividend
+  /// buy | sell | dividend | interest
   type      String
-  /// micro-units (1 unit = 1 000 000); 0 for dividends
+  /// micro-units (1 unit = 1 000 000); 0 for dividends and interest
   units     BigInt
-  /// minor units: paid (buy) or received (sell, dividend)
+  /// minor units: paid (buy) or received (sell, dividend, interest)
   amount    BigInt
   fees      BigInt   @default(0)
   createdAt DateTime @default(now())

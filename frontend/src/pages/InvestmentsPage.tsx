@@ -8,6 +8,8 @@ import { HoldingActivity, HoldingForm } from '../components/investments/HoldingD
 import { HoldingsImport } from '../components/investments/HoldingsImport';
 import { CountAt } from '../components/investments/CountAt';
 import { CorporateActions } from '../components/investments/CorporateActions';
+import { IncomeChart } from '../components/investments/IncomeChart';
+import { IncomeImport } from '../components/investments/IncomeImport';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
@@ -44,6 +46,7 @@ export function InvestmentsPage() {
     | { kind: 'form'; holding?: Holding }
     | { kind: 'activity'; id: string }
     | { kind: 'import' }
+    | { kind: 'income' }
     | null
   >(null);
   const close = () => setDialog(null);
@@ -73,6 +76,9 @@ export function InvestmentsPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setDialog({ kind: 'import' })}>
             <Upload size={16} aria-hidden /> Import from Zerodha
+          </Button>
+          <Button variant="secondary" onClick={() => setDialog({ kind: 'income' })}>
+            <Upload size={16} aria-hidden /> Import dividends
           </Button>
           <Button onClick={() => setDialog({ kind: 'form' })}>
             <Plus size={16} aria-hidden /> Add holding
@@ -169,6 +175,8 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
+            {/* Sold holdings' payouts count too (archived ones included). */}
+            <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
             {/* The account split is in the donuts; by person only when there is more than one. */}
             {s.byMember.length > 1 && (
               <Shares
@@ -186,7 +194,7 @@ export function InvestmentsPage() {
             className="space-y-5"
           >
             <HoldingsList holdings={open} currency={s.currency} owner={owner} onOpen={setDialog} />
-            {/* Sold out: kept for their history (sales and dividends), out of the totals. */}
+            {/* Sold out: kept for their history; their value is out of the totals. */}
             {soldOut.length > 0 && (
               <section className="space-y-2">
                 <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
@@ -229,6 +237,11 @@ export function InvestmentsPage() {
               close();
             }}
           />
+        </Modal>
+      )}
+      {dialog?.kind === 'income' && (
+        <Modal title="Import dividends and interest" onClose={close}>
+          <IncomeImport onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'import' && (

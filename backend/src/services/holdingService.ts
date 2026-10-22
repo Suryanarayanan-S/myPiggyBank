@@ -40,16 +40,16 @@ export const HoldingUpdate = z.object(fields).partial();
 export const TradeInput = z
   .object({
     date: pastDay,
-    type: z.enum(['buy', 'sell', 'dividend']),
+    type: z.enum(['buy', 'sell', 'dividend', 'interest']),
     // checked below: dividends have no units (ignored if sent) and no fees
     units: z.string().max(30).optional(),
     amount: cents.positive('Enter an amount above zero'),
     fees: cents.min(0).optional(),
   })
   .superRefine((t, ctx) => {
-    if (t.type === 'dividend') {
+    if (t.type === 'dividend' || t.type === 'interest') {
       if (t.fees)
-        ctx.addIssue({ code: 'custom', path: ['fees'], message: 'Enter the dividend after fees' });
+        ctx.addIssue({ code: 'custom', path: ['fees'], message: `Enter the ${t.type} after fees` });
     } else if (t.units === undefined || parseRate(t.units) === null) {
       ctx.addIssue({
         code: 'custom',
@@ -111,7 +111,7 @@ function computed(h: Row, onDay = todayLocal()) {
         id: t.id,
         date: formatDay(t.date),
         type: t.type,
-        units: t.type === 'dividend' ? null : formatRate(Number(t.units)),
+        units: t.type === 'dividend' || t.type === 'interest' ? null : formatRate(Number(t.units)),
         amount: Number(t.amount),
         fees: Number(t.fees),
       })),
@@ -191,6 +191,19 @@ export async function listHoldings(prisma: PrismaClient, familyId: string, view?
   const byKind = new Map<string, number>();
   const byMember = new Map<string | null, number>();
   const unconverted = new Map<string, number>();
+  // Income and sales of archived holdings (sold long ago) count too: the money came in all the
+  // same. Only their value is left out.
+  for (const h of holdings.filter((x) => x.archived)) {
+    for (const [part, n] of [
+      ['dividends', h.dividends],
+      ['realised', h.realised],
+    ] as const) {
+      if (n === 0) continue;
+      const v = convert(n, h.currency, currency, month, rates);
+      if (v === null) unconverted.set(h.currency, (unconverted.get(h.currency) ?? 0) + n);
+      else sum[part] += v;
+    }
+  }
   for (const h of holdings.filter((x) => !x.archived)) {
     // Each part on its own: zero needs no rate, and a part without a rate is listed, not lost.
     const part = (n: number) => {
@@ -315,7 +328,8 @@ export async function addTrade(
   input: z.output<typeof TradeInput>,
 ) {
   const h = await owned(prisma, familyId, id);
-  const units = input.type === 'dividend' ? 0 : parseRate(input.units!)!;
+  const units =
+    input.type === 'dividend' || input.type === 'interest' ? 0 : parseRate(input.units!)!;
   const next: Trade = {
     date: input.date,
     type: input.type,

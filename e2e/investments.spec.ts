@@ -246,6 +246,44 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(d.getByRole('button', { name: 'Done' })).toBeFocused();
   await d.getByRole('button', { name: 'Done' }).click();
 
+  // Console's dividend report: payouts on the holdings, and on a share sold since.
+  await page.getByRole('button', { name: 'Import dividends' }).click();
+  const inc = page.getByRole('dialog', { name: 'Import dividends and interest' });
+  const dividendReport = {
+    name: 'dividends.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      [
+        'Symbol,Ex-date,Qty,Dividend per share,Total dividend',
+        `HDBFS,${daysAgo(200)},20,2,40`,
+        `INFY#,${daysAgo(130)},26,23,598`,
+        `INFY#,${daysAgo(10)},30,25,750`,
+      ].join('\n'),
+    ),
+  };
+  await inc.getByLabel('Dividend or interest report (CSV)').setInputFiles(dividendReport);
+  await expect(inc.getByText('3 dividends', { exact: true })).toBeVisible();
+  await expect(inc.getByText(/Not among the holdings \(sold since\): HDBFS/)).toBeVisible();
+  await inc.getByRole('button', { name: 'Record 3 dividends' }).click();
+  await expect(inc.getByText(/Done: 3 dividends recorded/)).toBeVisible();
+  await inc.getByRole('button', { name: 'Done' }).click();
+  const income = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Dividend and interest' }),
+  });
+  await expect(income).toContainText('₹1,388.00 from 3 payouts');
+  await income.getByRole('button', { name: 'Show table' }).click();
+  await expect(income.getByRole('row').filter({ hasText: '₹750.00' })).toHaveCount(1);
+  await income.getByRole('button', { name: 'Show chart' }).click();
+  await expect(
+    page.locator('section', { has: page.getByText('Dividends', { exact: true }) }).first(),
+  ).toContainText('₹1,388.00');
+  // The same report again: nothing new.
+  await page.getByRole('button', { name: 'Import dividends' }).click();
+  await inc.getByLabel('Dividend or interest report (CSV)').setInputFiles(dividendReport);
+  await expect(inc.getByText('All of them are already recorded.')).toBeVisible();
+  await expect(inc.getByRole('button', { name: 'Nothing to record' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+
   // Overview: what weighs most, and what moved most.
   const biggest = page.locator('section', {
     has: page.getByRole('heading', { name: 'Biggest holdings' }),
@@ -332,7 +370,9 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
     'aria-sort',
     'ascending',
   );
-  await expect(page.getByRole('table')).toContainText('Total');
+  await expect(page.getByRole('table', { name: 'Holdings, sortable by column' })).toContainText(
+    'Total',
+  );
   await expect(rows.nth(1)).toContainText('1,361.19'); // Indian style, to the paisa
   await page.getByLabel('Search holdings').fill('gold');
   await expect(page.getByText('1 of 2 holdings')).toBeVisible();

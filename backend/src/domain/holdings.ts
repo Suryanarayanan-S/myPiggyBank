@@ -5,7 +5,8 @@
  */
 export type Trade = {
   date: string;
-  type: 'buy' | 'sell' | 'dividend';
+  /** dividend and interest (e.g. a gold bond's) are income: no units */
+  type: 'buy' | 'sell' | 'dividend' | 'interest';
   units: number;
   /** total paid (buy) or received (sell, dividend), minor units */
   amount: number;
@@ -34,7 +35,7 @@ export function computeHolding(trades: Trade[], prices: PricePoint[], today: str
   for (const tr of [...trades]
     .filter((x) => x.date <= today)
     .sort((a, b) => a.date.localeCompare(b.date))) {
-    if (tr.type === 'dividend') {
+    if (tr.type === 'dividend' || tr.type === 'interest') {
       dividends += tr.amount;
       continue;
     }

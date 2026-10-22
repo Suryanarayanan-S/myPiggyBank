@@ -170,7 +170,7 @@ export function HoldingForm({
             checked={f.archived}
             onChange={(e) => setF({ ...f, archived: e.target.checked })}
           />
-          Archived (sold off; kept for its history, not counted)
+          Archived (sold off: its value no longer counts; its sales, dividends and interest do)
         </label>
       )}
       <FormError error={save.error ?? remove.error} />
@@ -197,7 +197,14 @@ export function HoldingForm({
   );
 }
 
-const TYPE_LABEL = { buy: 'Buy', sell: 'Sell', dividend: 'Dividend' } as const;
+const TYPE_LABEL = {
+  buy: 'Buy',
+  sell: 'Sell',
+  dividend: 'Dividend',
+  interest: 'Interest',
+} as const;
+/** Income: no units or fees. */
+const income = (type: string) => type === 'dividend' || type === 'interest';
 
 /** Trades and prices of one holding. */
 export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone: () => void }) {
@@ -205,7 +212,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
   const money = (c: number) => formatMoney(c, holding.currency);
   const [t, setT] = useState({
     date: localDay(),
-    type: 'buy' as 'buy' | 'sell' | 'dividend',
+    type: 'buy' as keyof typeof TYPE_LABEL,
     units: '',
     amount: '',
     fees: '',
@@ -264,7 +271,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-slate-500">Dividends</dt>
+          <dt className="text-xs text-slate-500">Dividends and interest</dt>
           <dd className="tabular-nums">{money(holding.dividends)}</dd>
         </div>
       </dl>
@@ -274,17 +281,16 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
           className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (t.type !== 'dividend' && !units)
-              return setErr('Enter the number of units, e.g. 12,5');
+            if (!income(t.type) && !units) return setErr('Enter the number of units, e.g. 12,5');
             if (!amount || amount <= 0) return setErr('Enter the total amount');
             if (fees === null || fees < 0) return setErr('Fees must be 0 or more');
             setErr(null);
             addTrade.mutate({
               date: t.date,
               type: t.type,
-              ...(t.type !== 'dividend' && { units }),
+              ...(!income(t.type) && { units }),
               amount,
-              ...(t.type !== 'dividend' && { fees }),
+              ...(!income(t.type) && { fees }),
             });
           }}
         >
@@ -306,9 +312,10 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
               <option value="buy">Buy</option>
               <option value="sell">Sell</option>
               <option value="dividend">Dividend</option>
+              <option value="interest">Interest</option>
             </Select>
           </Field>
-          {t.type !== 'dividend' && (
+          {!income(t.type) && (
             <Field label="Units" htmlFor="t-units">
               <Input
                 id="t-units"
@@ -331,7 +338,7 @@ export function HoldingActivity({ holding, onDone }: { holding: Holding; onDone:
               onChange={(e) => setT({ ...t, amount: e.target.value })}
             />
           </Field>
-          {t.type !== 'dividend' && (
+          {!income(t.type) && (
             <Field label="Fees" htmlFor="t-fees">
               <Input
                 id="t-fees"

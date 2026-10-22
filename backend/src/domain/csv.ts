@@ -26,8 +26,12 @@ function detectDelimiter(text: string): string {
 const count = (chars: string[], c: string) => chars.filter((x) => x === c).length;
 
 /** RFC 4180-style parser (quoted fields, doubled quotes, newlines in quotes, CRLF). */
-export function parseCsv(text: string): { delimiter: string; rows: string[][] } {
-  const delimiter = detectDelimiter(text);
+export function parseCsv(
+  text: string,
+  /** when known (e.g. a broker's report); otherwise guessed from the text */
+  known?: string,
+): { delimiter: string; rows: string[][] } {
+  const delimiter = known ?? detectDelimiter(text);
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';

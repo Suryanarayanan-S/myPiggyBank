@@ -44,6 +44,7 @@ model Family {
   recurringRules   RecurringRule[]
   goals            Goal[]
   holdings         Holding[]
+  deposits         Deposit[]
 }
 
 model User {
@@ -90,6 +91,7 @@ model FamilyMember {
   recurringRules RecurringRule[]
   goals          Goal[]
   holdings       Holding[]
+  deposits       Deposit[]
 
   @@unique([familyId, name])
 }
@@ -145,6 +147,7 @@ model Account {
   transfersIn    Transaction[]   @relation("TransferAccount")
   recurringRules RecurringRule[]
   holdings       Holding[]
+  deposits       Deposit[]
 
   @@unique([familyId, name])
   @@index([familyId])
@@ -523,4 +526,37 @@ model HoldingAction {
 model FetchMark {
   name String   @id
   day  DateTime
+}
+
+/// A fixed deposit at a bank (recurring deposits later): valued each day from its terms.
+model Deposit {
+  id            String        @id @default(uuid())
+  familyId      String
+  family        Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /// fd
+  kind          String        @default("fd")
+  name          String
+  currency      String
+  ownerMemberId String?
+  owner         FamilyMember? @relation(fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  /// the bank account the money came from and is paid back to
+  accountId     String?
+  account       Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  /// minor units
+  principal     BigInt
+  /// yearly rate in basis points (7.25 % = 725)
+  rateBp        Int
+  startDate     DateTime
+  maturityDate  DateTime
+  /// monthly | quarterly | half-yearly | yearly
+  compounding   String        @default("quarterly")
+  /// reinvest (added, paid at maturity) | payout (paid out each period)
+  interest      String        @default("reinvest")
+  /// paid out and closed: no longer counted
+  closedAt      DateTime?
+  note          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([familyId])
 }

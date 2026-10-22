@@ -21,6 +21,10 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Market' })
+    .click();
   await expect(page.getByText('No holdings yet')).toBeVisible();
   await page.getByRole('button', { name: 'Add holding' }).click();
   const form = page.getByRole('dialog', { name: 'New holding' });
@@ -112,6 +116,10 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(invest).toContainText('1.506,25 €');
   await expect(invest).toContainText('+31,25 €');
   await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Market' })
+    .click();
   // …and the Day choice is remembered.
   await expect(contrib.getByLabel('Top performers of the day')).toBeVisible();
   await contrib.getByRole('button', { name: 'Overall' }).click();
@@ -210,6 +218,10 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(a).toBeHidden();
 
   await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Market' })
+    .click();
   await page.getByRole('button', { name: 'Import from Zerodha' }).click();
   const d = page.getByRole('dialog', { name: 'Import holdings' });
   await expect(d.getByLabel('Whose demat is this?')).toHaveValue(/.+/); // the logged-in person

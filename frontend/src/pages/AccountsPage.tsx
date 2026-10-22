@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import type { Converted } from '../lib/dashboardTypes';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
+import { useDeposits } from '../lib/deposits';
 
 export function AccountsPage() {
   const me = useMe();
@@ -27,6 +28,10 @@ export function AccountsPage() {
     (accounts.data ?? []).filter((a) => !a.archived).map((a) => a.currency),
   );
   const members = useMembers();
+  // Fixed deposits made from an account show on it (their money is not in its balance).
+  const deposits = useDeposits();
+  const depositsOf = (id: string) =>
+    (deposits.data?.deposits ?? []).filter((d) => d.accountId === id && d.status !== 'closed');
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
   const memberName = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
@@ -121,6 +126,29 @@ export function AccountsPage() {
                       Transactions
                     </Link>
                   </p>
+                  {depositsOf(a.id).length > 0 && (
+                    <p className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
+                      <span>
+                        {depositsOf(a.id).length === 1
+                          ? '1 fixed deposit'
+                          : `${depositsOf(a.id).length} fixed deposits`}
+                        :{' '}
+                        <span className="tabular-nums">
+                          {formatMoney(
+                            depositsOf(a.id).reduce((t, d) => t + (d.value ?? d.principal), 0),
+                            a.currency,
+                          )}
+                        </span>
+                      </span>
+                      <Link
+                        to="/investments/deposits"
+                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        aria-label={`Fixed deposits of ${a.name}`}
+                      >
+                        Deposits
+                      </Link>
+                    </p>
+                  )}
                 </Card>
               ))}
             </div>

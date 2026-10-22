@@ -149,6 +149,18 @@ export async function updateAccount(
       'The currency cannot be changed once the account has transactions',
     );
   }
+  // Its fixed deposits are in its currency.
+  if (
+    input.currency &&
+    input.currency !== existing.currency &&
+    (await prisma.deposit.count({ where: { accountId: id } }))
+  ) {
+    throw new AppError(
+      400,
+      'CURRENCY_LOCKED',
+      'The currency cannot be changed while fixed deposits are linked to the account',
+    );
+  }
   await prisma.account.update({ where: { id }, data: input });
   return getDto(prisma, familyId, id);
 }

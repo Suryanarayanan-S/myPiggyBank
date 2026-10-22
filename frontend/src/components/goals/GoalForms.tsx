@@ -12,6 +12,7 @@ import { localDay } from '../../lib/months';
 import { useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 import type { HoldingsResponse } from '../../lib/investments';
+import { useDeposits } from '../../lib/deposits';
 import type { Asset } from '../../lib/wealthTypes';
 
 const asInput = (cents: number) => String(cents / 100).replace('.', ',');
@@ -30,6 +31,7 @@ export function GoalForm({
   const accounts = useAccounts();
   const members = useMembers();
   const assets = useQuery({ queryKey: ['assets'], queryFn: () => api.get<Asset[]>('/assets') });
+  const deposits = useDeposits();
   const holdings = useQuery({
     queryKey: ['holdings', 'default'],
     queryFn: () => api.get<HoldingsResponse>('/holdings'),
@@ -212,9 +214,27 @@ export function GoalForm({
                 </span>
               </label>
             ))}
+          {deposits.data?.deposits
+            .filter((d) => d.status !== 'closed' || f.links.has(`deposit:${d.id}`))
+            .map((d) => (
+              <label key={d.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={f.links.has(`deposit:${d.id}`)}
+                    onChange={() => toggle(`deposit:${d.id}`)}
+                  />
+                  {d.name} <span className="text-xs text-slate-400">fixed deposit</span>
+                </span>
+                <span className="text-xs text-slate-500 tabular-nums">
+                  {formatMoney(d.value ?? d.principal, d.currency)}
+                </span>
+              </label>
+            ))}
           {accounts.data?.length === 0 &&
             assets.data?.length === 0 &&
-            holdings.data?.holdings.length === 0 && (
+            holdings.data?.holdings.length === 0 &&
+            deposits.data?.deposits.length === 0 && (
               <p className="text-sm text-slate-500">No accounts, assets or investments yet.</p>
             )}
         </div>

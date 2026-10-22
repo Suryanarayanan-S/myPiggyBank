@@ -13,6 +13,8 @@ import { ImportPage } from './pages/ImportPage';
 import { WealthPage } from './pages/WealthPage';
 import { GoalsPage } from './pages/GoalsPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
+import { InvestmentsOverviewPage } from './pages/InvestmentsOverviewPage';
+import { DepositsPage } from './pages/DepositsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { InsightsPage } from './pages/InsightsPage';
 import { RecurringPage } from './pages/RecurringPage';
@@ -26,6 +28,11 @@ const TRANSACTION_TABS: SectionTab[] = [
 const WEALTH_TABS: SectionTab[] = [
   { to: '/wealth', label: 'Net worth & assets', end: true },
   { to: '/wealth/accounts', label: 'Accounts' },
+];
+const INVESTMENT_TABS: SectionTab[] = [
+  { to: '/investments', label: 'Overview', end: true },
+  { to: '/investments/market', label: 'Market' },
+  { to: '/investments/deposits', label: 'Deposits' },
 ];
 const REPORT_TABS: SectionTab[] = [
   { to: '/reports', label: 'Year report', end: true },
@@ -60,7 +67,14 @@ export function App() {
             <Route index element={<WealthPage />} />
             <Route path="accounts" element={<AccountsPage />} />
           </Route>
-          <Route path="investments" element={<InvestmentsPage />} />
+          <Route
+            path="investments"
+            element={<SectionLayout name="Investments" tabs={INVESTMENT_TABS} />}
+          >
+            <Route index element={<InvestmentsOverviewPage />} />
+            <Route path="market" element={<InvestmentsPage />} />
+            <Route path="deposits" element={<DepositsPage />} />
+          </Route>
           <Route path="goals" element={<GoalsPage />} />
           <Route path="reports" element={<SectionLayout name="Reports" tabs={REPORT_TABS} />}>
             <Route index element={<ReportsPage />} />

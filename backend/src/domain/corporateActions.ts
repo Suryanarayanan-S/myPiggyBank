@@ -76,7 +76,10 @@ export function readCorporateActions(text: string): CorporateAction[] {
     // The purpose is the last column and may itself hold unquoted commas.
     const purpose = c.slice(iPurpose!).join(',').trim();
     const symbol = (c[iSym!] ?? '').toUpperCase();
-    const exDate = c[iEx!] ?? '';
+    // ISO dates, or dd/mm/yyyy in the older lists
+    const raw = c[iEx!] ?? '';
+    const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const exDate = dmy ? `${dmy[3]}-${dmy[2]}-${dmy[1]}` : raw;
     if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(exDate)) continue;
     const m = meaning(purpose);
     if (!m) continue;

@@ -507,3 +507,56 @@ export function incomeByQuarter(holdings: Holding[], currency: string, today: st
   const trimmed = count < payouts.length;
   return { quarters, total, count, trimmed };
 }
+
+/**
+ * The yearly rate that makes these cash flows worth nothing together (money in negative, money
+ * out positive), like a spreadsheet's XIRR. Null when there is no answer (all one sign).
+ */
+export function xirr(flows: { date: string; amount: number }[]): number | null {
+  if (!flows.some((f) => f.amount < 0) || !flows.some((f) => f.amount > 0)) return null;
+  const t0 = Math.min(...flows.map((f) => Date.parse(f.date)));
+  const years = flows.map((f) => (Date.parse(f.date) - t0) / (365 * 86_400_000));
+  const npv = (r: number) => flows.reduce((s, f, i) => s + f.amount / (1 + r) ** years[i]!, 0);
+  // Bisection: slow but sure (the value falls as the rate rises when money goes in first).
+  let lo = -0.9999;
+  let hi = 10;
+  if (npv(lo) * npv(hi) > 0) return null;
+  for (let k = 0; k < 200; k++) {
+    const mid = (lo + hi) / 2;
+    if (npv(lo) * npv(mid) <= 0) hi = mid;
+    else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * The portfolio's XIRR in `currency`: every buy, sale, dividend and interest payment of the
+ * holdings in that currency (sold ones too), and what is held is worth today.
+ */
+const MIN_XIRR_DAYS = 90;
+
+export function portfolioXirr(holdings: Holding[], currency: string, today: string) {
+  const mine = holdings.filter((h) => h.currency === currency);
+  const flows = mine.flatMap((h) =>
+    h.trades
+      .filter((t) => t.date <= today)
+      .map((t) => ({
+        date: t.date,
+        amount:
+          t.type === 'buy'
+            ? -(t.amount + t.fees)
+            : t.type === 'sell'
+              ? t.amount - t.fees
+              : t.amount,
+      })),
+  );
+  // what is still held is worth today (an archived holding that still has units too: its buys
+  // are among the flows)
+  const worth = mine.reduce((s, h) => s + (h.value ?? 0), 0);
+  if (worth > 0) flows.push({ date: today, amount: worth });
+  const first = flows.map((f) => f.date).sort()[0];
+  // Over a few weeks a yearly rate says little (and wildly): three months at least.
+  if (!first || Date.parse(today) - Date.parse(first) < MIN_XIRR_DAYS * 86_400_000) return null;
+  const rate = xirr(flows);
+  return rate === null ? null : { rate, since: first };
+}

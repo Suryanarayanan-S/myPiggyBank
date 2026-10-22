@@ -6,6 +6,7 @@ import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
 import * as inc from '../services/holdingIncomeService.js';
+import * as tb from '../services/holdingTradebookService.js';
 import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
 import { AppError } from '../lib/errors.js';
 import { parseDay, todayLocal } from '../lib/dates.js';
@@ -54,6 +55,21 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       app.prisma,
       fam(req),
       parse(inc.IncomeImportInput, req.body),
+    ),
+  }));
+  // A full tradebook (Zerodha Console's format): real buy and sell dates for the holdings.
+  app.post('/holdings/tradebook/preview', { bodyLimit }, async (req) => ({
+    data: await tb.previewTradebookImport(
+      app.prisma,
+      fam(req),
+      parse(tb.TradebookImportInput, req.body),
+    ),
+  }));
+  app.post('/holdings/tradebook/commit', { bodyLimit }, async (req) => ({
+    data: await tb.commitTradebookImport(
+      app.prisma,
+      fam(req),
+      parse(tb.TradebookImportInput, req.body),
     ),
   }));
   // Daily closing prices from NSE (opt-in per family).

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { kindOf, readBrokerHoldings, readBrokerIncome } from '../../src/domain/brokerHoldings.js';
+import {
+  kindOf,
+  readBrokerHoldings,
+  readBrokerIncome,
+  readBrokerTrades,
+} from '../../src/domain/brokerHoldings.js';
 
 const HEAD = [
   'Instrument',
@@ -120,5 +125,45 @@ describe('Console dividend and interest reports', () => {
 
   it('says so for another kind of file', () => {
     expect(() => readBrokerIncome([['Instrument', 'Qty.']])).toThrow(/dividend or interest report/);
+  });
+});
+
+describe('Console tradebook', () => {
+  const HEAD =
+    'symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time'.split(
+      ',',
+    );
+  it('reads buys and sells', () => {
+    const r = readBrokerTrades([
+      HEAD,
+      'DRREDDY,INE089A01031,2025-10-27,NSE,EQ,EQ,buy,false,1.000000,1283.099976,1,2,2025-10-27T14:47:05'.split(
+        ',',
+      ),
+      'HDBFS,INE756I01012,2026-01-05,NSE,EQ,EQ,sell,false,10.000000,812.5,3,4,x'.split(','),
+      'BAD,X,05/01/2026,NSE,EQ,EQ,buy,false,1,1,5,6,x'.split(','),
+      'ODD,X,2026-01-05,NSE,EQ,EQ,gift,false,1,1,5,6,x'.split(','),
+    ]);
+    expect(r.rows).toEqual([
+      {
+        line: 2,
+        symbol: 'DRREDDY',
+        date: '2025-10-27',
+        type: 'buy',
+        units: 1_000_000,
+        amount: 128_310,
+      },
+      {
+        line: 3,
+        symbol: 'HDBFS',
+        date: '2026-01-05',
+        type: 'sell',
+        units: 10_000_000,
+        amount: 812_500,
+      },
+    ]);
+    expect(r.errors.map((e) => e.symbol)).toEqual(['BAD', 'ODD']);
+  });
+  it('says so for another kind of file', () => {
+    expect(() => readBrokerTrades([['Instrument', 'Qty.']])).toThrow(/tradebook/);
   });
 });

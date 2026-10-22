@@ -11,6 +11,8 @@ import {
   dayMovers,
   dayTotal,
   incomeByQuarter,
+  portfolioXirr,
+  xirr,
   returnIndex,
   sliceColors,
   isSoldOut,
@@ -515,5 +517,56 @@ describe('portfolio', () => {
     expect(r.total).toBe(201_430);
     expect(r.count).toBe(4);
     expect(incomeByQuarter([h('A')], 'INR', '2026-10-22')).toBeNull();
+  });
+
+  it('finds the yearly return of cash flows (XIRR)', () => {
+    // 1,000 in, 1,100 out a year later: 10 %
+    expect(
+      xirr([
+        { date: '2025-01-01', amount: -1_000 },
+        { date: '2026-01-01', amount: 1_100 },
+      ]),
+    ).toBeCloseTo(0.1, 6);
+    // the spreadsheet example: −10,000 then 2,750 / 4,250 / 3,250 / 2,750 → 37.34 %
+    expect(
+      xirr([
+        { date: '2008-01-01', amount: -10_000 },
+        { date: '2008-03-01', amount: 2_750 },
+        { date: '2008-10-30', amount: 4_250 },
+        { date: '2009-02-15', amount: 3_250 },
+        { date: '2009-04-01', amount: 2_750 },
+      ])!,
+    ).toBeCloseTo(0.373363, 4);
+    expect(xirr([{ date: '2025-01-01', amount: -1 }])).toBeNull();
+  });
+
+  it('works out the portfolio’s XIRR from trades, income and today’s value', () => {
+    const t = (date: string, type: 'buy' | 'sell' | 'dividend', amount: number) => ({
+      id: date + type,
+      date,
+      type,
+      units: type === 'dividend' ? null : '1',
+      amount,
+      fees: 0,
+    });
+    const r = portfolioXirr(
+      [
+        h('A', { value: 110_000, trades: [t('2025-01-01', 'buy', 100_000)] }),
+        // sold long ago, archived: its flows still count
+        h('B', {
+          archived: true,
+          value: 0, // sold out
+          trades: [
+            t('2025-01-01', 'buy', 50_000),
+            t('2025-07-02', 'sell', 52_000), // with the dividend: 50,000 × 1.1^½
+            t('2025-07-02', 'dividend', 440),
+          ],
+        }),
+      ] as Holding[],
+      'INR',
+      '2026-01-01',
+    )!;
+    expect(r.since).toBe('2025-01-01');
+    expect(r.rate).toBeCloseTo(0.1, 2);
   });
 });

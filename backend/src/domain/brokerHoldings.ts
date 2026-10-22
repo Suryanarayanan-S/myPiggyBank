@@ -106,6 +106,12 @@ export function kindOf(symbol: string): 'stock' | 'etf' | 'gold' | 'other' {
   return 'stock';
 }
 
+/** A real calendar day as YYYY-MM-DD (not 2024-02-30, which Date.parse would roll over). */
+const realDay = (d: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(d) &&
+  !Number.isNaN(Date.parse(d)) &&
+  new Date(d).toISOString().slice(0, 10) === d;
+
 /** A dividend or an interest payment from a broker's report (Zerodha Console). */
 export type BrokerIncome = {
   line: number;
@@ -150,7 +156,7 @@ export function readBrokerIncome(rows: string[][]): {
     if (!symbol) return;
     const date = (r[iDate] ?? '').trim();
     const total = Number((r[iTotal] ?? '').trim().replace(/,/g, ''));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
+    if (!realDay(date)) {
       errors.push({ line, symbol, message: 'The ex-date is not a date (YYYY-MM-DD)' });
     } else if (!(total > 0)) {
       errors.push({ line, symbol, message: `The total ${kind} is not an amount above zero` });
@@ -159,4 +165,69 @@ export function readBrokerIncome(rows: string[][]): {
     }
   });
   return { kind, rows: out, errors };
+}
+
+/** A trade from a broker's tradebook (Zerodha Console's format). */
+export type BrokerTrade = {
+  line: number;
+  symbol: string;
+  /** YYYY-MM-DD */
+  date: string;
+  type: 'buy' | 'sell';
+  /** micro-units */
+  units: number;
+  /** paise: quantity × price */
+  amount: number;
+};
+
+/**
+ * Console's tradebook (symbol, isin, trade_date, …, trade_type, …, quantity, price, …): every
+ * buy and sell. Charges are not in it.
+ */
+export function readBrokerTrades(rows: string[][]): {
+  rows: BrokerTrade[];
+  errors: BrokerRowError[];
+} {
+  const head = (rows[0] ?? []).map((h) => h.trim().toLowerCase());
+  const at = (name: string) => head.indexOf(name);
+  const [iSym, iDate, iType, iQty, iPrice] = [
+    'symbol',
+    'trade_date',
+    'trade_type',
+    'quantity',
+    'price',
+  ].map(at);
+  if ([iSym, iDate, iType, iQty, iPrice].some((i) => i! < 0)) {
+    throw new Error(
+      'This is not a tradebook from Zerodha Console (symbol, trade_date, trade_type, quantity, price)',
+    );
+  }
+  const out: BrokerTrade[] = [];
+  const errors: BrokerRowError[] = [];
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2;
+    const symbol = plainSymbol(r[iSym!] ?? '');
+    if (!symbol) return;
+    const date = (r[iDate!] ?? '').trim();
+    const type = (r[iType!] ?? '').trim().toLowerCase();
+    const qty = Number((r[iQty!] ?? '').trim());
+    const price = Number((r[iPrice!] ?? '').trim());
+    if (!realDay(date)) {
+      errors.push({ line, symbol, message: 'The trade date is not a date (YYYY-MM-DD)' });
+    } else if (type !== 'buy' && type !== 'sell') {
+      errors.push({ line, symbol, message: `Unknown trade type “${type}”` });
+    } else if (!(qty > 0) || !(price >= 0)) {
+      errors.push({ line, symbol, message: 'The quantity or price is not a number' });
+    } else {
+      out.push({
+        line,
+        symbol,
+        date,
+        type,
+        units: Math.round(qty * 1_000_000),
+        amount: Math.round(qty * price * 100),
+      });
+    }
+  });
+  return { rows: out, errors };
 }

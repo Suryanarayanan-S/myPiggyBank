@@ -69,7 +69,7 @@ export async function storeCorporateActions(
         } else {
           if (!res.ok || !res.arrayBuffer) throw new Error(`NSE answered ${res.status}`);
           const text = readZipEntry(Buffer.from(await res.arrayBuffer()), (n) =>
-            /^bc\d{8}\.csv$/i.test(n),
+            /^bc\d{6}(\d{2})?\.csv$/i.test(n),
           );
           if (text === null) throw new Error('its daily archive has no list of corporate actions');
           for (const a of readCorporateActions(text)) {

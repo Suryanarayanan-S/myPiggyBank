@@ -417,4 +417,29 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(page.getByLabel('Gold 22K per gram')).not.toBeChecked();
   await expect(page.getByLabel('Gold 24K per gram')).toBeChecked();
   await expect(page.getByLabel('Gold, world price ($ per ounce)')).toBeChecked();
+  // The full tradebook: real buy dates (INFY in two lots, GOLDBEES in one), and the XIRR.
+  await page.getByRole('button', { name: 'Import tradebook' }).click();
+  const tb = page.getByRole('dialog', { name: 'Import tradebook' });
+  await tb.getByLabel('Tradebook (CSV)').setInputFiles({
+    name: 'tradebook.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      [
+        'symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time',
+        `INFY,X,${daysAgo(900)},NSE,EQ,EQ,buy,false,20,1300,1,1,x`,
+        `INFY,X,${daysAgo(400)},NSE,EQ,EQ,buy,false,12,1450.5,2,2,x`,
+        `GOLDBEES,X,${daysAgo(700)},NSE,EQ,EQ,buy,false,5030,62.21,3,3,x`,
+        `ADANIPORTS,X,${daysAgo(800)},NSE,EQ,EQ,buy,false,10,745.83,4,4,x`,
+        `ADANIPORTS,X,${daysAgo(780)},NSE,EQ,EQ,sell,false,10,682.04,5,5,x`,
+      ].join('\n'),
+    ),
+  });
+  await expect(tb.getByText('5 trades')).toBeVisible();
+  await expect(tb.getByText(/2 holdings get their real trades · 1 bought and sold/)).toBeVisible();
+  await tb.getByRole('button', { name: 'Use the trades for 3 holdings' }).click();
+  await expect(tb.getByText(/Done: 2 holdings got their trades, 1 sold ones/)).toBeVisible();
+  await tb.getByRole('button', { name: 'Done' }).click();
+  await expect(
+    page.locator('section', { has: page.getByText('XIRR', { exact: true }) }).first(),
+  ).toContainText(/[+−-]\d+\.\d %/);
 });

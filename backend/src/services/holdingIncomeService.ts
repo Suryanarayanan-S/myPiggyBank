@@ -39,10 +39,11 @@ function readFile(input: Input) {
 }
 
 /** NSE market (series) codes Kite may append to a symbol ("PGINVIT-IV", "SGBFEB32IV-GB"). */
-const MARKET_SUFFIX = /-(EQ|BE|BZ|BL|GB|IV|RR|RE|SM|ST|N[0-9A-Z])$/;
+// (not RE: that is a rights entitlement, a different instrument from the share)
+const MARKET_SUFFIX = /-(EQ|BE|BZ|BL|GB|IV|RR|SM|ST|N[0-9A-Z])$/;
 
 /** Every rupee holding in the family, with its payouts and owner. */
-async function rupeeHoldings(db: Db, familyId: string) {
+export async function rupeeHoldings(db: Db, familyId: string) {
   return db.holding.findMany({
     where: { familyId, currency: CURRENCY, symbol: { not: null } },
     include: {
@@ -55,7 +56,7 @@ async function rupeeHoldings(db: Db, familyId: string) {
 type Held = Awaited<ReturnType<typeof rupeeHoldings>>[number];
 
 /** Holdings by symbol as Console writes it (Kite's market suffix dropped), open ones first. */
-function bySymbol(rows: Held[]) {
+export function bySymbol(rows: Held[]) {
   const map = new Map<string, Held[]>();
   for (const h of rows) {
     const key = plainSymbol(h.symbol!).replace(MARKET_SUFFIX, '');

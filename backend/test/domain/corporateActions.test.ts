@@ -111,4 +111,21 @@ describe('NSE corporate actions (bc file)', () => {
   it('says so when the file is not the list', () => {
     expect(() => readCorporateActions('<html>busy</html>')).toThrow(/corporate actions/);
   });
+
+  it('reads the older lists too (dd/mm/yyyy, padded purposes)', () => {
+    const old = [
+      'SERIES,SYMBOL,SECURITY,RECORD_DT,BC_STRT_DT,BC_END_DT,EX_DT,ND_STRT_DT,ND_END_DT,PURPOSE',
+      'EQ,HDFCBANK,HDFC Bank Limited,27/08/2025, , ,26/08/2025, , ,BONUS 1:1                ',
+    ].join('\n');
+    expect(readCorporateActions(old)).toEqual([
+      {
+        symbol: 'HDFCBANK',
+        exDate: '2025-08-26',
+        purpose: 'BONUS 1:1',
+        kind: 'bonus',
+        num: 2,
+        den: 1,
+      },
+    ]);
+  });
 });

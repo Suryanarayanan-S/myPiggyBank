@@ -368,4 +368,138 @@ describe('importing broker holdings', () => {
       expect((await income('preview', first)).statusCode).toBe(400);
     });
   });
+
+  describe('tradebook (Console)', () => {
+    const HEAD =
+      'symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time';
+    const book = (...lines: string[]) =>
+      Buffer.from([HEAD, ...lines].join('\n')).toString('base64');
+    const tradebook = (kind: 'preview' | 'commit', data: string) =>
+      call('POST', `/api/holdings/tradebook/${kind}`, {
+        fileName: 'tradebook.csv',
+        data,
+        ownerMemberId: surya,
+      });
+    // INFY 32 held (the holdings file), bought in three lots; GOLDBEES does not add up;
+    // ADANIPORTS bought and sold; VISESH never in the holdings
+    const file = book(
+      'INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,20,1300,1,1,x',
+      'INFY,X,2023-05-10,NSE,EQ,EQ,buy,false,20,1400,2,2,x',
+      'INFY,X,2024-01-15,NSE,EQ,EQ,sell,false,8,1500,3,3,x',
+      'GOLDBEES,X,2022-01-01,NSE,EQ,EQ,buy,false,10,45,4,4,x',
+      'ADANIPORTS,X,2021-03-03,NSE,EQ,EQ,buy,false,10,745.83,5,5,x',
+      'ADANIPORTS,X,2021-03-19,NSE,EQ,EQ,sell,false,10,682.04,6,6,x',
+      'VISESHINFO,X,2021-06-01,NSE,EQ,EQ,buy,false,1090,0.5,7,7,x',
+    );
+
+    it('gives the holdings their real trades where the file adds up, and lists the rest', async () => {
+      await commit(first);
+      const p = (await tradebook('preview', file)).json().data;
+      expect(p).toMatchObject({
+        trades: 7,
+        from: '2021-03-01',
+        to: '2024-01-15',
+        notInFile: ['NATCO-RE'],
+      });
+      expect(
+        Object.fromEntries(
+          p.symbols.map((s: { symbol: string; action: string }) => [s.symbol, s.action]),
+        ),
+      ).toEqual({
+        INFY: 'replace',
+        ADANIPORTS: 'history',
+        GOLDBEES: 'mismatch',
+        VISESHINFO: 'not-held',
+      });
+      expect((await tradebook('commit', file)).json().data).toEqual({
+        replaced: 1,
+        history: 1,
+        skipped: 2,
+      });
+
+      const list = (await call('GET', '/api/holdings')).json().data.holdings as {
+        symbol: string;
+        units: string;
+        archived: boolean;
+        realised: number;
+        trades: { date: string; type: string }[];
+      }[];
+      const infy = list.find((h) => h.symbol === 'INFY')!;
+      expect(infy.units).toBe('32');
+      expect(infy.trades.map((t) => [t.date, t.type])).toEqual([
+        ['2024-01-15', 'sell'],
+        ['2023-05-10', 'buy'],
+        ['2021-03-01', 'buy'],
+      ]);
+      const ports = list.find((h) => h.symbol === 'ADANIPORTS')!;
+      expect(ports).toMatchObject({ archived: true, units: '0', realised: -63_790 }); // 10 × (682.04 − 745.83);
+      // GOLDBEES as it was (one entry from the holdings file)
+      expect(list.find((h) => h.symbol === 'GOLDBEES')!.trades).toHaveLength(1);
+    });
+
+    it('keeps dividends when the trades are replaced, and can be imported again', async () => {
+      await commit(first);
+      await call('POST', '/api/holdings/income/commit', {
+        fileName: 'd.csv',
+        data: Buffer.from(
+          'Symbol,Ex-date,Qty,Dividend per share,Total dividend\nINFY,2025-10-27,26,23,598',
+        ).toString('base64'),
+        ownerMemberId: surya,
+      });
+      await tradebook('commit', file);
+      await tradebook('commit', file);
+      const infy = (await call('GET', '/api/holdings'))
+        .json()
+        .data.holdings.find((h: { symbol: string }) => h.symbol === 'INFY');
+      expect(infy.units).toBe('32');
+      expect(infy.dividends).toBe(59_800);
+      expect(infy.trades).toHaveLength(4);
+      // the sold one is not added twice
+      const ports = (await call('GET', '/api/holdings'))
+        .json()
+        .data.holdings.filter((h: { symbol: string }) => h.symbol === 'ADANIPORTS');
+      expect(ports).toHaveLength(1);
+    });
+
+    it('accepts a sell before its buy on the same day; leaves two holdings of one symbol alone', async () => {
+      await commit(first);
+      const p = (
+        await tradebook(
+          'preview',
+          book(
+            'INFY,X,2021-03-01,NSE,EQ,EQ,sell,false,5,1300,1,1,x',
+            'INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,37,1300,2,2,x',
+          ),
+        )
+      ).json().data;
+      expect(p.symbols[0]).toMatchObject({ symbol: 'INFY', action: 'replace' });
+      // a second INFY holding (e.g. an old one, archived)
+      await call('POST', '/api/holdings', {
+        name: 'INFY old',
+        kind: 'stock',
+        symbol: 'INFY',
+        currency: 'INR',
+        ownerMemberId: surya,
+        archived: true,
+      });
+      const q = (
+        await tradebook('preview', book('INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,32,1300,2,2,x'))
+      ).json().data;
+      expect(q.symbols[0]).toMatchObject({ symbol: 'INFY', action: 'several' });
+      // an impossible day is an error, not a crash
+      const r = (
+        await tradebook('preview', book('INFY,X,2024-02-30,NSE,EQ,EQ,buy,false,1,1,2,2,x'))
+      ).json().data;
+      expect(r.errors).toHaveLength(1);
+    });
+
+    it('leaves out a symbol that sells more than it buys, and refuses another file', async () => {
+      await commit(first);
+      const p = (
+        await tradebook('preview', book('INFY,X,2021-03-01,NSE,EQ,EQ,sell,false,5,1300,1,1,x'))
+      ).json().data;
+      expect(p.symbols[0]).toMatchObject({ symbol: 'INFY', action: 'oversold' });
+      expect((await tradebook('preview', first)).statusCode).toBe(400);
+    });
+  });
 });

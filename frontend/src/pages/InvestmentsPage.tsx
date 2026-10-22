@@ -10,11 +10,14 @@ import { CountAt } from '../components/investments/CountAt';
 import { CorporateActions } from '../components/investments/CorporateActions';
 import { IncomeChart } from '../components/investments/IncomeChart';
 import { IncomeImport } from '../components/investments/IncomeImport';
+import { TradebookImport } from '../components/investments/TradebookImport';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
-import { isSoldOut, listed, profitSplit } from '../lib/portfolio';
+import { isSoldOut, listed, portfolioXirr, profitSplit } from '../lib/portfolio';
+import { localDay } from '../lib/months';
+import { dayLabel } from '../lib/deposits';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -47,6 +50,7 @@ export function InvestmentsPage() {
     | { kind: 'activity'; id: string }
     | { kind: 'import' }
     | { kind: 'income' }
+    | { kind: 'tradebook' }
     | null
   >(null);
   const close = () => setDialog(null);
@@ -60,6 +64,11 @@ export function InvestmentsPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'holdings' ? 'holdings' : 'overview';
   const split = profitSplit(open);
+  // the yearly return over every trade and payout (needs the trades' real dates: a tradebook)
+  const xirr = useMemo(
+    () => (data.data && s ? portfolioXirr(data.data.holdings, s.currency, localDay()) : null),
+    [data.data, s],
+  );
   const activity =
     dialog?.kind === 'activity' ? data.data?.holdings.find((h) => h.id === dialog.id) : undefined;
 
@@ -80,6 +89,9 @@ export function InvestmentsPage() {
           <Button variant="secondary" onClick={() => setDialog({ kind: 'income' })}>
             <Upload size={16} aria-hidden /> Import dividends
           </Button>
+          <Button variant="secondary" onClick={() => setDialog({ kind: 'tradebook' })}>
+            <Upload size={16} aria-hidden /> Import tradebook
+          </Button>
           <Button onClick={() => setDialog({ kind: 'form' })}>
             <Plus size={16} aria-hidden /> Add holding
           </Button>
@@ -94,7 +106,9 @@ export function InvestmentsPage() {
             <LivePrices />
           </div>
           <CorporateActions holdings={open} onOpen={(id) => setDialog({ kind: 'activity', id })} />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div
+            className={clsx('grid grid-cols-2 gap-3', xirr ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}
+          >
             <Tile label="Value" value={formatMoney(s.value, s.currency)} />
             <Tile
               label="Invested"
@@ -119,6 +133,18 @@ export function InvestmentsPage() {
               value={formatMoney(s.dividends, s.currency)}
               hint={`sold: ${signed(s.realised, s.currency)}`}
             />
+            {xirr && (
+              <Tile
+                label="XIRR"
+                value={`${xirr.rate >= 0 ? '+' : ''}${formatPercent(Math.round(xirr.rate * 10_000))}`}
+                hint={`a year, since ${dayLabel(xirr.since)}${
+                  (data.data?.holdings ?? []).some((h) => h.currency !== s.currency)
+                    ? ` (${s.currency} holdings only)`
+                    : ''
+                }`}
+                tone={xirr.rate}
+              />
+            )}
           </div>
           {open.some((h) => h.currency !== s.currency) && (
             <p className="text-xs text-slate-500">
@@ -237,6 +263,11 @@ export function InvestmentsPage() {
               close();
             }}
           />
+        </Modal>
+      )}
+      {dialog?.kind === 'tradebook' && (
+        <Modal title="Import tradebook" onClose={close}>
+          <TradebookImport onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'income' && (

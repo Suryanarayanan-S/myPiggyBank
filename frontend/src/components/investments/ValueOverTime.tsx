@@ -28,8 +28,8 @@ import { formatMoney } from '../../lib/money';
 import { compareSince, oneCurrency, returnIndex, valueHistory } from '../../lib/portfolio';
 
 type Point = { date: string; value: number };
-type MarketKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
-type LineKey = 'portfolio' | MarketKey;
+export type MarketKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
+export type LineKey = 'portfolio' | MarketKey;
 type Benchmarks = Record<MarketKey, Point[]> & {
   /** 22K and 24K are estimated from GOLDBEES before this day (null: not at all) */
   estimatedUntil: string | null;
@@ -52,7 +52,7 @@ const inr = (v: number, digits = 0) =>
  * yellow (as in the donuts), GOLDBEES orange. The yellow golds differ by stroke — 22K solid,
  * 24K dotted, world dashed — so they never rely on colour alone.
  */
-const LINES: Record<
+export const LINES: Record<
   LineKey,
   {
     label: string;

@@ -154,6 +154,8 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await page.getByLabel('Daily closing prices from NSE').click();
   await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
   await page.getByRole('tab', { name: 'Performance' }).click();
+  // the same money in Nifty or gold: for rupee holdings (these are in euros)
+  await expect(page.getByText(/This compares rupee holdings with Indian markets/)).toBeVisible();
   // One chart, each line ticked on or off; ticked by default: yours, Nifty 50 and 22K gold.
   await expect(page.getByLabel('Your investments')).toBeChecked();
   await expect(page.getByLabel('Nifty 50')).toBeChecked();

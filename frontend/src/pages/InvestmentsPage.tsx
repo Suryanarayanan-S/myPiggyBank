@@ -17,6 +17,7 @@ import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
 import { PayoutTable } from '../components/investments/PayoutTable';
+import { SameMoney } from '../components/investments/SameMoney';
 import { ValueOverTime } from '../components/investments/ValueOverTime';
 import { isSoldOut, listed, portfolioXirr, profitSplit } from '../lib/portfolio';
 import { localDay } from '../lib/months';
@@ -223,6 +224,7 @@ export function InvestmentsPage() {
             hidden={tab !== 'performance'}
             className="space-y-5"
           >
+            <SameMoney holdings={open} />
             <ValueOverTime holdings={open} />
           </div>
           <div

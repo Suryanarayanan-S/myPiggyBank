@@ -463,8 +463,11 @@ model HoldingTrade {
   /// minor units: paid (buy) or received (sell, dividend, interest)
   amount    BigInt
   fees      BigInt   @default(0)
+  /// the broker's id of the row it came from (Trade Republic's transaction_id): imported once
+  ref       String?
   createdAt DateTime @default(now())
 
+  @@unique([holdingId, ref])
   @@index([holdingId])
 }
 
@@ -480,6 +483,22 @@ model HoldingPrice {
   createdAt DateTime @default(now())
 
   @@unique([holdingId, date])
+}
+
+/// Where onvista keeps a security outside India (found by its ISIN; looked up again monthly).
+model WorldInstrument {
+  isin        String   @id
+  /// STOCK | FUND (onvista's entity type) and its id
+  entityType  String
+  entityValue String
+  name        String
+  /// the venue whose closes are used, in `currency` (Tradegate, LS Exchange, …)
+  idNotation  String?
+  venue       String?
+  currency    String?
+  /// splits as onvista lists them: [{"date":"YYYY-MM-DD","factor":5}]
+  splits      String   @default("[]")
+  updatedAt   DateTime @updatedAt
 }
 
 /// Public facts about an NSE-listed company, from NSE's index lists (refreshed monthly).

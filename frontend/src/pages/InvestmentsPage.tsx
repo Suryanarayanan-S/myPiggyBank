@@ -10,6 +10,7 @@ import { CountAt } from '../components/investments/CountAt';
 import { CorporateActions } from '../components/investments/CorporateActions';
 import { IncomeChart } from '../components/investments/IncomeChart';
 import { TradebookImport } from '../components/investments/TradebookImport';
+import { TradeRepublicImport } from '../components/investments/TradeRepublicImport';
 import { DividendCheck } from '../components/investments/DividendCheck';
 import { CorporateHistory } from '../components/investments/CorporateHistory';
 import { Tile } from '../components/investments/Tiles';
@@ -104,6 +105,7 @@ export function InvestmentsPage() {
     | { kind: 'activity'; id: string }
     | { kind: 'import' }
     | { kind: 'tradebook' }
+    | { kind: 'tradeRepublic' }
     | null
   >(null);
   const close = () => setDialog(null);
@@ -145,6 +147,9 @@ export function InvestmentsPage() {
           </Button>
           <Button variant="secondary" onClick={() => setDialog({ kind: 'tradebook' })}>
             <Upload size={16} aria-hidden /> Import tradebook
+          </Button>
+          <Button variant="secondary" onClick={() => setDialog({ kind: 'tradeRepublic' })}>
+            <Upload size={16} aria-hidden /> Import from Trade Republic
           </Button>
           <Button onClick={() => setDialog({ kind: 'form' })}>
             <Plus size={16} aria-hidden /> Add holding
@@ -364,6 +369,11 @@ export function InvestmentsPage() {
       {dialog?.kind === 'tradebook' && (
         <Modal title="Import tradebook" onClose={close}>
           <TradebookImport onDone={close} />
+        </Modal>
+      )}
+      {dialog?.kind === 'tradeRepublic' && (
+        <Modal title="Import from Trade Republic" onClose={close}>
+          <TradeRepublicImport onDone={close} />
         </Modal>
       )}
       {dialog?.kind === 'import' && (

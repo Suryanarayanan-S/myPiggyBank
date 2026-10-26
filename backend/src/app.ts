@@ -12,6 +12,7 @@ import {
   type FetchText,
   type GoldSources,
 } from './services/livePriceService.js';
+import { DEFAULT_WORLD_SOURCES, type WorldSources } from './services/worldPriceService.js';
 import { AppError } from './lib/errors.js';
 import { SESSION_COOKIE, findSessionUser } from './auth/sessions.js';
 import { healthRoutes } from './routes/health.js';
@@ -56,6 +57,8 @@ export interface AppOptions {
   nsePauseMs?: number;
   /** Indian (IBJA) and world gold price sources. */
   goldSources?: GoldSources;
+  /** onvista and the ECB, for shares outside India and the euro markets */
+  worldSources?: WorldSources;
 }
 
 function safeHost(origin: string): string | null {
@@ -84,6 +87,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
           gold: opts.goldSources ?? DEFAULT_GOLD_SOURCES,
           historyUrl: opts.historyUrl ?? DEFAULT_HISTORY_URL,
           pauseMs: opts.nsePauseMs ?? 300,
+          world: opts.worldSources ?? DEFAULT_WORLD_SOURCES,
         }
       : null,
   );

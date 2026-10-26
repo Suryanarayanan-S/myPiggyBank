@@ -306,6 +306,7 @@ describe('past dividends and corporate-action history', () => {
       units: 20,
       perShare: 16.5,
       amount: 33_000,
+      currency: 'INR',
     });
     // before the 1:1 bonus: 3 shares then (6 today)
     expect(rows.find((r: { date: string }) => r.date === '2025-06-27')).toMatchObject({

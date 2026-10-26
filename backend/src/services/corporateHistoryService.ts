@@ -414,10 +414,56 @@ export async function payoutList(prisma: PrismaClient, familyId: string) {
             /** rupees a share (null when none were held the day before: entered by hand) */
             perShare: units > 0 ? Math.round((amount / 100 / units) * 10_000) / 10_000 : null,
             amount,
+            currency: CURRENCY,
           };
         }),
     )
+    .concat(await worldPayouts(prisma, familyId))
     .sort((a, b) => b.date.localeCompare(a.date) || a.symbol.localeCompare(b.symbol));
+}
+
+/** Dividends of holdings in other currencies (imported from a broker): as received. */
+async function worldPayouts(prisma: PrismaClient, familyId: string) {
+  const holdings = await prisma.holding.findMany({
+    where: { familyId, currency: { not: CURRENCY } },
+    include: {
+      trades: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
+      actions: { where: { status: 'applied' } },
+    },
+  });
+  return holdings.flatMap((h) =>
+    h.trades
+      .filter((t) => t.type === 'dividend' || t.type === 'interest')
+      .map((t) => {
+        const date = formatDay(t.date);
+        // shares held the day before, in that day's units (the trades are in today's: a split
+        // since is taken back out)
+        const now = h.trades
+          .filter((x) => formatDay(x.date) < date)
+          .reduce(
+            (s, x) =>
+              s + (x.type === 'buy' ? Number(x.units) : x.type === 'sell' ? -Number(x.units) : 0),
+            0,
+          );
+        const units =
+          h.actions
+            .filter((a) => a.num && a.den && formatDay(a.exDate) > date)
+            .reduce((u, a) => (u * a.den!) / a.num!, now) / 1_000_000;
+        const amount = Number(t.amount);
+        return {
+          holdingId: h.id,
+          symbol: h.symbol ?? h.name,
+          name: h.name,
+          ownerMemberId: h.ownerMemberId,
+          date,
+          kind: t.type as 'dividend' | 'interest',
+          units,
+          perShare: units > 0 ? Math.round((amount / 100 / units) * 10_000) / 10_000 : null,
+          amount,
+          currency: h.currency,
+        };
+      }),
+  );
 }
 
 /** What a check added. */

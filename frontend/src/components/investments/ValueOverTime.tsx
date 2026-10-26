@@ -26,9 +26,11 @@ import { api } from '../../lib/api';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { compareSince, oneCurrency, returnIndex, valueHistory } from '../../lib/portfolio';
+import { VALUE_MARKETS, useCompareCurrency, type MarketKey } from '../../lib/markets';
+import { CurrencySwitch } from './CurrencySwitch';
 
 type Point = { date: string; value: number };
-export type MarketKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
+export type { MarketKey };
 export type LineKey = 'portfolio' | MarketKey;
 type Benchmarks = Record<MarketKey, Point[]> & {
   /** 22K and 24K are estimated from GOLDBEES before this day (null: not at all) */
@@ -44,6 +46,8 @@ const dayLabel = (d: string) =>
   });
 const pct = (bp: number | null) =>
   bp === null ? '—' : `${bp > 0 ? '+' : bp < 0 ? '−' : ''}${(Math.abs(bp) / 100).toFixed(1)} %`;
+const eur = (v: number, digits = 0) =>
+  `€${v.toLocaleString('de-DE', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
 const inr = (v: number, digits = 0) =>
   `₹${v.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
 
@@ -98,9 +102,48 @@ export const LINES: Record<
     dash: '6 4',
     shape: 'dash',
   },
+  // euro markets: ETFs bought in euros (what a euro investor could have bought instead)
+  msciWorld: {
+    label: 'MSCI World (iShares, €)',
+    tick: 'MSCI World',
+    short: 'MSCI World',
+    color: 'var(--c-cat-3)',
+  },
+  sp500: {
+    label: 'S&P 500 (iShares, €)',
+    tick: 'S&P 500',
+    short: 'S&P 500',
+    color: 'var(--c-cat-5)',
+  },
+  nasdaq100: {
+    label: 'Nasdaq 100 (iShares, €)',
+    tick: 'Nasdaq 100',
+    short: 'Nasdaq 100',
+    color: 'var(--c-cat-7)',
+  },
+  stoxx600: {
+    label: 'STOXX Europe 600 (iShares, €)',
+    tick: 'STOXX Europe 600',
+    short: 'STOXX 600',
+    color: 'var(--c-cat-6)',
+  },
+  nikkei225: {
+    label: 'Nikkei 225 (Xtrackers, €)',
+    tick: 'Nikkei 225',
+    short: 'Nikkei 225',
+    color: 'var(--c-cat-8)',
+  },
+  goldEur: {
+    label: 'Gold, world (€/oz)',
+    tick: 'Gold, world price (€ per ounce)',
+    short: 'Gold €',
+    color: 'var(--c-cat-4)',
+    dash: '6 4',
+    shape: 'dash',
+  },
 };
-const MARKET: MarketKey[] = ['nifty50', 'gold22k', 'gold24k', 'gold', 'goldUsd'];
-const ORDER: LineKey[] = ['portfolio', ...MARKET];
+const ALL_MARKETS = [...new Set(Object.values(VALUE_MARKETS).flat())];
+const ORDER: LineKey[] = ['portfolio', ...ALL_MARKETS];
 
 /** Which lines are shown (remembered on this browser). */
 type Choice = Record<LineKey, boolean>;
@@ -114,6 +157,12 @@ const DEFAULT_CHOICE: Choice = {
   gold24k: false,
   gold: false,
   goldUsd: false,
+  msciWorld: true,
+  sp500: true,
+  nasdaq100: false,
+  stoxx600: false,
+  nikkei225: false,
+  goldEur: false,
 };
 function readChoice(): Choice {
   try {
@@ -183,8 +232,19 @@ function Picker({
  * one axis, with the value itself (₹, ₹ per gram, $ per ounce) next to the % on hover and in
  * the table.
  */
-export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
+export function ValueOverTime({ holdings: all }: { holdings: Holding[] }) {
   const me = useMe();
+  // one currency at a time: its holdings, against its markets
+  const compare = useCompareCurrency(all);
+  const holdings = useMemo(
+    () => all.filter((h) => h.currency === compare.currency),
+    [all, compare.currency],
+  );
+  const market = useMemo(
+    () => VALUE_MARKETS[compare.currency] ?? VALUE_MARKETS.INR!,
+    [compare.currency],
+  );
+  const order: LineKey[] = useMemo(() => ['portfolio', ...market], [market]);
   // The chart's width, to tell which end labels sit close enough side by side to touch.
   const [width, setWidth] = useState(0);
   const measure = useCallback((el: HTMLDivElement | null) => {
@@ -210,12 +270,12 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
     queryFn: () => api.get<Benchmarks>('/holdings/benchmarks'),
     enabled: on,
   });
-  const currency = holdings.find((h) => !h.archived)?.currency ?? 'INR';
-  // Market prices come with the daily NSE prices; without them only yours can be shown.
-  const offered = ORDER.filter((k) => (k === 'portfolio' ? single : on));
+  const currency = compare.currency;
+  // Market prices come with the daily prices; without them only yours can be shown.
+  const offered = order.filter((k) => (k === 'portfolio' ? single : on));
   const ticked = useMemo(
-    () => ORDER.filter((k) => choice[k] && (k === 'portfolio' ? single : on)),
-    [choice, on, single],
+    () => order.filter((k) => choice[k] && (k === 'portfolio' ? single : on)),
+    [choice, on, single, order],
   );
   const history = useMemo(() => valueHistory(holdings), [holdings]);
   const index = useMemo(
@@ -242,10 +302,15 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
 
   const controls = (
     <>
+      <CurrencySwitch
+        options={compare.options}
+        value={compare.currency}
+        onChange={compare.choose}
+      />
       <Picker choice={choice} keys={offered} onChange={choose} />
       {!on && me.data && (
         <p className="-mt-1 mb-3 text-xs text-slate-500">
-          Switch on “Daily closing prices from NSE” above to compare with Nifty 50 and gold.
+          Switch on “Daily closing prices” above to compare with the markets.
         </p>
       )}
       {!single && (
@@ -254,7 +319,7 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
           the markets can be shown.
         </p>
       )}
-      {bench.data?.estimatedUntil && (choice.gold22k || choice.gold24k) && (
+      {bench.data?.estimatedUntil && currency === 'INR' && (choice.gold22k || choice.gold24k) && (
         <p className="-mt-1 mb-3 text-xs text-slate-500">
           IBJA publishes no history: Gold 22K and 24K before {dayLabel(bench.data.estimatedUntil)}{' '}
           are estimated from GOLDBEES, matched to RBI’s gold bond prices.
@@ -334,7 +399,11 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
           ? inr(v, 2)
           : k === 'goldUsd'
             ? `$${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}/oz`
-            : `${inr(v)}/g`;
+            : k === 'goldEur'
+              ? `${eur(v)}/oz`
+              : k === 'gold22k' || k === 'gold24k'
+                ? `${inr(v)}/g`
+                : eur(v, 2);
   const cell = (r: (typeof rows)[number], k: LineKey) => {
     const change = pct(r.change[k] ?? null);
     // Yours: what it was worth that day (the % leaves out money added or taken out).

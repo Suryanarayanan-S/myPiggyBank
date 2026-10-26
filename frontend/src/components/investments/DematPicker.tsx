@@ -47,28 +47,35 @@ export function useDematsLoaded() {
   return [list, !!accounts.data] as const;
 }
 
-/** A new demat account in rupees: a name (broker and client ID) and whose it is. */
+/**
+ * A new demat account in rupees (or a broker account in another currency, e.g. Trade Republic in
+ * euros): a name (broker and client ID) and whose it is.
+ */
 export function NewDematForm({
   onCreated,
   onCancel,
+  currency = 'INR',
 }: {
   onCreated: (a: Account) => void;
   onCancel: () => void;
+  currency?: string;
 }) {
+  const demat = currency === 'INR';
   const queryClient = useQueryClient();
   const members = useMembers();
   const [name, setName] = useState('');
   // the logged-in person until another is chosen
   const [owner, setOwner] = useState<string | undefined>(undefined);
   const ownerId = owner ?? members.data?.find((m) => m.isUser)?.id ?? '';
-  const takes = useFirstDematTakes(ownerId || null);
+  // only a first rupee demat takes the person's holdings
+  const takes = useFirstDematTakes(ownerId || null) * (demat ? 1 : 0);
   const ownerName = members.data?.find((m) => m.id === ownerId)?.name ?? null;
   const create = useMutation({
     mutationFn: () =>
       api.post<Account>('/accounts', {
         name,
         type: 'investment',
-        currency: 'INR',
+        currency,
         ownerMemberId: ownerId || null,
       }),
     onSuccess: async (a) => {
@@ -81,11 +88,15 @@ export function NewDematForm({
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Demat name" htmlFor="demat-name" hint="Broker and client ID">
+        <Field
+          label={demat ? 'Demat name' : 'Broker account name'}
+          htmlFor="demat-name"
+          hint={demat ? 'Broker and client ID' : `An investment account in ${currency}`}
+        >
           <Input
             id="demat-name"
             maxLength={60}
-            placeholder="Zerodha · XHY083"
+            placeholder={demat ? 'Zerodha · XHY083' : 'Trade Republic'}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -111,7 +122,7 @@ export function NewDematForm({
           onClick={() => create.mutate()}
           disabled={!name.trim() || !members.data || create.isPending}
         >
-          Add demat account
+          {demat ? 'Add demat account' : 'Add broker account'}
         </Button>
       </div>
     </div>
@@ -130,7 +141,7 @@ export function useDematChoice() {
   const [demats, loaded] = useDematsLoaded();
   const [chosen, setChosen] = useState<Demat | undefined>(undefined);
   const me = members.data?.find((m) => m.isUser)?.id ?? null;
-  const mine = demats.find((a) => a.ownerMemberId === me);
+  const mine = demats.find((a) => a.ownerMemberId === me && a.currency === 'INR');
   const value: Demat = chosen ?? { accountId: mine?.id ?? null, ownerMemberId: me };
   // a file read before the demats are known would be previewed for the wrong one
   return [value, setChosen, !!members.data && loaded] as const;
@@ -146,7 +157,8 @@ export function DematPicker({
   onChange: (d: Demat) => void;
 }) {
   const members = useMembers();
-  const demats = useDemats();
+  // Indian imports go into rupee demats (a euro broker account has its own import)
+  const demats = useDemats().filter((a) => a.currency === 'INR');
   const [adding, setAdding] = useState(false);
   const name = (owner: string | null) =>
     owner ? (members.data?.find((m) => m.id === owner)?.name ?? '—') : 'Shared';

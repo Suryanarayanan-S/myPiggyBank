@@ -3,6 +3,7 @@ import type { AppConfig } from './app.js';
 import type { AuthUser } from './auth/sessions.js';
 import type { FetchRates } from './services/liveRateService.js';
 import type { FetchText, GoldSources } from './services/livePriceService.js';
+import type { WorldSources } from './services/worldPriceService.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -16,6 +17,8 @@ declare module 'fastify' {
       /** NSE's corporate-action history */
       historyUrl: string;
       pauseMs: number;
+      /** onvista (shares outside India) and the ECB (dollars per euro) */
+      world: WorldSources;
     } | null;
   }
   interface FastifyRequest {

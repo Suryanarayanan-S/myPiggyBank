@@ -21,6 +21,7 @@ export async function resetDb() {
   await prisma.fetchMark.deleteMany(); // how far public downloads got
   await prisma.marketClose.deleteMany(); // public closing prices
   await prisma.symbolAlias.deleteMany(); // public symbol renames
+  await prisma.worldInstrument.deleteMany(); // where onvista quotes an ISIN
 }
 
 export async function signUp(

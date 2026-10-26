@@ -6,8 +6,10 @@ import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as h from '../services/holdingService.js';
 import * as hi from '../services/holdingImportService.js';
 import * as tb from '../services/holdingTradebookService.js';
+import * as trp from '../services/tradeRepublicService.js';
 import * as ch from '../services/corporateHistoryService.js';
 import { benchmarks, livePriceStatus, refreshLivePrices } from '../services/livePriceService.js';
+import { refreshWorldPrices, worldStatus } from '../services/worldPriceService.js';
 import { AppError } from '../lib/errors.js';
 import { parseDay, todayLocal } from '../lib/dates.js';
 
@@ -62,6 +64,21 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
   app.post('/holdings/move-to-demat', async (req) => ({
     data: await hi.moveToDemat(app.prisma, fam(req), parse(hi.MoveToDematInput, req.body)),
   }));
+  // Trade Republic's transactions export, into a broker account: preview, then import.
+  app.post('/holdings/trade-republic/preview', { bodyLimit }, async (req) => ({
+    data: await trp.previewTradeRepublic(
+      app.prisma,
+      fam(req),
+      parse(trp.TradeRepublicInput, req.body),
+    ),
+  }));
+  app.post('/holdings/trade-republic/commit', { bodyLimit }, async (req) => ({
+    data: await trp.commitTradeRepublic(
+      app.prisma,
+      fam(req),
+      parse(trp.TradeRepublicInput, req.body),
+    ),
+  }));
   // NSE's corporate-action history: dividends, gold bond interest, splits and mergers.
   const sources = () => {
     if (!app.livePrices) {
@@ -92,7 +109,9 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
     data: await ch.corporateEvents(app.prisma, fam(req), null),
   }));
   // Daily closing prices from NSE (opt-in per family).
-  app.get('/holdings/live-prices', async (req) => ({ data: livePriceStatus(fam(req)) }));
+  app.get('/holdings/live-prices', async (req) => ({
+    data: { ...livePriceStatus(fam(req)), world: worldStatus(fam(req)) },
+  }));
   // Nifty 50 and gold (public market data) to compare investments with.
   app.get('/holdings/benchmarks', async (req) => ({
     data: await benchmarks(app.prisma, parse(BenchmarkQuery, req.query).from),
@@ -105,16 +124,22 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
     if (!family?.livePrices) {
       throw new AppError(403, 'LIVE_PRICES_OFF', 'Switch on daily NSE prices first');
     }
-    return {
-      data: await refreshLivePrices(
-        app.prisma,
-        app.livePrices.fetch,
-        todayLocal(),
-        app.livePrices.url,
-        fam(req),
-        app.livePrices.gold,
-      ),
-    };
+    const nse = await refreshLivePrices(
+      app.prisma,
+      app.livePrices.fetch,
+      todayLocal(),
+      app.livePrices.url,
+      fam(req),
+      app.livePrices.gold,
+    );
+    await refreshWorldPrices(
+      app.prisma,
+      app.livePrices.fetch,
+      todayLocal(),
+      app.livePrices.world,
+      app.livePrices.pauseMs,
+    );
+    return { data: { ...nse, world: worldStatus(fam(req)) } };
   });
   app.get('/holdings', async (req) => {
     const q = parse(HoldingsQuery, req.query);

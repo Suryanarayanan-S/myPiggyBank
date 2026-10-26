@@ -5,6 +5,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { livePricesWanted, refreshLivePrices } from './services/livePriceService.js';
+import { refreshWorldPrices } from './services/worldPriceService.js';
 import { checkAllDividends } from './services/corporateHistoryService.js';
 import { backfillHistory } from './services/marketHistoryService.js';
 import { generateDue } from './services/recurringService.js';
@@ -40,6 +41,7 @@ const app = await buildApp({
     usd: config.GOLD_PRICE_URL,
     history: config.GOLD_HISTORY_URL,
   },
+  worldSources: { onvista: config.ONVISTA_URL, ecb: config.ECB_URL },
 });
 
 const shutdown = async () => {
@@ -87,6 +89,15 @@ const runPrices = async () => {
   );
   if (status.lastError) app.log.warn({ error: status.lastError }, 'NSE price download failed');
   if (status.warning) app.log.warn({ warning: status.warning }, 'market data partly updated');
+  // shares outside India and the euro markets (onvista, the ECB): on their own, after NSE
+  const world = await refreshWorldPrices(
+    prisma,
+    app.livePrices.fetch,
+    todayLocal(),
+    app.livePrices.world,
+    app.livePrices.pauseMs,
+  );
+  if (world.length) app.log.warn({ errors: world }, 'world prices partly updated');
   // then dividends and gold bond interest from NSE's history (once a day per family)
   const nse = {
     fetch: app.livePrices.fetch,

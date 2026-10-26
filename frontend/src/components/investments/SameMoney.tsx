@@ -21,16 +21,28 @@ import { api } from '../../lib/api';
 import type { Holding } from '../../lib/investments';
 import { gainClass, signed } from '../../lib/investments';
 import { formatCompact, formatMoney } from '../../lib/money';
-import { oneCurrency } from '../../lib/portfolio';
 import { sameMoneyComparison } from '../../lib/sameMoney';
+import { SAME_MONEY_MARKETS, useCompareCurrency, type MarketKey } from '../../lib/markets';
+import { CurrencySwitch } from './CurrencySwitch';
 
 type Point = { date: string; value: number };
-/** The market lines bought with rupees (the world price is in dollars: not one of them). */
-const MARKETS = ['nifty50', 'gold', 'gold24k', 'gold22k'] as const;
-type Market = (typeof MARKETS)[number];
-type Choice = Record<Market, boolean>;
+/** Every market line bought in a holding's own currency (the dollar gold price is in none). */
+const MARKETS = [...new Set(Object.values(SAME_MONEY_MARKETS).flat())];
+type Market = MarketKey;
+type Choice = Partial<Record<Market, boolean>>;
 const CHOICE_KEY = 'pb-same-money';
-const DEFAULT_CHOICE: Choice = { nifty50: true, gold: true, gold24k: false, gold22k: false };
+const DEFAULT_CHOICE: Choice = {
+  nifty50: true,
+  gold: true,
+  gold24k: false,
+  gold22k: false,
+  msciWorld: true,
+  sp500: true,
+  nasdaq100: false,
+  stoxx600: false,
+  nikkei225: false,
+  goldEur: true,
+};
 
 function readChoice(): Choice {
   try {
@@ -50,20 +62,27 @@ const dayLabel = (d: string) =>
     year: '2-digit',
     timeZone: 'UTC',
   });
-const inr = (paise: number) => formatMoney(paise, 'INR');
+
 const rate = (r: number | null) =>
-  r === null ? '—' : `${r >= 0 ? '+' : '−'}${(Math.abs(r) * 100).toFixed(1)} % a year`;
+  r === null
+    ? '—'
+    : // nothing gained or lost reads as 0.0, never −0.0
+      `${Math.abs(r) < 0.0005 ? '' : r > 0 ? '+' : '−'}${(Math.abs(r) * 100).toFixed(1)} % a year`;
 
 /**
  * Your investments against the same money in Nifty 50 or gold: each buy and sale repeated on its
  * day for its amount, then the gain (or loss) of each over the money put in, day by day, and
  * where each stands today.
  */
-export function SameMoney({ holdings }: { holdings: Holding[] }) {
+export function SameMoney({ holdings: all }: { holdings: Holding[] }) {
   const me = useMe();
   const on = me.data?.family.livePrices ?? false;
-  const single = oneCurrency(holdings);
-  const currency = holdings.find((h) => !h.archived)?.currency ?? 'INR';
+  // one currency at a time: its holdings, bought instead in its markets
+  const compare = useCompareCurrency(all);
+  const currency = compare.currency;
+  const holdings = useMemo(() => all.filter((h) => h.currency === currency), [all, currency]);
+  const markets = useMemo(() => SAME_MONEY_MARKETS[currency] ?? [], [currency]);
+  const inr = (minor: number) => formatMoney(minor, currency);
   const [choice, setChoice] = useState<Choice>(readChoice);
   const choose = (c: Choice) => {
     setChoice(c);
@@ -77,12 +96,12 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
     queryKey: ['holdings', 'benchmarks'],
     queryFn: () =>
       api.get<Record<Market, Point[]> & { estimatedUntil: string | null }>('/holdings/benchmarks'),
-    enabled: on && single && currency === 'INR',
+    enabled: on && markets.length > 0,
   });
   // ticked, and with prices
   const ticked = useMemo(
-    () => MARKETS.filter((k) => choice[k] && (bench.data?.[k]?.length ?? 0) > 0),
-    [choice, bench.data],
+    () => markets.filter((k) => choice[k] && (bench.data?.[k]?.length ?? 0) > 1),
+    [choice, bench.data, markets],
   );
   const c = useMemo(
     () =>
@@ -94,13 +113,16 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
   );
 
   const title = 'Your money against the same money elsewhere';
-  if (!single || currency !== 'INR' || !on) {
+  const switcher = (
+    <CurrencySwitch options={compare.options} value={currency} onChange={compare.choose} />
+  );
+  if (markets.length === 0 || !on) {
     return (
       <Card title={title}>
         <p className="text-sm text-slate-500">
           {!on
-            ? 'Switch on “Daily closing prices from NSE” to compare with Nifty 50 and gold.'
-            : 'This compares rupee holdings with Indian markets: your holdings are in other currencies.'}
+            ? 'Switch on “Daily closing prices” to compare with the markets.'
+            : 'There are markets to compare with for rupee and euro holdings only.'}
         </p>
       </Card>
     );
@@ -108,6 +130,7 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
   if (bench.isError) {
     return (
       <Card title={title}>
+        {switcher}
         <p className="text-sm text-slate-500">
           Market prices could not be loaded. Try again later.
         </p>
@@ -117,6 +140,7 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
   if (bench.isPending || c.rows.length < 2) {
     return (
       <Card title={title}>
+        {switcher}
         <p className="text-sm text-slate-500">
           {bench.isPending ? 'Loading…' : 'It needs your buys and at least two days of prices.'}
         </p>
@@ -134,7 +158,7 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
   const ticks = niceTicks(Math.max(0, ...values), Math.min(0, ...values));
   const data = c.rows.map((r) => ({ date: r.date, ...r.gain }));
   const byDate = new Map(c.rows.map((r) => [r.date, r]));
-  const gainCell = (v: number | undefined) => (v === undefined ? '—' : signed(v, 'INR'));
+  const gainCell = (v: number | undefined) => (v === undefined ? '—' : signed(v, currency));
   const best = keys.reduce((b, k) => (c.summary[k]!.gain > c.summary[b]!.gain ? k : b), keys[0]!);
 
   return (
@@ -143,27 +167,30 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
       subtitle={`Each of your buys and sales repeated on its day, for its amount, in each market. Gain or loss over the money put in so far, net of sales (${inr(c.invested)} today). Dividends are left out on both sides.`}
       controls={
         <>
+          {switcher}
           <fieldset className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
             <legend className="sr-only">Markets to compare with</legend>
-            {MARKETS.map((k) => (
+            {markets.map((k) => (
               <label key={k} className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  // no prices for it yet: nothing to draw
-                  checked={choice[k] && (bench.data?.[k]?.length ?? 0) > 0}
-                  disabled={(bench.data?.[k]?.length ?? 0) === 0}
+                  // fewer than two days of prices: nothing to compare yet
+                  checked={!!choice[k] && (bench.data?.[k]?.length ?? 0) > 1}
+                  disabled={(bench.data?.[k]?.length ?? 0) < 2}
                   onChange={(e) => choose({ ...choice, [k]: e.target.checked })}
                 />
                 In {LINES[k].short}
               </label>
             ))}
           </fieldset>
-          {bench.data?.estimatedUntil && (choice.gold24k || choice.gold22k) && (
-            <p className="-mt-1 mb-3 text-xs text-slate-500">
-              IBJA publishes no history: 22K and 24K gold before{' '}
-              {dayLabel(bench.data.estimatedUntil)} are estimated from GOLDBEES.
-            </p>
-          )}
+          {bench.data?.estimatedUntil &&
+            currency === 'INR' &&
+            (choice.gold24k || choice.gold22k) && (
+              <p className="-mt-1 mb-3 text-xs text-slate-500">
+                IBJA publishes no history: 22K and 24K gold before{' '}
+                {dayLabel(bench.data.estimatedUntil)} are estimated from GOLDBEES.
+              </p>
+            )}
           <table className="mb-4 w-full text-sm">
             <caption className="sr-only">Where each stands today</caption>
             <thead>
@@ -204,7 +231,7 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
                     </th>
                     <td className="py-2 text-right">{inr(s.value)}</td>
                     <td className={clsx('py-2 text-right', gainClass(s.gain))}>
-                      {signed(s.gain, 'INR')}
+                      {signed(s.gain, currency)}
                     </td>
                     <td className={clsx('py-2 text-right', gainClass(s.xirr ?? 0))}>
                       {rate(s.xirr)}
@@ -247,7 +274,7 @@ export function SameMoney({ holdings }: { holdings: Holding[] }) {
               tickLine={false}
               axisLine={false}
               width={64}
-              tickFormatter={(v: number) => formatCompact(v, 'INR')}
+              tickFormatter={(v: number) => formatCompact(v, currency)}
             />
             <ReferenceLine y={0} stroke={MUTED} />
             <Tooltip

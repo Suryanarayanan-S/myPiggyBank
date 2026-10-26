@@ -1,0 +1,168 @@
+{
+ "instrument": {
+  "entityType": "STOCK",
+  "entityValue": "85671",
+  "name": "Toyota",
+  "isin": "JP3633400001"
+ },
+ "quoteList": {
+  "list": [
+   {
+    "market": {
+     "name": "London Stock Exchange",
+     "codeExchange": "LSE",
+     "idNotation": 216350
+    },
+    "isoCurrency": "JPY",
+    "last": 3034.0
+   },
+   {
+    "market": {
+     "name": "Tradegate BSX",
+     "codeExchange": "GAT",
+     "idNotation": 9385956
+    },
+    "isoCurrency": "EUR",
+    "last": 17.7
+   },
+   {
+    "market": {
+     "name": "Nasdaq OTC",
+     "codeExchange": "PNK",
+     "idNotation": 467773274
+    },
+    "isoCurrency": "USD",
+    "last": 19.95
+   },
+   {
+    "market": {
+     "name": "M\u00fcnchen",
+     "codeExchange": "MUN",
+     "idNotation": 19656
+    },
+    "isoCurrency": "EUR",
+    "last": 17.65
+   },
+   {
+    "market": {
+     "name": "gettex",
+     "codeExchange": "TRO",
+     "idNotation": 120481279
+    },
+    "isoCurrency": "EUR",
+    "last": 17.684
+   },
+   {
+    "market": {
+     "name": "Stuttgart",
+     "codeExchange": "STU",
+     "idNotation": 19657
+    },
+    "isoCurrency": "EUR",
+    "last": 17.652
+   },
+   {
+    "market": {
+     "name": "LS Exchange",
+     "codeExchange": "LSX",
+     "idNotation": 244495687
+    },
+    "isoCurrency": "EUR",
+    "last": 17.592
+   },
+   {
+    "market": {
+     "name": "Frankfurt",
+     "codeExchange": "FRA",
+     "idNotation": 3357976
+    },
+    "isoCurrency": "EUR",
+    "last": 17.506
+   },
+   {
+    "market": {
+     "name": "Quotrix",
+     "codeExchange": "QUO",
+     "idNotation": 134122490
+    },
+    "isoCurrency": "EUR",
+    "last": 17.724
+   },
+   {
+    "market": {
+     "name": "Baader Trading",
+     "codeExchange": "@DE",
+     "idNotation": 46983719
+    },
+    "isoCurrency": "EUR",
+    "last": 17.661
+   },
+   {
+    "market": {
+     "name": "Stuttgart TradeREBEL",
+     "codeExchange": "BPS",
+     "idNotation": 404403090
+    },
+    "isoCurrency": "EUR",
+    "last": 17.502
+   },
+   {
+    "market": {
+     "name": "Lang & Schwarz",
+     "codeExchange": "@DE",
+     "idNotation": 12233702
+    },
+    "isoCurrency": "EUR",
+    "last": 17.592
+   },
+   {
+    "market": {
+     "name": "D\u00fcsseldorf",
+     "codeExchange": "DUS",
+     "idNotation": 19659
+    },
+    "isoCurrency": "EUR",
+    "last": 17.586
+   },
+   {
+    "market": {
+     "name": "Hamburg",
+     "codeExchange": "HAM",
+     "idNotation": 19658
+    },
+    "isoCurrency": "EUR",
+    "last": 17.502
+   },
+   {
+    "market": {
+     "name": "Hannover",
+     "codeExchange": "HAN",
+     "idNotation": 124043477
+    },
+    "isoCurrency": "EUR",
+    "last": 17.502
+   },
+   {
+    "market": {
+     "name": "Societe Generale",
+     "codeExchange": "@DE",
+     "idNotation": 10337147
+    },
+    "isoCurrency": "EUR",
+    "last": 17.596
+   }
+  ]
+ },
+ "stocksSplitList": {
+  "list": [
+   {
+    "dateSplit": "2021-09-29T12:00:00.000+00:00",
+    "factor": 5.0,
+    "isoCurrency": "JPY",
+    "datePreviousLast": "2021-09-16T12:00:00.000+00:00",
+    "pricePreviousLast": 9940.0,
+    "idNotation": 216350
+   }
+  ]
+ }
+}

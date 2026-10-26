@@ -12,6 +12,13 @@ type Status = {
   notFound: string[];
   lastError: string | null;
   warning: string | null;
+  /** shares outside India (onvista) and the euro markets */
+  world?: {
+    fetchedAt: string | null;
+    updated: number;
+    notFound: string[];
+    lastError: string | null;
+  };
 };
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -75,7 +82,7 @@ export function LivePrices() {
       </div>
       <p id="live-prices-hint" className="text-xs text-slate-500" aria-live="polite">
         {!on
-          ? 'Downloads NSE’s public end-of-day file each evening (nothing about you is sent). Quantities still come from your Kite imports.'
+          ? 'Downloads NSE’s public end-of-day file each evening, and onvista’s closes for shares outside India (only public ISINs are sent, nothing about you). Quantities still come from your imports.'
           : s?.lastError
             ? `Could not update: ${s.lastError}. The last prices are kept.`
             : s?.asOf
@@ -86,6 +93,17 @@ export function LivePrices() {
       </p>
       {on && s?.warning && !s.lastError && (
         <p className="text-xs text-amber-700 dark:text-amber-400">{s.warning}</p>
+      )}
+      {on && s?.world && (s.world.updated > 0 || s.world.notFound.length > 0) && (
+        <p className="text-xs text-slate-500">
+          Shares outside India: closes saved for {s.world.updated}
+          {s.world.notFound.length
+            ? ` · not quoted on onvista (price kept): ${s.world.notFound.join(', ')}`
+            : ''}
+        </p>
+      )}
+      {on && s?.world?.lastError && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{s.world.lastError}</p>
       )}
       <FormError error={toggle.error ?? update.error} />
     </div>

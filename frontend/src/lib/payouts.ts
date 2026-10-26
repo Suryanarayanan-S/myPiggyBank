@@ -11,8 +11,9 @@ export type Payout = {
   units: number;
   /** rupees a share; null when none were held the day before */
   perShare: number | null;
-  /** paise */
+  /** minor units of `currency` (paise, cents) */
   amount: number;
+  currency: string;
 };
 
 export type PayoutKind = 'dividend' | 'interest' | 'all';
@@ -49,8 +50,14 @@ export function selectPayouts(
     });
 }
 
+/** The total in each currency (rupees first), and how many payouts. */
 export function payoutTotals(rows: Payout[]) {
-  return { amount: rows.reduce((s, r) => s + r.amount, 0), count: rows.length };
+  const sums = new Map<string, number>();
+  for (const r of rows) sums.set(r.currency, (sums.get(r.currency) ?? 0) + r.amount);
+  const amounts = [...sums]
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => Number(b.currency === 'INR') - Number(a.currency === 'INR'));
+  return { amounts, count: rows.length };
 }
 
 const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
@@ -64,6 +71,8 @@ export function payoutCsv(rows: Payout[], kind: PayoutKind): string {
     'Qty',
     word ? `${word} per share` : 'Per share',
     word ? `Total ${word.toLowerCase()}` : 'Total',
+    // only when not all are in rupees (Console's report has none)
+    ...(rows.some((r) => r.currency !== 'INR') ? ['Currency'] : []),
   ];
   return [
     head.join(','),
@@ -74,6 +83,7 @@ export function payoutCsv(rows: Payout[], kind: PayoutKind): string {
         String(r.units),
         r.perShare === null ? '' : String(r.perShare),
         (r.amount / 100).toFixed(2),
+        ...(head.length > 5 ? [r.currency] : []),
       ].join(','),
     ),
   ].join('\n');

@@ -433,6 +433,19 @@ async function storeGoldUsd(
   await upsertPoint(prisma, 'goldUsd', today, p.usd);
 }
 
+type Point = { date: string; value: number };
+/** Dollar amounts in euros at the rate of their day, or the last one before (none: left out). */
+export function inEuros(usd: Point[], usdPerEur: Point[]): Point[] {
+  const out: Point[] = [];
+  let i = -1;
+  for (const p of usd) {
+    while (i + 1 < usdPerEur.length && usdPerEur[i + 1]!.date <= p.date) i++;
+    const rate = usdPerEur[i]?.value;
+    if (rate) out.push({ date: p.date, value: Math.round((p.value / rate) * 100) / 100 });
+  }
+  return out;
+}
+
 /** Nifty 50 and gold since a day, for the comparison chart (values as plain numbers). */
 export async function benchmarks(prisma: PrismaClient, from?: string) {
   const rows = await prisma.benchmarkPoint.findMany({
@@ -461,6 +474,14 @@ export async function benchmarks(prisma: PrismaClient, from?: string) {
     estimatedUntil: series('gold24kEst').length > 0 ? firstIbja : null,
     /** US dollars per troy ounce */
     goldUsd: series('goldUsd'),
+    /** euro markets: ETFs bought in euros (€ per share) */
+    msciWorld: series('msciWorld'),
+    sp500: series('sp500'),
+    nasdaq100: series('nasdaq100'),
+    stoxx600: series('stoxx600'),
+    nikkei225: series('nikkei225'),
+    /** euros per troy ounce: the world price ÷ the ECB's dollars per euro that day (or before) */
+    goldEur: inEuros(series('goldUsd'), series('usdPerEur')),
   };
 }
 

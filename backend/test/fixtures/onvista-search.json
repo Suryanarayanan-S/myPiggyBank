@@ -1,0 +1,49 @@
+{
+ "searchValue": "JP3633400001",
+ "facets": [
+  {
+   "type": "STOCK",
+   "results": [
+    {
+     "entityType": "STOCK",
+     "entitySubType": null,
+     "entityValue": "85671",
+     "name": "Toyota",
+     "isin": "JP3633400001"
+    }
+   ]
+  },
+  {
+   "type": "INDEX",
+   "results": []
+  },
+  {
+   "type": "FUND",
+   "results": []
+  },
+  {
+   "type": "ETF",
+   "results": []
+  },
+  {
+   "type": "BOND",
+   "results": []
+  },
+  {
+   "type": "CURRENCY",
+   "results": []
+  },
+  {
+   "type": "CRYPTO",
+   "results": []
+  },
+  {
+   "type": "COMMODITY",
+   "results": []
+  },
+  {
+   "type": "FUTURE",
+   "results": []
+  }
+ ]
+}

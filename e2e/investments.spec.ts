@@ -136,7 +136,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   ).toHaveText('2.1 %');
   await page.getByRole('tab', { name: 'Overview' }).click();
 
-  // Compared with Nifty 50 and gold: market data stands in (the test server is offline).
+  // Compared with the markets: market data stands in (the test server is offline).
   const days = [90, 60, 30, 5, 0].map(daysAgo);
   await page.route('**/api/holdings/benchmarks', (route) =>
     route.fulfill({
@@ -146,7 +146,14 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
           gold: days.map((date, i) => ({ date, value: 60 + i * 4 })),
           gold22k: days.map((date, i) => ({ date, value: 13_000 + i * 100 })),
           gold24k: days.map((date, i) => ({ date, value: 14_200 + i * 110 })),
-          goldUsd: [{ date: days[4], value: 4132.9 }], // collected from today only
+          goldUsd: [{ date: days[4], value: 4132.9 }],
+          // the euro markets (ETFs bought in euros); world gold in euros from today only
+          msciWorld: days.map((date, i) => ({ date, value: 100 + i * 2 })),
+          sp500: days.map((date, i) => ({ date, value: 500 + i * 10 })),
+          nasdaq100: days.map((date, i) => ({ date, value: 1000 + i * 20 })),
+          stoxx600: days.map((date, i) => ({ date, value: 50 + i })),
+          nikkei225: days.map((date, i) => ({ date, value: 30 + i })),
+          goldEur: [{ date: days[4], value: 3550 }],
         },
       },
     }),
@@ -154,48 +161,48 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await page.getByLabel('Daily closing prices from NSE').click();
   await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
   await page.getByRole('tab', { name: 'Performance' }).click();
-  // the same money in Nifty or gold: for rupee holdings (these are in euros)
-  await expect(page.getByText(/This compares rupee holdings with Indian markets/)).toBeVisible();
-  // One chart, each line ticked on or off; ticked by default: yours, Nifty 50 and 22K gold.
+  // euro holdings against the same money in euro markets (rupee ones get Nifty 50 and gold)
+  await expect(page.getByLabel('In MSCI World')).toBeChecked();
+  await expect(page.getByLabel('In S&P 500')).toBeChecked();
+  await expect(page.getByLabel('In Nikkei 225')).not.toBeChecked();
+  // One chart, each line ticked on or off; ticked by default: yours, MSCI World and S&P 500.
   await expect(page.getByLabel('Your investments')).toBeChecked();
-  await expect(page.getByLabel('Nifty 50')).toBeChecked();
-  await expect(page.getByLabel('Gold 22K per gram')).toBeChecked();
-  await expect(page.getByLabel('Gold 24K per gram')).not.toBeChecked();
-  await expect(page.getByLabel('GOLDBEES ETF')).not.toBeChecked();
-  await expect(page.getByLabel('Gold, world price ($ per ounce)')).not.toBeChecked();
+  await expect(page.getByLabel('MSCI World', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('S&P 500', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Nasdaq 100', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('Nikkei 225', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('Gold, world price (€ per ounce)')).not.toBeChecked();
+  await expect(page.getByLabel('Nifty 50', { exact: true })).toHaveCount(0);
   const compare = page.locator('section', { has: page.getByText(/^Change since/) });
-  await expect(compare).toContainText('Gold 22K (IBJA)');
+  await expect(compare).toContainText('MSCI World (iShares, €)');
   await compare.getByRole('button', { name: 'Show table' }).click();
-  // values next to the change: 22K 13,000 → 13,400 per gram; yours in its own currency
-  await expect(compare.getByRole('row').last()).toContainText('₹13,400/g (+3.1 %)');
+  // values next to the change: MSCI World €100 → €108; yours in its own currency
+  await expect(compare.getByRole('row').last()).toContainText('€108,00 (+8.0 %)');
   await expect(compare.getByRole('row').last()).toContainText('1.506,25 € (+20.5 %)');
   await compare.getByRole('button', { name: 'Show chart' }).click();
-  await shot(page, '35-investments-vs-nifty-gold');
-  // 22K and 24K move alike: their end labels are spread apart, not drawn on top of each other.
-  await page.getByLabel('Gold 24K per gram').click();
-  await expect(compare).toContainText('Gold 24K (IBJA)');
-  await shot(page, '36-investments-gold-labels');
-  await page.getByLabel('Gold 24K per gram').click();
-  // World gold has only today so far: it says so, and unticking brings the chart back.
-  await page.getByLabel('Gold, world price ($ per ounce)').click();
+  await shot(page, '35-investments-vs-markets');
+  // S&P 500 and Nasdaq 100 move alike: their end labels are spread apart, not on top
+  await page.getByLabel('Nasdaq 100', { exact: true }).click();
+  await expect(compare).toContainText('Nasdaq 100 (iShares, €)');
+  await shot(page, '36-investments-close-labels');
+  await page.getByLabel('Nasdaq 100', { exact: true }).click();
+  // Gold in euros has only today so far: it says so, and unticking brings the chart back.
+  await page.getByLabel('Gold, world price (€ per ounce)').click();
   await expect(page.getByText(/two days in common/)).toBeVisible();
-  await page.getByLabel('Gold, world price ($ per ounce)').click();
-  await expect(compare).toContainText('Nifty 50');
-  // GOLDBEES is a line of its own, next to 22K gold.
-  await page.getByLabel('GOLDBEES ETF').click();
-  await expect(compare).toContainText('GOLDBEES ETF');
-  await expect(compare).toContainText('Gold 22K (IBJA)');
+  await page.getByLabel('Gold, world price (€ per ounce)').click();
+  await expect(compare).toContainText('S&P 500');
   // Without yours, only the markets are compared.
   await page.getByLabel('Your investments').click();
   await expect(compare).not.toContainText('without money added');
   // The choice is remembered.
+  await page.getByLabel('Nikkei 225', { exact: true }).click();
   await page.reload();
-  await expect(page.getByLabel('GOLDBEES ETF')).toBeChecked();
+  await expect(page.getByLabel('Nikkei 225', { exact: true })).toBeChecked();
   await expect(page.getByLabel('Your investments')).not.toBeChecked();
   await page.getByLabel('Your investments').click();
-  await page.getByLabel('GOLDBEES ETF').click();
+  await page.getByLabel('Nikkei 225', { exact: true }).click();
   await expect(page.getByLabel('Your investments')).toBeChecked();
-  await expect(page.getByLabel('GOLDBEES ETF')).not.toBeChecked();
+  await expect(page.getByLabel('Nikkei 225', { exact: true })).not.toBeChecked();
   await page.getByLabel('Daily closing prices from NSE').click();
 
   await page.setViewportSize({ width: 390, height: 844 });

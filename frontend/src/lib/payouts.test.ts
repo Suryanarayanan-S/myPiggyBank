@@ -11,6 +11,7 @@ const row = (p: Partial<Payout>): Payout => ({
   units: 30,
   perShare: 25,
   amount: 75_000,
+  currency: 'INR',
   ...p,
 });
 const rows = [
@@ -64,7 +65,21 @@ describe('the payouts table', () => {
   });
 
   it('adds them up', () => {
-    expect(payoutTotals(rows.slice(0, 2))).toEqual({ amount: 80_940, count: 2 });
+    expect(payoutTotals(rows.slice(0, 2))).toEqual({
+      amounts: [{ currency: 'INR', amount: 80_940 }],
+      count: 2,
+    });
+    // each currency on its own, rupees first
+    expect(
+      payoutTotals([
+        row({ currency: 'EUR', amount: 57 }),
+        row({}),
+        row({ currency: 'EUR', amount: 23 }),
+      ]).amounts,
+    ).toEqual([
+      { currency: 'INR', amount: 75_000 },
+      { currency: 'EUR', amount: 80 },
+    ]);
   });
 
   it('writes a CSV like Console’s report', () => {
@@ -78,6 +93,16 @@ describe('the payouts table', () => {
     expect(payoutCsv([row({ symbol: 'A,B', perShare: null })], 'all').split('\n')).toEqual([
       'Symbol,Ex-date,Qty,Per share,Total',
       '"A,B",2026-06-10,30,,750.00',
+    ]);
+    // with other currencies, each row says its own
+    expect(
+      payoutCsv([row({}), row({ currency: 'EUR', amount: 57, perShare: 0.285 })], 'dividend').split(
+        '\n',
+      ),
+    ).toEqual([
+      'Symbol,Ex-date,Qty,Dividend per share,Total dividend,Currency',
+      'INFY,2026-06-10,30,25,750.00,INR',
+      'INFY,2026-06-10,30,0.285,0.57,EUR',
     ]);
   });
 

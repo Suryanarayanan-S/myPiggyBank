@@ -8,7 +8,7 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Tile } from './Tiles';
 import { api } from '../../lib/api';
-import { formatMoney } from '../../lib/money';
+import { formatMoney, localeFor } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import {
   payoutCsv,
@@ -23,7 +23,14 @@ import {
 import { useRemembered } from '../../lib/remember';
 import { useMembers } from '../../lib/queries';
 
-const inr = (paise: number) => formatMoney(paise, 'INR');
+/** an amount a share, to four places */
+const each = (v: number, currency: string) =>
+  new Intl.NumberFormat(localeFor(currency), {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(v);
 const KINDS = ['dividend', 'interest', 'all'] as const;
 const PERIODS = ['year', 'fy', 'lastFy', 'all', 'custom'] as const;
 const PERIOD_LABEL: Record<Period, string> = {
@@ -176,7 +183,14 @@ export function PayoutTable({
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-        <Tile label={`Total ${word.one}`} value={inr(totals.amount)} />
+        <Tile
+          label={`Total ${word.one}`}
+          value={
+            totals.amounts.length === 0
+              ? formatMoney(0, 'INR')
+              : totals.amounts.map((t) => formatMoney(t.amount, t.currency)).join(' + ')
+          }
+        />
         <Tile label={`No. of ${word.many} received`} value={String(totals.count)} />
       </div>
 
@@ -240,11 +254,11 @@ export function PayoutTable({
                     <td className="px-3 py-2 text-right">{r.date}</td>
                     <td className="px-3 py-2 text-right">{r.units.toLocaleString('en-IN')}</td>
                     <td className="px-3 py-2 text-right">
-                      {r.perShare === null
-                        ? '—'
-                        : `₹${r.perShare.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`}
+                      {r.perShare === null ? '—' : each(r.perShare, r.currency)}
                     </td>
-                    <td className="px-3 py-2 text-right font-medium">{inr(r.amount)}</td>
+                    <td className="px-3 py-2 text-right font-medium">
+                      {formatMoney(r.amount, r.currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

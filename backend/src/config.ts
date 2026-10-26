@@ -20,6 +20,10 @@ const EnvSchema = z.object({
   IBJA_URL: z.url().default('https://ibjarates.com/'),
   GOLD_PRICE_URL: z.url().default('https://api.gold-api.com/price/XAU'),
   GOLD_HISTORY_URL: z.url().default('https://freegoldapi.com/data/latest.json'),
+  /** onvista's public data (prices and splits of shares outside India, euro ETFs) */
+  ONVISTA_URL: z.url().default('https://api.onvista.de/api/v1'),
+  /** the ECB's reference exchange rates (dollars per euro, for gold in euros) */
+  ECB_URL: z.url().default('https://data-api.ecb.europa.eu/service/data/EXR'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

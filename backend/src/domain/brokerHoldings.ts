@@ -69,6 +69,11 @@ export function readBrokerHoldings(rows: string[][]): {
     price: col(COLUMNS.price),
   };
   if (Object.values(at).some((i) => i < 0)) {
+    if (head.some((h) => norm(h) === 'tradedate')) {
+      throw new Error(
+        'This is a tradebook (buys and sells). Import the holdings file here, then the tradebook with “Import tradebook”.',
+      );
+    }
     throw new Error(
       'This does not look like a holdings export. In Zerodha Kite open Portfolio → Holdings and download it as CSV.',
     );

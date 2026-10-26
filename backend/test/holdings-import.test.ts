@@ -373,6 +373,10 @@ describe('importing broker holdings', () => {
       ).json().data;
       expect(p.symbols[0]).toMatchObject({ symbol: 'INFY', action: 'oversold' });
       expect((await tradebook('preview', first)).statusCode).toBe(400);
+      // and the other way round: a tradebook given as the holdings file says what it is
+      const wrong = await preview(book('INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,5,1300,1,1,x'));
+      expect(wrong.statusCode).toBe(400);
+      expect(wrong.json().error.message).toMatch(/This is a tradebook/);
     });
   });
   describe('demat accounts', () => {

@@ -287,6 +287,7 @@ describe('importing broker holdings', () => {
       expect((await tradebook('commit', file)).json().data).toEqual({
         replaced: 1,
         history: 1,
+        added: 0,
         skipped: 2,
       });
 
@@ -517,6 +518,64 @@ describe('importing broker holdings', () => {
       const r = await commit(first, { accountId: zerodha });
       expect(r.json().data).toMatchObject({ created: 0 });
       expect((await all()).every((h) => h.accountId === zerodha)).toBe(true);
+    });
+
+    it('adds the holdings a tradebook holds but the demat does not, when asked', async () => {
+      const zerodha = await demat('Zerodha · OYM940', appa);
+      const tb = book(
+        'GOLDBEES,X,2024-01-11,NSE,EQ,EQ,buy,false,2,52.86,1,1,x',
+        'GOLDBEES,X,2024-02-19,NSE,EQ,EQ,buy,false,927,52.69,2,2,x',
+        'GOLD1,X,2024-01-09,NSE,EQ,EQ,buy,false,2,53.13,3,3,x',
+      );
+      const body = { fileName: 'tradebook.csv', data: tb, ownerMemberId: null, accountId: zerodha };
+      const p = (await call('POST', '/api/holdings/tradebook/preview', body)).json().data;
+      // a demat with nothing in it yet: adding them is the obvious choice
+      expect(p.fresh).toBe(true);
+      expect(p.symbols.map((s: { action: string }) => s.action)).toEqual(['not-held', 'not-held']);
+      // not asked: left out
+      expect(
+        (await call('POST', '/api/holdings/tradebook/commit', body)).json().data,
+      ).toMatchObject({ added: 0, skipped: 2 });
+      const r = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
+      expect(r.json().data).toMatchObject({ added: 2, skipped: 0 });
+      const list = await all();
+      expect(list.map((h) => [h.symbol, h.units, h.ownerMemberId, h.accountId, h.archived])).toEqual(
+        expect.arrayContaining([
+          ['GOLDBEES', '929', appa, zerodha, false],
+          ['GOLD1', '2', appa, zerodha, false],
+        ]),
+      );
+      // again: they are held now, so their trades are simply used again
+      const again = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
+      expect(again.json().data).toMatchObject({ replaced: 2, added: 0 });
+      expect(await all()).toHaveLength(2);
+      const q = (await call('POST', '/api/holdings/tradebook/preview', body)).json().data;
+      expect(q.fresh).toBe(false);
+    });
+
+    it('never adds a symbol the person holds in another demat', async () => {
+      const zerodha = await demat('Zerodha', surya);
+      const groww = await demat('Groww', surya);
+      await commit(first, { accountId: zerodha });
+      const body = {
+        fileName: 'tradebook.csv',
+        data: book(
+          'INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,5,1300,1,1,x',
+          'TCS,X,2021-03-01,NSE,EQ,EQ,buy,false,2,3000,2,2,x',
+        ),
+        ownerMemberId: null,
+        accountId: groww,
+      };
+      const p = (await call('POST', '/api/holdings/tradebook/preview', body)).json().data;
+      expect(p.fresh).toBe(false);
+      expect(
+        Object.fromEntries(
+          p.symbols.map((s: { symbol: string; action: string }) => [s.symbol, s.action]),
+        ),
+      ).toEqual({ INFY: 'elsewhere', TCS: 'not-held' });
+      const r = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
+      expect(r.json().data).toMatchObject({ added: 1, skipped: 1 });
+      expect((await all()).filter((h) => h.symbol === 'INFY')).toHaveLength(1);
     });
 
     it('takes only an investment account of the family', async () => {

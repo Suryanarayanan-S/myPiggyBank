@@ -44,6 +44,8 @@ export const TradebookImportInput = z.object({
   ownerMemberId: z.uuid().nullable(),
   /** The demat account it is for: its owner decides whose the holdings are. */
   accountId: z.uuid().nullable().optional(),
+  /** Symbols the file holds but the demat does not: added as new holdings. */
+  addMissing: z.boolean().optional(),
 });
 type Input = z.output<typeof TradebookImportInput>;
 
@@ -59,13 +61,19 @@ function readFile(input: Input) {
   }
 }
 
-type Action = 'replace' | 'history' | 'mismatch' | 'not-held' | 'oversold' | 'several';
+type Action =
+  'replace' | 'history' | 'mismatch' | 'not-held' | 'elsewhere' | 'oversold' | 'several';
 
 async function plan(db: Db, familyId: string, input: Input) {
   const demat = await dematOf(db, familyId, input);
   const file = readFile(input);
   const all = await rupeeHoldings(db, familyId);
-  const mine = bySymbol(all.filter(inDemat(demat)));
+  const scope = inDemat(demat);
+  const mine = bySymbol(all.filter(scope));
+  // the person's open holdings outside this import (another demat): never added a second time
+  const theirs = bySymbol(
+    all.filter((h) => !scope(h) && !h.archived && h.ownerMemberId === demat.owner),
+  );
   const units = new Map(
     (
       await db.holdingTrade.groupBy({
@@ -103,14 +111,21 @@ async function plan(db: Db, familyId: string, input: Input) {
             : 'mismatch'
           : run === 0
             ? 'history'
-            : 'not-held';
+            : (theirs.get(symbol) ?? []).some((h) => heldUnits(h.id) > 0)
+              ? 'elsewhere'
+              : 'not-held';
     return { symbol, trades: sorted, fileUnits: run, held, holding, action };
   });
   const inFile = new Set(groups.keys());
   const notInFile = [...mine]
     .filter(([symbol, list]) => !inFile.has(symbol) && list.some((h) => heldUnits(h.id) > 0))
     .map(([, list]) => list.find((h) => heldUnits(h.id) > 0)!.symbol!);
-  return { demat, symbols, notInFile, errors: file.errors };
+  // nothing held in this demat yet, nor any of the file's shares in another of the person's
+  // demats: all of it comes from the file
+  const fresh =
+    ![...mine.values()].flat().some((h) => heldUnits(h.id) > 0) &&
+    !symbols.some((s) => s.action === 'elsewhere');
+  return { demat, fresh, symbols, notInFile, errors: file.errors };
 }
 
 const REASON: Record<Action, string> = {
@@ -119,6 +134,7 @@ const REASON: Record<Action, string> = {
   history: 'bought and sold entirely: kept as an archived holding',
   mismatch: 'the file does not add up to the units held — left alone',
   'not-held': 'not among the holdings — left out',
+  elsewhere: 'held in another of this person’s demats — left out',
   oversold: 'sells more than it buys (a trade is missing) — left out',
 };
 
@@ -139,6 +155,8 @@ export async function previewTradebookImport(prisma: PrismaClient, familyId: str
         reason: REASON[s.action],
       }))
       .sort((a, b) => a.action.localeCompare(b.action) || a.symbol.localeCompare(b.symbol)),
+    /** nothing in the demat yet: adding the ones not held is the obvious choice */
+    fresh: p.fresh,
     /** held, but not in the file: left as they are */
     notInFile: p.notInFile,
     errors: p.errors,
@@ -151,6 +169,7 @@ export async function commitTradebookImport(prisma: PrismaClient, familyId: stri
       const p = await plan(tx, familyId, input);
       let replaced = 0;
       let history = 0;
+      let added = 0;
       const data = (holdingId: string, trades: BrokerTrade[]) =>
         trades.map((t) => ({
           holdingId,
@@ -177,7 +196,8 @@ export async function commitTradebookImport(prisma: PrismaClient, familyId: stri
             });
           }
           replaced++;
-        } else if (s.action === 'history') {
+        } else if (s.action === 'history' || (s.action === 'not-held' && input.addMissing)) {
+          const sold = s.action === 'history';
           const h = await tx.holding.create({
             data: {
               familyId,
@@ -187,18 +207,20 @@ export async function commitTradebookImport(prisma: PrismaClient, familyId: stri
               currency: CURRENCY,
               ownerMemberId: p.demat.owner,
               accountId: p.demat.accountId,
-              archived: true,
-              note: 'Added by the tradebook import: sold',
+              archived: sold,
+              note: sold ? 'Added by the tradebook import: sold' : 'Added by the tradebook import',
             },
           });
           await tx.holdingTrade.createMany({ data: data(h.id, s.trades) });
-          history++;
+          if (sold) history++;
+          else added++;
         }
       }
       return {
         replaced,
         history,
-        skipped: p.symbols.filter((s) => s.action !== 'replace' && s.action !== 'history').length,
+        added,
+        skipped: p.symbols.length - replaced - history - added,
       };
     },
     // a few thousand trades: more than the default five seconds on a slow disk

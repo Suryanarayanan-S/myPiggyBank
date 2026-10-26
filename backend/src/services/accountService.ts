@@ -186,7 +186,10 @@ export async function deleteAccount(prisma: PrismaClient, familyId: string, id: 
   await prisma.account.delete({ where: { id } });
 }
 
-/** All open accounts in one currency (default: the wealth currency), at the latest rates. */
+/**
+ * All open bank and cash accounts in one currency (default: the wealth currency), at the latest
+ * rates. Demat accounts are left out: the Accounts page shows them apart, at what they hold.
+ */
 export async function accountsTotal(prisma: PrismaClient, familyId: string, view?: string) {
   const [family, accounts, rates] = await Promise.all([
     getFamily(prisma, familyId),
@@ -196,7 +199,7 @@ export async function accountsTotal(prisma: PrismaClient, familyId: string, view
   const currency = view ?? family.wealthCurrency;
   const month = todayLocal().slice(0, 7);
   const items = accounts
-    .filter((a) => !a.archived)
+    .filter((a) => !a.archived && a.type !== 'investment')
     .map((a) => ({ amount: a.balance, currency: a.currency, month }));
   return { currency, ...sumConverted(items, currency, rates) };
 }

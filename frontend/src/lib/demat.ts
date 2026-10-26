@@ -46,3 +46,31 @@ export function byDemat(holdings: Holding[], demats: Set<string>): DematRow[] {
     }))
     .sort((a, b) => b.value - a.value);
 }
+
+/** What a demat account holds now: its open holdings in its currency (the Accounts page). */
+export function dematWorth(holdings: Holding[], account: { id: string; currency: string }) {
+  const held = holdings.filter(
+    (h) =>
+      h.accountId === account.id &&
+      !h.archived &&
+      Number(h.units) > 0 &&
+      h.currency === account.currency,
+  );
+  // the gain only where there is a price (one without would show its cost as a loss)
+  const priced = held.filter((h) => h.value !== null);
+  return {
+    count: held.length,
+    value: priced.reduce((t, h) => t + h.value!, 0),
+    cost: held.reduce((t, h) => t + h.cost, 0),
+    gain: priced.reduce((t, h) => t + h.value! - h.cost, 0),
+    unpriced: held.length - priced.length,
+    /** held in another currency: not in the numbers */
+    other: holdings.filter(
+      (h) =>
+        h.accountId === account.id &&
+        !h.archived &&
+        Number(h.units) > 0 &&
+        h.currency !== account.currency,
+    ).length,
+  };
+}

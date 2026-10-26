@@ -15,7 +15,9 @@ import { api } from '../lib/api';
 import type { Converted } from '../lib/dashboardTypes';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 import { depositCount, useDeposits } from '../lib/deposits';
-import type { HoldingsResponse } from '../lib/investments';
+import { gainClass, signed, type HoldingsResponse } from '../lib/investments';
+import { dematWorth } from '../lib/demat';
+import clsx from 'clsx';
 
 export function AccountsPage() {
   const me = useMe();
@@ -26,7 +28,9 @@ export function AccountsPage() {
     queryFn: () => api.get<Converted>(withView('/accounts/total', view)),
   });
   const currencies = new Set(
-    (accounts.data ?? []).filter((a) => !a.archived).map((a) => a.currency),
+    (accounts.data ?? [])
+      .filter((a) => !a.archived && a.type !== 'investment')
+      .map((a) => a.currency),
   );
   const members = useMembers();
   // Deposits made from an account show on it (their money is not in its balance).
@@ -38,16 +42,15 @@ export function AccountsPage() {
     queryKey: ['holdings', view],
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
-  const heldIn = (a: Account) =>
-    (holdings.data?.holdings ?? []).filter(
-      (h) => h.accountId === a.id && !h.archived && Number(h.units) > 0 && h.currency === a.currency,
-    );
+  const worth = (a: Account) => dematWorth(holdings.data?.holdings ?? [], a);
+  // Demat accounts hold shares, not cash: listed apart, at what they hold.
+  const demats = (accounts.data ?? []).filter((a) => a.type === 'investment');
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
   const memberName = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
 
   const byCurrency = new Map<string, Account[]>();
-  for (const a of accounts.data ?? []) {
+  for (const a of (accounts.data ?? []).filter((x) => x.type !== 'investment')) {
     byCurrency.set(a.currency, [...(byCurrency.get(a.currency) ?? []), a]);
   }
 
@@ -136,26 +139,6 @@ export function AccountsPage() {
                       Transactions
                     </Link>
                   </p>
-                  {heldIn(a).length > 0 && (
-                    <p className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
-                      <span>
-                        {heldIn(a).length} {heldIn(a).length === 1 ? 'holding' : 'holdings'}:{' '}
-                        <span className="tabular-nums">
-                          {formatMoney(
-                            heldIn(a).reduce((t, h) => t + (h.value ?? 0), 0),
-                            a.currency,
-                          )}
-                        </span>
-                      </span>
-                      <Link
-                        to="/investments/market?tab=holdings"
-                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                        aria-label={`Holdings of ${a.name}`}
-                      >
-                        Holdings
-                      </Link>
-                    </p>
-                  )}
                   {depositsOf(a.id).length > 0 && (
                     <p className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
                       <span>
@@ -186,6 +169,116 @@ export function AccountsPage() {
           </section>
         );
       })}
+
+      {demats.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+              Demat accounts
+            </h2>
+            {holdings.data &&
+              new Set(demats.filter((a) => !a.archived).map((a) => a.currency)).size === 1 && (
+              <span className="text-sm text-slate-500">
+                Total{' '}
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {formatMoney(
+                    demats
+                      .filter((a) => !a.archived)
+                      .reduce((t, a) => t + worth(a).value + a.balance, 0),
+                    demats.find((a) => !a.archived)!.currency,
+                  )}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {demats.map((a) => {
+              const w = worth(a);
+              return (
+                <Card key={a.id} className={a.archived ? 'opacity-60' : undefined}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{a.name}</p>
+                      <p className="text-xs text-slate-500">
+                        Demat · {memberName(a.ownerMemberId)}
+                        {a.archived && ' · archived'}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Edit ${a.name}`}
+                      onClick={() => setEditing(a)}
+                    >
+                      <Pencil size={16} aria-hidden />
+                    </Button>
+                  </div>
+                  <p className="mt-3 text-2xl font-semibold tabular-nums">
+                    {holdings.data ? (
+                      <Amount cents={w.value + a.balance} currency={a.currency} />
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {!holdings.data ? (
+                      holdings.isError ? (
+                        'Its holdings could not be loaded.'
+                      ) : (
+                        'Loading…'
+                      )
+                    ) : w.count === 0 ? (
+                      a.archived ? (
+                        'No holdings'
+                      ) : (
+                        'No holdings yet: import a tradebook into it'
+                      )
+                    ) : (
+                      <>
+                        {w.count} {w.count === 1 ? 'holding' : 'holdings'} · bought for{' '}
+                        <span className="tabular-nums">{formatMoney(w.cost, a.currency)}</span> ·{' '}
+                        <span className={clsx('tabular-nums', gainClass(w.gain))}>
+                          {signed(w.gain, a.currency)}
+                        </span>
+                        {w.unpriced > 0 && ` (${w.unpriced} without a price)`}
+                      </>
+                    )}
+                    {w.other > 0 && ` · ${w.other} in another currency not shown`}
+                    {a.balance !== 0 && (
+                      <>
+                        {' '}
+                        · cash{' '}
+                        <span className="tabular-nums">{formatMoney(a.balance, a.currency)}</span>
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-2 flex justify-end gap-3 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
+                    {a.balance !== 0 && (
+                      <Link
+                        to={`/transactions?accountId=${a.id}`}
+                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        aria-label={`Transactions of ${a.name}`}
+                      >
+                        Transactions
+                      </Link>
+                    )}
+                    <Link
+                      to="/investments/market?tab=holdings"
+                      className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                      aria-label={`Holdings of ${a.name}`}
+                    >
+                      Holdings
+                    </Link>
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-500">
+            Their shares count in net worth as investments (on Net worth &amp; assets); demat
+            accounts are not in the bank account totals above.
+          </p>
+        </section>
+      )}
 
       {editing && (
         <Modal

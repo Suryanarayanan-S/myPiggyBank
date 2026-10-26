@@ -255,6 +255,15 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(d.getByRole('button', { name: 'Done' })).toBeFocused();
   await d.getByRole('button', { name: 'Done' }).click();
 
+  // The demat is on the Accounts page, at what it holds.
+  await page.goto('/wealth/accounts');
+  const demat = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Demat accounts' }),
+  });
+  await expect(demat).toContainText('Zerodha · XVH685');
+  await expect(demat).toContainText('2 holdings');
+  await page.goto('/investments/market');
+
   // Dividends (worked out from NSE each day; offline here, so two are recorded directly).
   const held = (await (await page.request.get('/api/holdings')).json()).data.holdings;
   const infyId = held.find((h: { symbol: string }) => h.symbol === 'INFY').id;

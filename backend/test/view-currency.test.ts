@@ -88,6 +88,16 @@ describe('viewing money in another currency', () => {
     await f.txn(f.eur.id, 'income', 5_000, 'Salary', `${thisMonth}-01`);
     const total = (await f.call('GET', '/api/accounts/total?currency=EUR')).json().data;
     expect(total).toEqual({ currency: 'EUR', total: 5_000 + 10_000, unconverted: [] });
+    // a demat is shown apart, at what it holds: not in the bank total
+    await f.call('POST', '/api/accounts', {
+      name: 'Zerodha',
+      type: 'investment',
+      currency: 'EUR',
+      openingBalance: 7_000,
+    });
+    expect((await f.call('GET', '/api/accounts/total?currency=EUR')).json().data.total).toBe(
+      15_000,
+    );
     const usd = (await f.call('GET', '/api/accounts/total?currency=USD')).json().data;
     expect(usd.unconverted).toEqual([
       { currency: 'EUR', amount: 5_000 },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byDemat } from './demat';
+import { byDemat, dematWorth } from './demat';
 import type { Holding } from './investments';
 
 const h = (p: Partial<Holding>) =>
@@ -63,5 +63,27 @@ describe('holdings by demat account', () => {
         weightBp: 500,
       },
     ]);
+  });
+});
+
+describe('what a demat account holds', () => {
+  it('counts its open holdings in its currency, at their value and cost', () => {
+    const list = [
+      h({ accountId: 'z', currency: 'INR', value: 800, cost: 500 } as Partial<Holding>),
+      // no price yet: no value, its cost still counts
+      h({ accountId: 'z', currency: 'INR', value: null, cost: 100 } as Partial<Holding>),
+      h({ accountId: 'z', currency: 'INR', units: '0', value: 0, cost: 0 } as Partial<Holding>),
+      h({ accountId: 'z', currency: 'INR', archived: true, value: 9, cost: 9 } as Partial<Holding>),
+      h({ accountId: 'z', currency: 'USD', value: 7, cost: 7 } as Partial<Holding>),
+      h({ accountId: 'other', currency: 'INR', value: 5, cost: 5 } as Partial<Holding>),
+    ];
+    expect(dematWorth(list, { id: 'z', currency: 'INR' })).toEqual({
+      count: 2,
+      value: 800,
+      cost: 600,
+      gain: 300,
+      unpriced: 1,
+      other: 1,
+    });
   });
 });

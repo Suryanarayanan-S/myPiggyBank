@@ -33,7 +33,7 @@ export const ACCOUNT_TYPES = {
   tagesgeld: 'Tagesgeld',
   cash: 'Cash',
   credit_card: 'Credit card',
-  investment: 'Investment',
+  investment: 'Demat / investment',
   other: 'Other',
 } as const;
 export type AccountType = keyof typeof ACCOUNT_TYPES;

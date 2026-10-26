@@ -54,7 +54,8 @@ export type HoldingAction = {
   exDate: string;
   purpose: string;
   kind: 'split' | 'bonus' | 'consolidation' | 'review';
-  status: 'applied' | 'review';
+  /** included: from NSE's history, already in the trades as they were entered or imported */
+  status: 'applied' | 'review' | 'included';
   unitsBefore: string;
   unitsAfter: string;
 };

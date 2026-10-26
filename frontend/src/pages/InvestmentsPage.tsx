@@ -16,6 +16,8 @@ import { Shares, Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
+import { PayoutTable } from '../components/investments/PayoutTable';
+import { ValueOverTime } from '../components/investments/ValueOverTime';
 import { isSoldOut, listed, portfolioXirr, profitSplit } from '../lib/portfolio';
 import { localDay } from '../lib/months';
 import { dayLabel } from '../lib/deposits';
@@ -37,6 +39,8 @@ import { formatMoney } from '../lib/money';
 import { formatPercent } from '../lib/percent';
 import { useMembers } from '../lib/queries';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
+
+const TABS = ['overview', 'performance', 'dividends', 'holdings'] as const;
 
 export function InvestmentsPage() {
   const me = useMe();
@@ -65,7 +69,7 @@ export function InvestmentsPage() {
     h.trades.some((t) => t.type === 'dividend' || t.type === 'interest'),
   );
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'holdings' ? 'holdings' : 'overview';
+  const tab = TABS.find((t) => t === params.get('tab')) ?? 'overview';
   const split = profitSplit(open);
   // the yearly return over every trade and payout (needs the trades' real dates: a tradebook)
   const xirr = useMemo(
@@ -166,6 +170,8 @@ export function InvestmentsPage() {
             {(
               [
                 ['overview', 'Overview'],
+                ['performance', 'Performance'],
+                ['dividends', 'Dividends'],
                 ['holdings', `Holdings (${listed(open, s.currency).length})`],
               ] as const
             ).map(([key, label]) => (
@@ -188,7 +194,7 @@ export function InvestmentsPage() {
               </button>
             ))}
           </div>
-          {/* Both panels exist (each tab points at one); the other one is hidden. */}
+          {/* Every panel exists (each tab points at one); the others are hidden. */}
           <div
             role="tabpanel"
             id="panel-overview"
@@ -201,10 +207,6 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            <DividendCheck empty={!paidOut} />
-            {/* Sold holdings' payouts count too (archived ones included). */}
-            <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
-            <CorporateHistory />
             {/* The account split is in the donuts; by person only when there is more than one. */}
             {s.byMember.length > 1 && (
               <Shares
@@ -213,6 +215,28 @@ export function InvestmentsPage() {
                 rows={s.byMember.map((m) => ({ label: m.name, value: m.value }))}
               />
             )}
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-performance"
+            aria-labelledby="tab-performance"
+            hidden={tab !== 'performance'}
+            className="space-y-5"
+          >
+            <ValueOverTime holdings={open} />
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-dividends"
+            aria-labelledby="tab-dividends"
+            hidden={tab !== 'dividends'}
+            className="space-y-5"
+          >
+            <DividendCheck empty={!paidOut} />
+            <PayoutTable />
+            {/* Sold holdings' payouts count too (archived ones included). */}
+            <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
+            <CorporateHistory />
           </div>
           <div
             role="tabpanel"

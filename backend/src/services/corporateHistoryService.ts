@@ -56,7 +56,7 @@ type Held = Awaited<ReturnType<typeof holdingsOf>>[number];
  * Fetches the history of these symbols since `from` — again after a week, or when an earlier
  * start is wanted; says which failed and why.
  */
-async function refreshHistory(
+export async function refreshHistory(
   prisma: PrismaClient,
   src: Sources,
   symbols: string[],
@@ -158,12 +158,12 @@ async function refreshAliases(
   }
 }
 
-type Action = Awaited<ReturnType<PrismaClient['corporateAction']['findMany']>>[number];
+export type Action = Awaited<ReturnType<PrismaClient['corporateAction']['findMany']>>[number];
 /**
  * One row per event: NSE's daily list and its website word the same split differently
  * ("FACE VALUE SPLIT…" / "Face Value Split…"); a dividend is kept per wording (two can share a day).
  */
-const distinct = (actions: Action[]) => {
+export const distinct = (actions: Action[]) => {
   const seen = new Set<string>();
   return actions.filter((a) => {
     const key =
@@ -175,14 +175,14 @@ const distinct = (actions: Action[]) => {
     return true;
   });
 };
-const isUnitChange = (a: Action) => ['split', 'bonus', 'consolidation'].includes(a.kind);
+export const isUnitChange = (a: Action) => ['split', 'bonus', 'consolidation'].includes(a.kind);
 const moves = (t: { type: string }) => t.type === 'buy' || t.type === 'sell';
 
 /**
  * The free shares of a bonus (or split) recorded as their own lot around the ex-date (as Paytm
  * Money does): then the trades before it are in the units of their day.
  */
-const ownLot = (h: Held, ex: string) =>
+export const ownLot = (h: { trades: { type: string; amount: bigint; date: Date }[] }, ex: string) =>
   h.trades.some((t) => {
     const d = formatDay(t.date);
     return (
@@ -381,6 +381,44 @@ const lastFailed = new Map<string, { failed: string[]; problem: string | null }>
 const checkedMark = (familyId: string) => `dividends-checked:${familyId}`;
 
 type CheckResult = Awaited<ReturnType<typeof runCheck>>;
+
+/**
+ * Every dividend and interest payment recorded on the rupee holdings (sold ones too), newest
+ * first, with the shares held at the close before it (in that day's units, as the check counts
+ * them) and the amount a share. Nothing is downloaded.
+ */
+export async function payoutList(prisma: PrismaClient, familyId: string) {
+  const holdings = await holdingsOf(prisma, familyId);
+  const actions = distinct(
+    await prisma.corporateAction.findMany({
+      where: { symbol: { in: [...new Set(holdings.map((h) => h.nse))] } },
+      orderBy: [{ exDate: 'asc' }, { purpose: 'asc' }],
+    }),
+  );
+  return holdings
+    .flatMap((h) =>
+      h.trades
+        .filter((t) => t.type === 'dividend' || t.type === 'interest')
+        .map((t) => {
+          const date = formatDay(t.date);
+          const units = unitsOn(h, addDays(date, -1), actions) / 1_000_000;
+          const amount = Number(t.amount);
+          return {
+            holdingId: h.id,
+            symbol: h.nse,
+            name: h.name,
+            ownerMemberId: h.ownerMemberId,
+            date,
+            kind: t.type as 'dividend' | 'interest',
+            units,
+            /** rupees a share (null when none were held the day before: entered by hand) */
+            perShare: units > 0 ? Math.round((amount / 100 / units) * 10_000) / 10_000 : null,
+            amount,
+          };
+        }),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date) || a.symbol.localeCompare(b.symbol));
+}
 
 /** What a check added. */
 const result = (fresh: Payout[]) => ({

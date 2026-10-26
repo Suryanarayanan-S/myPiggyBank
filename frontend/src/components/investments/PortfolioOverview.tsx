@@ -15,7 +15,6 @@ import {
   type RankedHolding,
 } from '../../lib/portfolio';
 import { AllocationDonut } from './AllocationDonut';
-import { ValueOverTime } from './ValueOverTime';
 
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -148,7 +147,6 @@ export function PortfolioOverview({
           </div>
         </Card>
       </div>
-      <ValueOverTime holdings={holdings} />
     </div>
   );
 }

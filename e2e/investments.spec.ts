@@ -153,7 +153,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   );
   await page.getByLabel('Daily closing prices from NSE').click();
   await expect(page.getByLabel('Daily closing prices from NSE')).toBeChecked();
-  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('tab', { name: 'Performance' }).click();
   // One chart, each line ticked on or off; ticked by default: yours, Nifty 50 and 22K gold.
   await expect(page.getByLabel('Your investments')).toBeChecked();
   await expect(page.getByLabel('Nifty 50')).toBeChecked();
@@ -260,6 +260,24 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
     });
   }
   await page.reload();
+  await page.getByRole('tab', { name: 'Dividends' }).click();
+  // where each came from and when (like Console's report), and a CSV of it
+  await expect(page.getByText('Total dividend', { exact: true }).locator('..')).toContainText(
+    '₹1,348.00',
+  );
+  await expect(
+    page.getByText('No. of dividends received', { exact: true }).locator('..'),
+  ).toContainText('2');
+  const payouts = page.getByRole('table', { name: /dividends from/ });
+  await expect(payouts.getByRole('row')).toHaveCount(3);
+  await expect(payouts.getByRole('row').nth(1)).toContainText('INFY');
+  await expect(payouts.getByRole('row').nth(1)).toContainText('₹750.00');
+  await page.getByPlaceholder('Search…').fill('gold');
+  await expect(page.getByText('No dividends match the search.')).toBeVisible();
+  await page.getByPlaceholder('Search…').fill('');
+  const csv = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'CSV' }).click();
+  expect((await csv).suggestedFilename()).toMatch(/^dividend_\d{4}-\d{2}-\d{2}_to_/);
   const income = page.locator('section', {
     has: page.getByRole('heading', { name: 'Dividend and interest' }),
   });
@@ -274,6 +292,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   ).toContainText('₹1,348.00');
 
   // Overview: what weighs most, and what moved most.
+  await page.getByRole('tab', { name: 'Overview' }).click();
   const biggest = page.locator('section', {
     has: page.getByRole('heading', { name: 'Biggest holdings' }),
   });
@@ -389,7 +408,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(page.getByText(/Could not update: .*The last prices are kept/)).toBeVisible();
 
   // Value over time: the comparison with Nifty 50 and gold needs NSE data (none here).
-  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('tab', { name: 'Performance' }).click();
   // Markets without prices yet are named and left out; yours needs a second day first.
   await expect(page.getByText(/No prices yet for Nifty 50, Gold 22K/)).toBeVisible();
   await expect(page.getByText(/Each day with prices adds a point/)).toBeVisible();
@@ -438,7 +457,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
 
   // The tradebook started a dividend check on NSE (offline here: it says so), and one can be
   // asked for again.
-  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('tab', { name: 'Dividends' }).click();
   await expect(page.getByText(/NSE did not answer as expected/)).toBeVisible();
   await page.getByRole('button', { name: 'Check now' }).click();
   await expect(page.getByText(/Dividends and gold bond interest are checked on NSE/)).toBeVisible();

@@ -30,7 +30,10 @@ import { compareSince, oneCurrency, returnIndex, valueHistory } from '../../lib/
 type Point = { date: string; value: number };
 type MarketKey = 'nifty50' | 'gold22k' | 'gold24k' | 'gold' | 'goldUsd';
 type LineKey = 'portfolio' | MarketKey;
-type Benchmarks = Record<MarketKey, Point[]>;
+type Benchmarks = Record<MarketKey, Point[]> & {
+  /** 22K and 24K are estimated from GOLDBEES before this day (null: not at all) */
+  estimatedUntil: string | null;
+};
 
 const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -166,7 +169,7 @@ function Picker({
           </label>
           {k === 'goldUsd' && (
             <span id="gold-usd-since" className="text-xs text-slate-500">
-              — collected daily from 21 Oct 2026
+              — monthly averages before 2025
             </span>
           )}
         </span>
@@ -249,6 +252,12 @@ export function ValueOverTime({ holdings }: { holdings: Holding[] }) {
         <p className="-mt-1 mb-3 text-xs text-slate-500">
           Your holdings are in different currencies, so they cannot be added up day by day — only
           the markets can be shown.
+        </p>
+      )}
+      {bench.data?.estimatedUntil && (choice.gold22k || choice.gold24k) && (
+        <p className="-mt-1 mb-3 text-xs text-slate-500">
+          IBJA publishes no history: Gold 22K and 24K before {dayLabel(bench.data.estimatedUntil)}{' '}
+          are estimated from GOLDBEES, matched to RBI’s gold bond prices.
         </p>
       )}
       {missing.length > 0 && (

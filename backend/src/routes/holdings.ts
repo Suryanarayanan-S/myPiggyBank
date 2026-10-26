@@ -78,6 +78,10 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
   app.post('/holdings/dividend-check', async (req) => ({
     data: await ch.checkDividends(app.prisma, fam(req), sources(), true),
   }));
+  // every payout with the shares held and the amount a share (the Dividends tab)
+  app.get('/holdings/payouts', async (req) => ({
+    data: await ch.payoutList(app.prisma, fam(req)),
+  }));
   app.get('/holdings/events', async (req) => ({
     // only the prices kept by a check: a page view never goes to NSE
     data: await ch.corporateEvents(app.prisma, fam(req), null),

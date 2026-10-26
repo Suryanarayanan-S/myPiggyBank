@@ -5,6 +5,7 @@ holding are adjusted automatically on the ex-date; anything that cannot be adjus
 flagged for the user to check.
 
 ## Findings (checked against real NSE files, Sep–Oct 2026)
+
 - `sec_bhavdata_full` does NOT adjust PREV_CLOSE on an ex-date (0 adjusted rows in 20 days, while
   BUILDPRO, BANSALWIRE, BLSE, MOLDTECH, MOLDTKPAC fell to 1/5 or 1/2 overnight).
 - NSE's daily `archives/equities/bhavcopy/pr/PRddmmyy.zip` holds `bcddmmyyyy.csv`
@@ -13,6 +14,7 @@ flagged for the user to check.
   `FVSPLT FRM RS 10 TO RS 2`, `FV SPLT FRM RS10 TO RE1`, `BONUS 1:1`, `DEMERGER`.
 
 ## Design
+
 - `domain/zip.ts`: read one entry of a zip (central directory, stored or deflate) — no dependency.
 - `domain/corporateActions.ts`: `prName(day)`, `readCorporateActions(csv)` → split / bonus /
   consolidation with factor num/den (split from a to b: a/b; bonus a:b: (a+b)/b), or `review`
@@ -33,6 +35,7 @@ flagged for the user to check.
   the last 60 days (applied: units before → after; review: "check its units and cost").
 
 ## Tests
+
 Zip reader, purpose parsing, service (applied, no double apply, review on later trade, demerger,
 backfill adjusted, PR failure is a warning), frontend notice helper, e2e not possible offline
 (unit-tested instead).

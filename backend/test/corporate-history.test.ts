@@ -292,6 +292,28 @@ describe('past dividends and corporate-action history', () => {
     expect(rows.map((r: { amount: number }) => r.amount)).toEqual([33_000, 33_000]);
   });
 
+  it('lists each payout with the shares held and the amount a share, newest first', async () => {
+    await check();
+    const rows = (await call('GET', '/api/holdings/payouts')).json().data;
+    expect(rows[0]).toMatchObject({ symbol: 'SGBFEB32IV', date: '2026-08-06', kind: 'interest' });
+    expect(rows.find((r: { symbol: string }) => r.symbol === 'INFY')).toEqual({
+      holdingId: expect.any(String),
+      symbol: 'INFY',
+      name: 'INFY',
+      ownerMemberId: surya,
+      date: '2021-10-21',
+      kind: 'dividend',
+      units: 20,
+      perShare: 16.5,
+      amount: 33_000,
+    });
+    // before the 1:1 bonus: 3 shares then (6 today)
+    expect(rows.find((r: { date: string }) => r.date === '2025-06-27')).toMatchObject({
+      units: 3,
+      perShare: 22,
+    });
+  });
+
   it('lists the bonus with the shares and value before and after', async () => {
     await check();
     const events = (await call('GET', '/api/holdings/events')).json().data;

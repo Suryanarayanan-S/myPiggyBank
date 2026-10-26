@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  kindOf,
-  readBrokerHoldings,
-  readBrokerTrades,
-} from '../../src/domain/brokerHoldings.js';
+import { kindOf, readBrokerHoldings, readBrokerTrades } from '../../src/domain/brokerHoldings.js';
 
 const HEAD = [
   'Instrument',

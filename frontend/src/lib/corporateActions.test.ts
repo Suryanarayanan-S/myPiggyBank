@@ -22,6 +22,8 @@ describe('corporate actions notice', () => {
         holding('B', [action({ exDate: '2026-10-20', kind: 'review', purpose: 'DEMERGER' })]),
         holding('Old', [action({})], true),
         holding('None', []),
+        // found in NSE's history, already in the trades: nothing to say
+        holding('C', [action({ exDate: '2026-10-21', status: 'included' })]),
       ],
       '2026-10-22',
     );

@@ -19,6 +19,7 @@ const EnvSchema = z.object({
   /** Indian gold rates page (IBJA) and the world gold price (US dollars per ounce). */
   IBJA_URL: z.url().default('https://ibjarates.com/'),
   GOLD_PRICE_URL: z.url().default('https://api.gold-api.com/price/XAU'),
+  GOLD_HISTORY_URL: z.url().default('https://freegoldapi.com/data/latest.json'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

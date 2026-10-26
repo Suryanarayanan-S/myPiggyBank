@@ -22,11 +22,15 @@ export function recentActions(holdings: Holding[], today: string) {
   const since = new Date(Date.parse(`${today}T00:00:00Z`) - SHOW_DAYS * 86_400_000)
     .toISOString()
     .slice(0, 10);
-  return holdings
-    .filter((h) => !h.archived)
-    .flatMap((h) => (h.actions ?? []).map((action) => ({ holding: h, action })))
-    .filter((r) => r.action.exDate >= since)
-    .sort((a, b) => b.action.exDate.localeCompare(a.action.exDate));
+  return (
+    holdings
+      .filter((h) => !h.archived)
+      .flatMap((h) => (h.actions ?? []).map((action) => ({ holding: h, action })))
+      // found in NSE's history, already in the trades: nothing was changed, nothing to check
+      .filter((r) => r.action.status !== 'included')
+      .filter((r) => r.action.exDate >= since)
+      .sort((a, b) => b.action.exDate.localeCompare(a.action.exDate))
+  );
 }
 
 /** One line for the notice; `check`: the user needs to look at the holding. */

@@ -104,7 +104,7 @@ const unitsBefore = (trades: Trade[], exDate: Date) =>
   trades
     .filter((t) => moves(t) && t.date < exDate)
     .reduce((s, t) => s + (t.type === 'buy' ? t.units : -t.units), 0n);
-const scale = (n: bigint, num: number, den: number) =>
+export const scale = (n: bigint, num: number, den: number) =>
   (n * BigInt(num) + BigInt(den) / 2n) / BigInt(den);
 const changesUnits = (kind: string) => kind !== 'review';
 
@@ -206,6 +206,12 @@ export async function applyCorporateActions(
 }
 
 /**
+ * Statuses whose split the trades are in: applied by the app, or (from NSE's history) already in
+ * the trades as they were entered or imported.
+ */
+export const INCLUDED = ['applied', 'included'];
+
+/**
  * A close for a day before an applied split, filled in later (past days are fetched after the
  * latest one): divided like the prices that were there when the split was applied.
  */
@@ -216,7 +222,7 @@ export function adjustedClose(
 ): number {
   let p = BigInt(price);
   for (const a of applied) {
-    if (a.status === 'applied' && a.num && a.den && formatDay(a.exDate) > day) {
+    if (INCLUDED.includes(a.status) && a.num && a.den && formatDay(a.exDate) > day) {
       p = scale(p, a.den, a.num);
     }
   }

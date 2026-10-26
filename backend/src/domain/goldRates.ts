@@ -3,7 +3,8 @@
  * - IBJA (India Bullion and Jewellers Association, ibjarates.com): the daily Indian reference
  *   rates, per 10 g, for 24K (999) and 22K (916), morning and evening — the rates RBI uses for
  *   gold bonds. Its page lists the last few trading days.
- * - The world spot price in US dollars per troy ounce (gold-api.com, current price only).
+ * - The world spot price in US dollars per troy ounce (gold-api.com, current price only), and its
+ *   history (freegoldapi.com: World Bank monthly averages, then daily closes).
  */
 import { parseRate } from './currency.js';
 
@@ -87,4 +88,30 @@ export function readGoldApi(text: string): { date: string; usd: number } {
     throw new Error('The world gold price service gave an unexpected answer');
   }
   return { date, usd: price };
+}
+
+/**
+ * The world gold price's history: US dollars per troy ounce (micros) by day, oldest first. Its
+ * oldest rows are in other currencies (marked in their source): only dollar ones are kept.
+ */
+export function readGoldHistory(text: string): { date: string; usd: number }[] {
+  let rows: unknown;
+  try {
+    rows = JSON.parse(text);
+  } catch {
+    rows = null;
+  }
+  if (!Array.isArray(rows)) throw new Error('The gold price history came in an unexpected form');
+  return (rows as { date?: unknown; price?: unknown; source?: unknown }[])
+    .filter(
+      (r) =>
+        typeof r.date === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(r.date) &&
+        typeof r.price === 'number' &&
+        r.price > 0 &&
+        // "measuringworth_british (GBP)": not dollars
+        !/\((?!USD)[A-Z]{3}\)/.test(String(r.source ?? '')),
+    )
+    .map((r) => ({ date: r.date as string, usd: Math.round((r.price as number) * 1_000_000) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

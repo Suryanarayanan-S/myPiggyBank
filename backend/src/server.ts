@@ -6,6 +6,7 @@ import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { livePricesWanted, refreshLivePrices } from './services/livePriceService.js';
 import { checkAllDividends } from './services/corporateHistoryService.js';
+import { backfillHistory } from './services/marketHistoryService.js';
 import { generateDue } from './services/recurringService.js';
 import { todayLocal } from './lib/dates.js';
 
@@ -34,7 +35,11 @@ const app = await buildApp({
     }),
   pricesUrl: config.PRICES_URL,
   historyUrl: config.NSE_HISTORY_URL,
-  goldSources: { ibja: config.IBJA_URL, usd: config.GOLD_PRICE_URL },
+  goldSources: {
+    ibja: config.IBJA_URL,
+    usd: config.GOLD_PRICE_URL,
+    history: config.GOLD_HISTORY_URL,
+  },
 });
 
 const shutdown = async () => {
@@ -83,17 +88,28 @@ const runPrices = async () => {
   if (status.lastError) app.log.warn({ error: status.lastError }, 'NSE price download failed');
   if (status.warning) app.log.warn({ warning: status.warning }, 'market data partly updated');
   // then dividends and gold bond interest from NSE's history (once a day per family)
-  const { added } = await checkAllDividends(
-    prisma,
-    {
-      fetch: app.livePrices.fetch,
-      historyUrl: app.livePrices.historyUrl,
-      pricesUrl: app.livePrices.url,
-      pauseMs: app.livePrices.pauseMs,
-    },
-    (familyId, err) => app.log.error({ err, familyId }, 'dividend check failed'),
+  const nse = {
+    fetch: app.livePrices.fetch,
+    historyUrl: app.livePrices.historyUrl,
+    pricesUrl: app.livePrices.url,
+    pauseMs: app.livePrices.pauseMs,
+  };
+  const { added } = await checkAllDividends(prisma, nse, (familyId, err) =>
+    app.log.error({ err, familyId }, 'dividend check failed'),
   );
   if (added) app.log.info({ added }, 'dividends and interest added');
+  // and the market's history back to the first trade (with the splits the check looked up)
+  try {
+    const filled = await backfillHistory(prisma, {
+      ...nse,
+      goldHistoryUrl: app.livePrices.gold.history,
+    });
+    if (filled.weeks || filled.worldGold) app.log.info(filled, 'market history filled');
+    if (filled.errors.length)
+      app.log.warn({ errors: filled.errors }, 'market history partly filled');
+  } catch (err) {
+    app.log.error(err, 'market history download failed');
+  }
 };
 void runPrices().catch((err) => app.log.error(err, 'NSE price download failed'));
 setInterval(

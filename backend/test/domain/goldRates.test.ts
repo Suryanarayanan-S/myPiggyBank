@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readGoldApi, readIbja } from '../../src/domain/goldRates.js';
+import { readGoldApi, readGoldHistory, readIbja } from '../../src/domain/goldRates.js';
 
 const row = (session: string, date: string, g999: string, g916: string) =>
   `<tr> <td class="x" data-label="${session}"><strong>${date}</strong></td> <td class="x" data-label="Gold 999">${g999}</td> <td class="x" data-label="Gold 995">1</td> <td class="x" data-label="Gold 916">${g916}</td> <td data-label="Silver 999">209467 </td> </tr>`;
@@ -85,5 +85,25 @@ describe('IBJA markup variations', () => {
       '{&quot;labels&quot;:[&quot;19/10/2026&quot;,&quot;21/10/2026&quot;]}',
     ].join('');
     expect(readIbja(page, '2026-10-21').map((r) => r.date)).toEqual(['2026-10-19']);
+  });
+});
+
+describe('the world gold price’s history', () => {
+  it('reads dollar prices by day, leaving out other currencies and bad rows', () => {
+    const json = JSON.stringify([
+      { date: '1258-01-01', price: 0.89, source: 'measuringworth_british (GBP)' },
+      { date: '2020-01-01', price: 1560.67, source: 'worldbank' },
+      { date: '2025-01-02', price: 2658.9, source: 'yahoo_finance' },
+      { date: 'soon', price: 1, source: 'worldbank' },
+      { date: '2025-01-03', price: 0, source: 'yahoo_finance' },
+    ]);
+    expect(readGoldHistory(json)).toEqual([
+      { date: '2020-01-01', usd: 1_560_670_000 },
+      { date: '2025-01-02', usd: 2_658_900_000 },
+    ]);
+  });
+
+  it('says so for anything else', () => {
+    expect(() => readGoldHistory('<html>')).toThrow(/gold price history/);
   });
 });

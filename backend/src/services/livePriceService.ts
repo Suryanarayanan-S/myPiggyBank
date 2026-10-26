@@ -12,6 +12,7 @@ import {
 import { addDays, formatDay, parseDay } from '../lib/dates.js';
 import {
   adjustedClose,
+  INCLUDED,
   applyCorporateActions,
   forgetCorporateActions,
   storeCorporateActions,
@@ -32,6 +33,8 @@ export const DEFAULT_PRICES_URL = 'https://nsearchives.nseindia.com/products/con
 export const DEFAULT_GOLD_SOURCES = {
   ibja: 'https://ibjarates.com/',
   usd: 'https://api.gold-api.com/price/XAU',
+  /** the world price's history (World Bank monthly averages, then daily), read once */
+  history: 'https://freegoldapi.com/data/latest.json',
 };
 export type GoldSources = typeof DEFAULT_GOLD_SOURCES;
 /** Weekends and holidays: look back this many days for the latest published file. */
@@ -84,7 +87,7 @@ export function livePriceStatus(familyId?: string): LivePriceStatus {
 }
 
 /** NSE keeps the index lists next to the daily files: …/products/content → …/content/indices. */
-const listsUrl = (base: string) =>
+export const listsUrl = (base: string) =>
   base.endsWith('/products/content')
     ? `${base.slice(0, -'/products/content'.length)}/content/indices`
     : `${base}/indices`;
@@ -251,7 +254,7 @@ async function applyDay(
     include: {
       trades: { where: { date: { lte: date } } },
       prices: { where: { date } },
-      actions: { where: { status: 'applied' } },
+      actions: { where: { status: { in: INCLUDED } } },
     },
   });
   for (const h of holdings) {
@@ -440,13 +443,22 @@ export async function benchmarks(prisma: PrismaClient, from?: string) {
     rows
       .filter((r) => r.series === name)
       .map((r) => ({ date: formatDay(r.date), value: Number(r.value) / 1_000_000 }));
+  // before IBJA's first stored day: estimated from GOLDBEES
+  const ibja = (name: string) => {
+    const real = series(name);
+    const first = real[0]?.date;
+    return [...series(`${name}Est`).filter((p) => !first || p.date < first), ...real];
+  };
+  const firstIbja = series('gold24k')[0]?.date ?? null;
   return {
     nifty50: series('nifty50'),
     /** GOLDBEES (₹ per unit) */
     gold: series('gold'),
     /** IBJA, ₹ per gram */
-    gold22k: series('gold22k'),
-    gold24k: series('gold24k'),
+    gold22k: ibja('gold22k'),
+    gold24k: ibja('gold24k'),
+    /** the IBJA lines are estimates before this day (null: none are) */
+    estimatedUntil: series('gold24kEst').length > 0 ? firstIbja : null,
     /** US dollars per troy ounce */
     goldUsd: series('goldUsd'),
   };

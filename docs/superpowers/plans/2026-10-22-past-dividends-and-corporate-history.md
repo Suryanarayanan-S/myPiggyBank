@@ -5,6 +5,7 @@ does (shares held at the close before the ex-date × amount per share), plus a h
 bonuses, demergers and mergers with what each did to the holding.
 
 ## Verified first (prototype, 22 Oct 2026)
+
 NSE's `api/corporates-corporateActions?index=equities&symbol=…&from_date=…&to_date=…` returns the
 history per symbol (one request each). Computed against the combined tradebook, 139 of the 140
 payouts in Console's dividend reports (Oct 2024 → Oct 2026) match to the paisa (the 140th is the
@@ -12,6 +13,7 @@ same ₹2 under another symbol). Trades are stored in today's units, so units be
 split/bonus are divided by its factor.
 
 ## Design
+
 - CorporateAction gains `amount` (micros per share/unit) and kind `dividend`.
 - `readNseHistory(json)`: dividends (sum of Rs amounts; "Distribution - Rs X" = X), split/bonus/
   consolidation via the existing purpose meaning, demerger/amalgamation/merger/arrangement as

@@ -76,6 +76,13 @@ const SERIES: Record<string, [issued: string, price: number]> = {
   SGBFEB32IV: ['2024-02-21', 6263],
 };
 
+/** Every series' issue price (rupees a gram), dated by its issue: RBI's IBJA averages. */
+export function goldBondIssues(): { date: string; price: number }[] {
+  return Object.values(SERIES)
+    .map(([issued, price]) => ({ date: issued, price }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** A series' issue date and issue price (rupees), or null for anything else. */
 export function goldBond(symbol: string): { issued: string; price: number } | null {
   const s = SERIES[symbol];

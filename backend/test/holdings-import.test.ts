@@ -616,6 +616,26 @@ describe('importing broker holdings', () => {
       expect(list.filter((h) => h.accountId === zerodha)).toHaveLength(3);
     });
 
+    it('lists and sums only the demats asked for (the Market filter)', async () => {
+      const zerodha = await demat('Zerodha', surya);
+      await commit(first, { accountId: zerodha });
+      await commit(first, { ownerMemberId: appa });
+      const get = async (hide: string) =>
+        (
+          await call('GET', `/api/holdings${hide ? `?hide=${encodeURIComponent(hide)}` : ''}`)
+        ).json().data as { holdings: { ownerMemberId: string }[]; summary: { value: number } };
+      const everyone = await get('');
+      expect(everyone.holdings).toHaveLength(6);
+      // Appa has no demat: his are filtered by person
+      const mine = await get(`person:${appa}`);
+      expect(mine.holdings.every((h) => h.ownerMemberId === surya)).toBe(true);
+      expect(mine.holdings).toHaveLength(3);
+      expect(mine.summary.value * 2).toBeCloseTo(everyone.summary.value, 0);
+      const his = await get(zerodha);
+      expect(his.holdings.every((h) => h.ownerMemberId === appa)).toBe(true);
+      expect((await call('GET', `/api/holdings?hide=${'x'.repeat(5000)}`)).statusCode).toBe(400);
+    });
+
     it('takes only an investment account of the family', async () => {
       const bank = await demat('ICICI', surya, 'savings');
       const res = await commit(first, { accountId: bank });

@@ -44,18 +44,24 @@ function effect(e: Event) {
  * just before and just after. A split or bonus itself neither gains nor loses — what changes is
  * the day's market move; a demerger or merger shows what the new shares were worth.
  */
-export function CorporateHistory() {
+export function CorporateHistory({
+  holdingIds = null,
+}: {
+  /** only these holdings' (the demats chosen on the Market page); null: all */
+  holdingIds?: Set<string> | null;
+}) {
   const q = useQuery({
     queryKey: ['holdings', 'events'],
     queryFn: () => api.get<Event[]>('/holdings/events'),
     // read from what a lookup kept: no need to ask often
     staleTime: 5 * 60_000,
   });
-  if (!q.data || q.data.length === 0) return null;
+  const events = (q.data ?? []).filter((e) => !holdingIds || holdingIds.has(e.holdingId));
+  if (events.length === 0) return null;
   return (
     <Card title="Splits, bonuses and mergers">
       <ul className="space-y-3 text-sm">
-        {q.data.map((e) => (
+        {events.map((e) => (
           <li key={`${e.symbol}|${e.exDate}|${e.purpose}`}>
             <p>
               <span className="font-medium">{e.symbol}</span>{' '}

@@ -19,6 +19,8 @@ import { PortfolioOverview } from '../components/investments/PortfolioOverview';
 import { PayoutTable } from '../components/investments/PayoutTable';
 import { SameMoney } from '../components/investments/SameMoney';
 import { DematAccounts } from '../components/investments/DematAccounts';
+import { useDematsLoaded } from '../components/investments/DematPicker';
+import { byDemat, hiddenAmong } from '../lib/demat';
 import { ValueOverTime } from '../components/investments/ValueOverTime';
 import { isSoldOut, listed, portfolioXirr, profitSplit } from '../lib/portfolio';
 import { localDay } from '../lib/months';
@@ -43,15 +45,60 @@ import { useMembers } from '../lib/queries';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 
 const TABS = ['overview', 'performance', 'dividends', 'holdings'] as const;
+const HIDDEN_KEY = 'pb-demats-hidden';
+
+function readHidden(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 export function InvestmentsPage() {
   const me = useMe();
   const members = useMembers();
   const [view] = useViewCurrency();
-  const data = useQuery({
+  const all = useQuery({
     queryKey: ['holdings', view],
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
+  // The demats (and people outside one) ticked off at the top: left out of the whole page.
+  const [demats, dematsLoaded] = useDematsLoaded();
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>(readHidden);
+  // every holding (sold and unpriced too) has a row to tick off; until the demats are known,
+  // nothing is left out (a demat's key would read as its person's)
+  const rowKeys = byDemat(all.data?.holdings ?? [], new Set(demats.map((a) => a.id))).map(
+    (r) => r.key,
+  );
+  const hidden = dematsLoaded ? hiddenAmong(hiddenKeys, rowKeys).sort() : [];
+  const waiting = !dematsLoaded && hiddenKeys.length > 0;
+  const hide = (keys: string[]) => {
+    setHiddenKeys(keys);
+    try {
+      localStorage.setItem(HIDDEN_KEY, JSON.stringify(keys));
+    } catch {
+      // storage refused: the choice still applies for this visit
+    }
+  };
+  const filtered = useQuery({
+    queryKey: ['holdings', view, 'hide', hidden.join(',')],
+    queryFn: () =>
+      api.get<HoldingsResponse>(
+        withView(`/holdings?hide=${encodeURIComponent(hidden.join(','))}`, view),
+      ),
+    enabled: hidden.length > 0,
+    // while another choice loads, the last one stays (dimmed), never everything
+    placeholderData: (previous) => previous,
+  });
+  const data = waiting ? filtered : hidden.length > 0 ? filtered : all;
+  const updating = hidden.length > 0 && filtered.isPlaceholderData;
+  // payouts and splits are listed apart: kept to the holdings shown
+  const shownIds = useMemo(
+    () => (hidden.length > 0 ? new Set((data.data?.holdings ?? []).map((h) => h.id)) : null),
+    [hidden.length, data.data],
+  );
   const [dialog, setDialog] = useState<
     | { kind: 'form'; holding?: Holding }
     | { kind: 'activity'; id: string }
@@ -67,7 +114,7 @@ export function InvestmentsPage() {
   const open = useMemo(() => data.data?.holdings.filter((h) => !h.archived) ?? [], [data.data]);
   const archived = data.data?.holdings.filter((h) => h.archived) ?? [];
   const soldOut = open.filter(isSoldOut);
-  const paidOut = (data.data?.holdings ?? []).some((h) =>
+  const paidOut = (all.data?.holdings ?? []).some((h) =>
     h.trades.some((t) => t.type === 'dividend' || t.type === 'interest'),
   );
   const [params, setParams] = useSearchParams();
@@ -79,7 +126,8 @@ export function InvestmentsPage() {
     [data.data, s],
   );
   const activity =
-    dialog?.kind === 'activity' ? data.data?.holdings.find((h) => h.id === dialog.id) : undefined;
+    // from every holding: an edit may move it into a demat ticked off
+    dialog?.kind === 'activity' ? all.data?.holdings.find((h) => h.id === dialog.id) : undefined;
 
   return (
     <div className="space-y-5">
@@ -105,8 +153,35 @@ export function InvestmentsPage() {
       </div>
       <FormError error={data.error} />
 
+      {all.data && all.data.holdings.length > 0 && (
+        <DematAccounts
+          holdings={all.data.holdings}
+          currency={all.data.summary.currency}
+          hidden={hidden}
+          onHidden={hide}
+        />
+      )}
+
+      {hidden.length > 0 && (
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 text-sm text-slate-600 dark:text-slate-300"
+        >
+          Showing {rowKeys.length - hidden.length} of {rowKeys.length} accounts — the rest are left
+          out of everything below, also new holdings that go into them.
+          <button
+            type="button"
+            className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            onClick={() => hide([])}
+          >
+            Show all
+          </button>
+          {updating && <span className="text-slate-500">Updating…</span>}
+        </p>
+      )}
+
       {s && open.length > 0 && (
-        <>
+        <div className={clsx('space-y-5', updating && 'opacity-60')}>
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
             <CountAt />
             <LivePrices />
@@ -209,7 +284,6 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            <DematAccounts holdings={open} currency={s.currency} />
           </div>
           <div
             role="tabpanel"
@@ -229,10 +303,10 @@ export function InvestmentsPage() {
             className="space-y-5"
           >
             <DividendCheck empty={!paidOut} />
-            <PayoutTable />
+            <PayoutTable holdingIds={shownIds} />
             {/* Sold holdings' payouts count too (archived ones included). */}
             <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
-            <CorporateHistory />
+            <CorporateHistory holdingIds={shownIds} />
           </div>
           <div
             role="tabpanel"
@@ -252,7 +326,7 @@ export function InvestmentsPage() {
               </section>
             )}
           </div>
-        </>
+        </div>
       )}
 
       {data.data && data.data.holdings.length === 0 && (

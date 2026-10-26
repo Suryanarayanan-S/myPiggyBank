@@ -388,7 +388,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
 
   // Holdings: a broker-style table, sortable and searchable.
   await page.getByRole('tab', { name: 'Holdings (2)' }).click();
-  const rows = page.getByRole('table').getByRole('row');
+  const rows = page.getByRole('tabpanel').getByRole('table').getByRole('row');
   await expect(rows.nth(1)).toContainText('GOLDBEES'); // largest first
   await page.getByRole('button', { name: 'Net chg.' }).click(); // highest return first
   await page.getByRole('button', { name: 'Net chg.' }).click(); // then lowest first
@@ -407,6 +407,29 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await shot(page, '31-investments-holdings');
   const value = page.locator('section', { has: page.getByText('Value', { exact: true }) }).first();
   await expect(value).toContainText('₹6,37,036.40');
+
+  // The demats at the top choose what the whole page shows: a shared holding outside any demat
+  // makes a second row; Surya's demat ticked off leaves only it.
+  const other = (
+    await (
+      await page.request.post('/api/holdings', {
+        data: { name: 'TCS', kind: 'stock', symbol: 'TCS', currency: 'INR', ownerMemberId: null },
+      })
+    ).json()
+  ).data.id;
+  await page.request.post(`/api/holdings/${other}/trades`, {
+    data: { date: daysAgo(30), type: 'buy', units: '1', amount: 300_000 },
+  });
+  await page.reload();
+  await page.getByLabel('Show Surya · Zerodha · XVH685').uncheck();
+  await expect(page.getByText(/Showing 1 of 2 accounts/)).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Holdings (1)' })).toBeVisible();
+  // the last one shown stays
+  await expect(page.getByLabel('Show Shared · not in a demat account')).toBeDisabled();
+  await page.getByRole('button', { name: 'Show all' }).click();
+  await expect(page.getByRole('tab', { name: 'Holdings (3)' })).toBeVisible();
+  await page.request.delete(`/api/holdings/${other}`);
+  await page.reload();
 
   // Net worth can count the holdings at what was invested instead; the choice is kept.
   const countAt = page.getByLabel('Count in net worth and goals at');

@@ -19,23 +19,45 @@ export type DematRow = {
   weightBp: number;
 };
 
+/** Which demat a holding is in (one of `demats`), else whose it is: the Market filter's keys. */
+export const dematKey = (h: Pick<Holding, 'accountId' | 'ownerMemberId'>, demats: Set<string>) =>
+  h.accountId && demats.has(h.accountId) ? h.accountId : `person:${h.ownerMemberId ?? ''}`;
+
+/**
+ * The demats and people left out, among those listed (a closed demat drops out by itself);
+ * never all of them — then nothing is left out.
+ */
+export function hiddenAmong(hidden: string[], keys: string[]): string[] {
+  const out = hidden.filter((k) => keys.includes(k));
+  return out.length >= keys.length ? [] : out;
+}
+
+/**
+ * A row for each demat, and each person outside one, that has holdings (sold ones and ones
+ * without a price too — at 0, so every holding can be ticked off): cost and worth of what is
+ * held and priced.
+ */
 export function byDemat(holdings: Holding[], demats: Set<string>): DematRow[] {
   const sums = new Map<string, DematRow>();
+  const row = (h: Holding) => {
+    const key = dematKey(h, demats);
+    return (
+      sums.get(key) ?? {
+        key,
+        accountId: key.startsWith('person:') ? null : key,
+        ownerMemberId: h.ownerMemberId,
+        cost: 0,
+        value: 0,
+        gain: 0,
+        returnBp: null,
+        weightBp: 0,
+      }
+    );
+  };
+  for (const h of holdings) sums.set(dematKey(h, demats), row(h));
   for (const r of ranked(holdings)) {
-    const h = r.holding;
-    const accountId = h.accountId && demats.has(h.accountId) ? h.accountId : null;
-    const key = accountId ?? `person:${h.ownerMemberId ?? ''}`;
-    const s = sums.get(key) ?? {
-      key,
-      accountId,
-      ownerMemberId: h.ownerMemberId,
-      cost: 0,
-      value: 0,
-      gain: 0,
-      returnBp: null,
-      weightBp: 0,
-    };
-    sums.set(key, { ...s, cost: s.cost + r.cost, value: s.value + r.value });
+    const s = row(r.holding);
+    sums.set(s.key, { ...s, cost: s.cost + r.cost, value: s.value + r.value });
   }
   const total = [...sums.values()].reduce((t, s) => t + s.value, 0);
   return [...sums.values()]

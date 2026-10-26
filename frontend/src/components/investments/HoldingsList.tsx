@@ -52,7 +52,6 @@ export function HoldingsList({
 }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('');
-  const [person, setPerson] = useState('');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'value',
     dir: 'desc',
@@ -60,7 +59,6 @@ export function HoldingsList({
   const all = listed(holdings, currency);
   // The latest market day's move; "—" for holdings without one (see dayChanges).
   const day = useMemo(() => dayChanges(holdings), [holdings]);
-  const people = [...new Set(all.map((r) => owner(r.holding.ownerMemberId)))].sort();
   const kinds = [...new Set(all.map((r) => r.holding.kind))];
   const needle = q.trim().toLowerCase();
   const shown = sortHoldings(
@@ -69,8 +67,7 @@ export function HoldingsList({
         (!needle ||
           r.holding.name.toLowerCase().includes(needle) ||
           (r.holding.symbol ?? '').toLowerCase().includes(needle)) &&
-        (!kind || r.holding.kind === kind) &&
-        (!person || owner(r.holding.ownerMemberId) === person),
+        (!kind || r.holding.kind === kind),
     ),
     sort.key,
     sort.dir,
@@ -129,19 +126,6 @@ export function HoldingsList({
               <option key={k} value={k}>
                 {HOLDING_KINDS[k]}
               </option>
-            ))}
-          </Select>
-        )}
-        {people.length > 1 && (
-          <Select
-            aria-label="Person"
-            className="!w-auto"
-            value={person}
-            onChange={(e) => setPerson(e.target.value)}
-          >
-            <option value="">Everyone</option>
-            {people.map((p) => (
-              <option key={p}>{p}</option>
             ))}
           </Select>
         )}

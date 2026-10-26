@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byDemat, dematWorth, firstDematTakes } from './demat';
+import { byDemat, dematKey, dematWorth, firstDematTakes, hiddenAmong } from './demat';
 import type { Holding } from './investments';
 
 const h = (p: Partial<Holding>) =>
@@ -135,5 +135,37 @@ describe('what a first demat takes', () => {
   });
   it('takes nothing when the person already has a demat', () => {
     expect(firstDematTakes(list, accounts, 'appa')).toBe(0);
+  });
+});
+
+describe('the Market filter', () => {
+  it('keys a holding by its demat, else by its person', () => {
+    const demats = new Set(['z']);
+    expect(dematKey({ accountId: 'z', ownerMemberId: 's' }, demats)).toBe('z');
+    expect(dematKey({ accountId: 'bank', ownerMemberId: 's' }, demats)).toBe('person:s');
+    expect(dematKey({ accountId: null, ownerMemberId: null }, demats)).toBe('person:');
+  });
+  it('leaves out only listed ones, and never all', () => {
+    expect(hiddenAmong(['z', 'gone'], ['z', 'person:a'])).toEqual(['z']);
+    expect(hiddenAmong(['z', 'person:a'], ['z', 'person:a'])).toEqual([]);
+    expect(hiddenAmong([], ['z'])).toEqual([]);
+  });
+});
+
+describe('rows to tick off', () => {
+  it('lists a demat even when nothing in it has a price yet, or all of it is sold', () => {
+    const rows = byDemat(
+      [
+        h({ accountId: 'z', inView: { value: 100, cost: 50 } }),
+        h({ accountId: 'fresh', inView: null }),
+        h({ ownerMemberId: 'appa', archived: true, inView: null }),
+      ],
+      new Set(['z', 'fresh']),
+    );
+    expect(rows.map((r) => [r.key, r.value])).toEqual([
+      ['z', 100],
+      ['fresh', 0],
+      ['person:appa', 0],
+    ]);
   });
 });

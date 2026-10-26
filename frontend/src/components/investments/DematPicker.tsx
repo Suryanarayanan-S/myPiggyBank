@@ -41,7 +41,7 @@ export type Demat = { accountId: string | null; ownerMemberId: string | null };
 export function useDemats() {
   return useDematsLoaded()[0];
 }
-function useDematsLoaded() {
+export function useDematsLoaded() {
   const accounts = useAccounts();
   const list = (accounts.data ?? []).filter((a) => a.type === 'investment' && !a.archived);
   return [list, !!accounts.data] as const;

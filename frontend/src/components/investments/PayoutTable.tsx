@@ -43,7 +43,12 @@ const WORD: Record<PayoutKind, { one: string; many: string }> = {
  * Where each dividend and interest payment came from and when: like Console's report — a type, a
  * period, the total, a searchable table (sorted by any column) and a CSV of what is shown.
  */
-export function PayoutTable() {
+export function PayoutTable({
+  holdingIds = null,
+}: {
+  /** only these holdings' (the demats chosen on the Market page); null: all */
+  holdingIds?: Set<string> | null;
+}) {
   const today = localDay();
   const members = useMembers();
   const list = useQuery({
@@ -58,9 +63,13 @@ export function PayoutTable() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ by: PayoutSort; desc: boolean }>({ by: 'date', desc: true });
   const range = period === 'custom' ? custom : rangeOf(period, today);
+  const mine = useMemo(
+    () => (list.data ?? []).filter((r) => !holdingIds || holdingIds.has(r.holdingId)),
+    [list.data, holdingIds],
+  );
   const rows = useMemo(
     () =>
-      selectPayouts(list.data ?? [], {
+      selectPayouts(mine, {
         kind,
         from: range.from,
         to: range.to,
@@ -68,11 +77,11 @@ export function PayoutTable() {
         sort: sort.by,
         desc: sort.desc,
       }),
-    [list.data, kind, range.from, range.to, search, sort],
+    [mine, kind, range.from, range.to, search, sort],
   );
   const totals = payoutTotals(rows);
   // the person's name when the family's payouts are on more than one person's holdings
-  const owners = new Set((list.data ?? []).map((r) => r.ownerMemberId));
+  const owners = new Set(mine.map((r) => r.ownerMemberId));
   const ownerName = (id: string | null) => members.data?.find((m) => m.id === id)?.name ?? 'Shared';
   const word = WORD[kind];
 

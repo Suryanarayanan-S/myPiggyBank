@@ -163,14 +163,38 @@ async function checkRefs(
 const demat = (a: { type: string; archived: boolean; ownerMemberId: string | null } | null) =>
   a && a.type === 'investment' && !a.archived ? { ownerMemberId: a.ownerMemberId } : {};
 
-/** Holdings with their numbers, plus the totals in one currency (default: wealth currency). */
-export async function listHoldings(prisma: PrismaClient, familyId: string, view?: string) {
-  const [rows, family, rates, members] = await Promise.all([
+/**
+ * Which demat a holding is in (an open account of the type Investment), else whose it is
+ * ("person:<id>", "person:" when shared): what the Market page filters by.
+ */
+export const dematKey = (
+  h: { accountId: string | null; ownerMemberId: string | null },
+  demats: Set<string>,
+) => (h.accountId && demats.has(h.accountId) ? h.accountId : `person:${h.ownerMemberId ?? ''}`);
+
+/**
+ * Holdings with their numbers, plus the totals in one currency (default: wealth currency) —
+ * without the demats and people in `hide`.
+ */
+export async function listHoldings(
+  prisma: PrismaClient,
+  familyId: string,
+  view?: string,
+  hide: string[] = [],
+) {
+  const [all, family, rates, members, demats] = await Promise.all([
     load(prisma, familyId),
     getFamily(prisma, familyId),
     loadRates(prisma, familyId),
     prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
+    prisma.account.findMany({
+      where: { familyId, type: 'investment', archived: false },
+      select: { id: true },
+    }),
   ]);
+  const open = new Set(demats.map((a) => a.id));
+  const hidden = new Set(hide);
+  const rows = all.filter((h) => !hidden.has(dematKey(h, open)));
   // Industry and size group of rupee holdings listed on NSE (when downloaded).
   const keyOf = (h: { currency: string; symbol: string | null }) =>
     h.currency === 'INR' && h.symbol ? plainSymbol(h.symbol) : null;

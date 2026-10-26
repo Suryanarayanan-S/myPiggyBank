@@ -20,6 +20,8 @@ const BenchmarkQuery = z.object({
     .optional(),
 });
 const SubParams = z.object({ id: z.uuid(), subId: z.uuid() });
+/** `hide`: demats (account ids) and people outside one ("person:<id>") left out, comma-separated */
+const HoldingsQuery = ViewQuery.extend({ hide: z.string().max(4000).optional() });
 
 export const holdingRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -114,9 +116,17 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       ),
     };
   });
-  app.get('/holdings', async (req) => ({
-    data: await h.listHoldings(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
-  }));
+  app.get('/holdings', async (req) => {
+    const q = parse(HoldingsQuery, req.query);
+    return {
+      data: await h.listHoldings(
+        app.prisma,
+        fam(req),
+        q.currency,
+        q.hide?.split(',').filter(Boolean) ?? [],
+      ),
+    };
+  });
   app.post('/holdings', async (req, reply) =>
     reply.status(201).send({
       data: await h.createHolding(app.prisma, fam(req), parse(h.HoldingCreate, req.body)),

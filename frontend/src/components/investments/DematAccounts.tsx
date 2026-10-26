@@ -18,8 +18,21 @@ import { NewDematForm, useDemats } from './DematPicker';
 /**
  * Like a broker's sub-account breakdown: what each family member's demat cost and is worth, and
  * its share. Holdings in no demat yet are listed by person, with a way to move them into theirs.
+ * Each row can be ticked off: the whole Market page then shows the ticked ones only.
  */
-export function DematAccounts({ holdings, currency }: { holdings: Holding[]; currency: string }) {
+export function DematAccounts({
+  holdings,
+  currency,
+  hidden,
+  onHidden,
+}: {
+  /** every open holding (the rows stay, whatever is ticked) */
+  holdings: Holding[];
+  currency: string;
+  /** keys of the rows ticked off */
+  hidden: string[];
+  onHidden: (keys: string[]) => void;
+}) {
   const queryClient = useQueryClient();
   const members = useMembers();
   const demats = useDemats();
@@ -41,6 +54,11 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
   const totalBp =
     total.cost > 0 ? Math.round(((total.value - total.cost) * 10_000) / total.cost) : null;
   const loose = rows.some((r) => !r.accountId);
+  // with one row there is nothing to choose
+  const choose = rows.length > 1;
+  const shown = rows.filter((r) => !hidden.includes(r.key));
+  const toggle = (key: string) =>
+    onHidden(hidden.includes(key) ? hidden.filter((k) => k !== key) : [...hidden, key].sort());
 
   return (
     <Card
@@ -57,7 +75,23 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500 dark:border-slate-800">
               <th scope="col" className="py-2 font-medium">
-                Account
+                {choose ? (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hidden.length === 0}
+                      // some shown: partly selected
+                      ref={(el) => {
+                        if (el) el.indeterminate = hidden.length > 0;
+                      }}
+                      // ticking every one off is not offered: it only selects all
+                      onChange={() => onHidden([])}
+                    />
+                    Account <span className="font-normal">(select all)</span>
+                  </label>
+                ) : (
+                  'Account'
+                )}
               </th>
               <th scope="col" className="py-2 text-right font-medium">
                 Buy value
@@ -81,31 +115,51 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
               // a demat is its owner's, whoever its holdings were entered for
               const who = demat ? demat.ownerMemberId : r.ownerMemberId;
               return (
-                <tr key={r.key}>
+                <tr key={r.key} className={clsx(hidden.includes(r.key) && 'opacity-50')}>
                   <th scope="row" className="py-2.5 text-left font-normal">
-                    <p className="font-medium">{person(who)}</p>
-                    {demat ? (
-                      <p className="text-xs text-slate-500">{demat.name}</p>
-                    ) : theirs.length > 0 ? (
-                      <Select
-                        aria-label={`Move ${person(r.ownerMemberId)}’s holdings into a demat account`}
-                        className="mt-1 !w-auto !py-1 !text-xs"
-                        value=""
-                        disabled={move.isPending}
-                        onChange={(e) => e.target.value && move.mutate(e.target.value)}
-                      >
-                        <option value="">Not in a demat account — move into…</option>
-                        {theirs.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
-                        Not in a demat account
-                      </p>
-                    )}
+                    <div className="flex items-start gap-2">
+                      {choose && (
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          aria-label={`Show ${person(who)} · ${demat ? demat.name : 'not in a demat account'}`}
+                          checked={!hidden.includes(r.key)}
+                          // the last one shown stays
+                          disabled={!hidden.includes(r.key) && shown.length === 1}
+                          title={
+                            !hidden.includes(r.key) && shown.length === 1
+                              ? 'At least one account stays shown'
+                              : undefined
+                          }
+                          onChange={() => toggle(r.key)}
+                        />
+                      )}
+                      <div>
+                        <p className="font-medium">{person(who)}</p>
+                        {demat ? (
+                          <p className="text-xs text-slate-500">{demat.name}</p>
+                        ) : theirs.length > 0 ? (
+                          <Select
+                            aria-label={`Move ${person(r.ownerMemberId)}’s holdings into a demat account`}
+                            className="mt-1 !w-auto !py-1 !text-xs"
+                            value=""
+                            disabled={move.isPending}
+                            onChange={(e) => e.target.value && move.mutate(e.target.value)}
+                          >
+                            <option value="">Not in a demat account — move into…</option>
+                            {theirs.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            Not in a demat account
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </th>
                   <td className="py-2.5 text-right">{money(r.cost)}</td>
                   <td className="py-2.5 text-right">{money(r.value)}</td>

@@ -12,8 +12,7 @@ import { formatRate } from '../domain/currency.js';
 import { parseDay } from '../lib/dates.js';
 import type { Db } from '../lib/db.js';
 import { AppError } from '../lib/errors.js';
-import { MAX_FILE_CHARS } from './holdingImportService.js';
-import { assertMember } from './ownership.js';
+import { MAX_FILE_CHARS, dematOf, inDemat } from './holdingImportService.js';
 
 const CURRENCY = 'INR';
 const MAX_ROWS = 20_000;
@@ -22,6 +21,7 @@ const MAX_ROWS = 20_000;
 function rupeeHoldings(db: Db, familyId: string) {
   return db.holding.findMany({
     where: { familyId, currency: CURRENCY, symbol: { not: null } },
+    include: { account: { select: { type: true, archived: true } } },
     orderBy: [{ archived: 'asc' }, { createdAt: 'asc' }],
   });
 }
@@ -42,6 +42,8 @@ export const TradebookImportInput = z.object({
   data: z.string().max(MAX_FILE_CHARS),
   /** Whose demat the tradebook is for (null: shared). */
   ownerMemberId: z.uuid().nullable(),
+  /** The demat account it is for: its owner decides whose the holdings are. */
+  accountId: z.uuid().nullable().optional(),
 });
 type Input = z.output<typeof TradebookImportInput>;
 
@@ -60,10 +62,10 @@ function readFile(input: Input) {
 type Action = 'replace' | 'history' | 'mismatch' | 'not-held' | 'oversold' | 'several';
 
 async function plan(db: Db, familyId: string, input: Input) {
-  if (input.ownerMemberId) await assertMember(db, familyId, input.ownerMemberId);
+  const demat = await dematOf(db, familyId, input);
   const file = readFile(input);
   const all = await rupeeHoldings(db, familyId);
-  const mine = bySymbol(all.filter((h) => h.ownerMemberId === input.ownerMemberId));
+  const mine = bySymbol(all.filter(inDemat(demat)));
   const units = new Map(
     (
       await db.holdingTrade.groupBy({
@@ -108,7 +110,7 @@ async function plan(db: Db, familyId: string, input: Input) {
   const notInFile = [...mine]
     .filter(([symbol, list]) => !inFile.has(symbol) && list.some((h) => heldUnits(h.id) > 0))
     .map(([, list]) => list.find((h) => heldUnits(h.id) > 0)!.symbol!);
-  return { symbols, notInFile, errors: file.errors };
+  return { demat, symbols, notInFile, errors: file.errors };
 }
 
 const REASON: Record<Action, string> = {
@@ -164,6 +166,16 @@ export async function commitTradebookImport(prisma: PrismaClient, familyId: stri
             where: { holdingId: s.holding!.id, type: { in: ['buy', 'sell'] } },
           });
           await tx.holdingTrade.createMany({ data: data(s.holding!.id, s.trades) });
+          const h = s.holding!;
+          if (
+            p.demat.accountId &&
+            (h.accountId !== p.demat.accountId || h.ownerMemberId !== p.demat.owner)
+          ) {
+            await tx.holding.update({
+              where: { id: h.id },
+              data: { accountId: p.demat.accountId, ownerMemberId: p.demat.owner },
+            });
+          }
           replaced++;
         } else if (s.action === 'history') {
           const h = await tx.holding.create({
@@ -173,7 +185,8 @@ export async function commitTradebookImport(prisma: PrismaClient, familyId: stri
               kind: kindOf(s.symbol),
               symbol: s.symbol,
               currency: CURRENCY,
-              ownerMemberId: input.ownerMemberId,
+              ownerMemberId: p.demat.owner,
+              accountId: p.demat.accountId,
               archived: true,
               note: 'Added by the tradebook import: sold',
             },

@@ -375,4 +375,152 @@ describe('importing broker holdings', () => {
       expect((await tradebook('preview', first)).statusCode).toBe(400);
     });
   });
+  describe('demat accounts', () => {
+    const HEAD =
+      'symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time';
+    const book = (...lines: string[]) =>
+      Buffer.from([HEAD, ...lines].join('\n')).toString('base64');
+    const demat = async (name: string, ownerMemberId: string | null, type = 'investment') =>
+      (await call('POST', '/api/accounts', { name, type, currency: 'INR', ownerMemberId })).json()
+        .data.id as string;
+    const all = async () =>
+      (await call('GET', '/api/holdings')).json().data.holdings as {
+        symbol: string;
+        ownerMemberId: string | null;
+        accountId: string | null;
+        units: string;
+        archived: boolean;
+      }[];
+
+    it('imports into a demat account: its owner\'s holdings, kept in it', async () => {
+      const zerodha = await demat('Zerodha · OYM940', appa);
+      // the account decides whose they are, whatever person is sent
+      const r = await commit(first, { ownerMemberId: surya, accountId: zerodha });
+      expect(r.json().data).toMatchObject({ created: 3 });
+      expect((await all()).every((h) => h.ownerMemberId === appa && h.accountId === zerodha)).toBe(
+        true,
+      );
+      // the tradebook into the same demat finds them; sold shares land in it too
+      const tb = book(
+        'INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,32,1300,1,1,x',
+        'ADANIPORTS,X,2021-03-03,NSE,EQ,EQ,buy,false,10,745.83,5,5,x',
+        'ADANIPORTS,X,2021-03-19,NSE,EQ,EQ,sell,false,10,682.04,6,6,x',
+      );
+      const res = await call('POST', '/api/holdings/tradebook/commit', {
+        fileName: 'tradebook.csv',
+        data: tb,
+        ownerMemberId: null,
+        accountId: zerodha,
+      });
+      expect(res.json().data).toMatchObject({ replaced: 1, history: 1 });
+      const ports = (await all()).find((h) => h.symbol === 'ADANIPORTS')!;
+      expect(ports).toMatchObject({ ownerMemberId: appa, accountId: zerodha, archived: true });
+    });
+
+    it('moves a person\'s holdings without a demat into the first one imported', async () => {
+      await commit(first);
+      const zerodha = await demat('Zerodha · XVH685', surya);
+      await call('POST', '/api/holdings/tradebook/commit', {
+        fileName: 'tradebook.csv',
+        data: book('INFY,X,2021-03-01,NSE,EQ,EQ,buy,false,32,1300,1,1,x'),
+        ownerMemberId: surya,
+        accountId: zerodha,
+      });
+      expect((await all()).find((h) => h.symbol === 'INFY')!.accountId).toBe(zerodha);
+      // a holdings file into the demat updates them (nothing created twice)
+      const r = await commit(first, { accountId: zerodha });
+      expect(r.json().data).toMatchObject({ created: 0 });
+      expect((await all()).every((h) => h.accountId === zerodha)).toBe(true);
+    });
+
+    it('keeps two demats of one person apart', async () => {
+      const one = await demat('Zerodha', surya);
+      const two = await demat('Groww', surya);
+      await commit(first, { accountId: one });
+      const r = await commit(first, { accountId: two });
+      expect(r.json().data).toMatchObject({ created: 3 });
+      const infy = (await all()).filter((h) => h.symbol === 'INFY');
+      expect(infy.map((h) => h.accountId).sort()).toEqual([one, two].sort());
+    });
+
+    it('moves a person\'s holdings outside a demat into theirs, archived ones too', async () => {
+      await commit(first);
+      await commit(first, { ownerMemberId: appa });
+      const old = await call('POST', '/api/holdings', {
+        name: 'OLD',
+        kind: 'stock',
+        symbol: 'OLD',
+        currency: 'INR',
+        ownerMemberId: surya,
+        archived: true,
+      });
+      expect(old.statusCode).toBe(201);
+      const zerodha = await demat('Zerodha · XVH685', surya);
+      const move = (body: object) => call('POST', '/api/holdings/move-to-demat', body);
+      const usd = await call('POST', '/api/holdings', {
+        name: 'AAPL',
+        kind: 'stock',
+        symbol: 'AAPL',
+        currency: 'USD',
+        ownerMemberId: surya,
+      });
+      expect(usd.statusCode).toBe(201);
+      const r = await move({ accountId: zerodha });
+      expect(r.json().data).toEqual({ moved: 4 });
+      const list = await all();
+      expect(list.filter((h) => h.accountId === zerodha)).toHaveLength(4);
+      // Appa's stay where they were; dollar shares are not in an Indian demat
+      expect(list.filter((h) => h.ownerMemberId === appa).every((h) => !h.accountId)).toBe(true);
+      expect(list.find((h) => h.symbol === 'AAPL')!.accountId).toBeNull();
+    });
+
+    it('lets the demat decide whose its holdings are', async () => {
+      const zerodha = await demat('Zerodha · OYM940', appa);
+      await commit(first, { accountId: zerodha });
+      const infy = (await all()).find((h) => h.symbol === 'INFY') as unknown as { id: string };
+      // a holding in it entered for someone else stays the demat owner's
+      await call('PUT', `/api/holdings/${infy.id}`, { ownerMemberId: surya });
+      expect((await all()).find((h) => h.symbol === 'INFY')!.ownerMemberId).toBe(appa);
+      // the demat given to another person: its holdings follow, and imports still find them
+      await call('PUT', `/api/accounts/${zerodha}`, { ownerMemberId: surya });
+      expect((await all()).every((h) => h.ownerMemberId === surya)).toBe(true);
+      const r = await commit(first, { accountId: zerodha });
+      expect(r.json().data).toMatchObject({ created: 0 });
+      expect(await all()).toHaveLength(3);
+    });
+
+    it('without a demat touches only the person\'s holdings outside one', async () => {
+      const zerodha = await demat('Zerodha', surya);
+      await commit(first, { accountId: zerodha });
+      const r = await commit(file('"INFY",5,1000,1000,5000,5000,0,0,0,""'), {
+        sellMissing: true,
+      });
+      expect(r.json().data).toMatchObject({ created: 1, sold: 0 });
+      const infy = (await all()).filter((h) => h.symbol === 'INFY');
+      expect(infy.map((h) => [h.accountId, h.units]).sort()).toEqual(
+        [
+          [zerodha, '32'],
+          [null, '5'],
+        ].sort(),
+      );
+    });
+
+    it('treats a closed demat\'s holdings as in none: a new demat takes them', async () => {
+      const old = await demat('Upstox', surya);
+      await commit(first, { accountId: old });
+      await call('PUT', `/api/accounts/${old}`, { archived: true });
+      const zerodha = await demat('Zerodha', surya);
+      const r = await commit(first, { accountId: zerodha });
+      expect(r.json().data).toMatchObject({ created: 0 });
+      expect((await all()).every((h) => h.accountId === zerodha)).toBe(true);
+    });
+
+    it('takes only an investment account of the family', async () => {
+      const bank = await demat('ICICI', surya, 'savings');
+      const res = await commit(first, { accountId: bank });
+      expect(res.statusCode).toBe(400);
+      const missing = await commit(first, { accountId: '00000000-0000-4000-8000-000000000000' });
+      expect(missing.statusCode).toBe(404);
+    });
+  });
 });

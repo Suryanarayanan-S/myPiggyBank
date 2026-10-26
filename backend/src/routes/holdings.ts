@@ -57,6 +57,9 @@ export const holdingRoutes: FastifyPluginAsync = async (app) => {
       parse(tb.TradebookImportInput, req.body),
     ),
   }));
+  app.post('/holdings/move-to-demat', async (req) => ({
+    data: await hi.moveToDemat(app.prisma, fam(req), parse(hi.MoveToDematInput, req.body)),
+  }));
   // NSE's corporate-action history: dividends, gold bond interest, splits and mergers.
   const sources = () => {
     if (!app.livePrices) {

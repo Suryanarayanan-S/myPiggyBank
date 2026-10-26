@@ -12,12 +12,13 @@ import { IncomeChart } from '../components/investments/IncomeChart';
 import { TradebookImport } from '../components/investments/TradebookImport';
 import { DividendCheck } from '../components/investments/DividendCheck';
 import { CorporateHistory } from '../components/investments/CorporateHistory';
-import { Shares, Tile } from '../components/investments/Tiles';
+import { Tile } from '../components/investments/Tiles';
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
 import { PayoutTable } from '../components/investments/PayoutTable';
 import { SameMoney } from '../components/investments/SameMoney';
+import { DematAccounts } from '../components/investments/DematAccounts';
 import { ValueOverTime } from '../components/investments/ValueOverTime';
 import { isSoldOut, listed, portfolioXirr, profitSplit } from '../lib/portfolio';
 import { localDay } from '../lib/months';
@@ -208,14 +209,7 @@ export function InvestmentsPage() {
               currency={s.currency}
               onOpen={(id) => setDialog({ kind: 'activity', id })}
             />
-            {/* The account split is in the donuts; by person only when there is more than one. */}
-            {s.byMember.length > 1 && (
-              <Shares
-                title="By person"
-                currency={s.currency}
-                rows={s.byMember.map((m) => ({ label: m.name, value: m.value }))}
-              />
-            )}
+            <DematAccounts holdings={open} currency={s.currency} />
           </div>
           <div
             role="tabpanel"

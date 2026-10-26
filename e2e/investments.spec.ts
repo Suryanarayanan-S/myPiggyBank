@@ -228,7 +228,12 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
     .click();
   await page.getByRole('button', { name: 'Import from Zerodha' }).click();
   const d = page.getByRole('dialog', { name: 'Import holdings' });
-  await expect(d.getByLabel('Whose demat is this?')).toHaveValue(/.+/); // the logged-in person
+  await expect(d.getByLabel('Which demat is this?')).toHaveValue(/.+/); // the logged-in person
+  // a demat account of their own, made on the spot
+  await d.getByLabel('Which demat is this?').selectOption({ label: 'New demat account…' });
+  await d.getByLabel('Demat name').fill('Zerodha · XVH685');
+  await d.getByRole('button', { name: 'Add demat account' }).click();
+  await expect(d.getByLabel('Which demat is this?')).toHaveValue(/^a:/);
   await d.getByLabel('Holdings file (CSV)').setInputFiles({
     name: 'holdings.csv',
     mimeType: 'text/csv',
@@ -295,6 +300,9 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
 
   // Overview: what weighs most, and what moved most.
   await page.getByRole('tab', { name: 'Overview' }).click();
+  const demats = page.getByRole('table', { name: 'Holdings by demat account' });
+  await expect(demats.getByRole('row').nth(1)).toContainText('Zerodha · XVH685');
+  await expect(demats.getByRole('row').nth(1)).toContainText('100.0 %');
   const biggest = page.locator('section', {
     has: page.getByRole('heading', { name: 'Biggest holdings' }),
   });

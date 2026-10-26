@@ -13,7 +13,7 @@ import { formatRate } from '../domain/currency.js';
 import { computeHolding, valueOf, type Trade } from '../domain/holdings.js';
 import { formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
-import { assertMember } from './ownership.js';
+import { assertAccount, assertMember } from './ownership.js';
 import { awaitingCredit } from './corporateActionService.js';
 
 /** Zerodha (Kite) holdings are Indian instruments, priced in rupees. */
@@ -27,6 +27,8 @@ export const HoldingImportInput = z.object({
   data: z.string().max(MAX_FILE_CHARS),
   /** Whose demat the file comes from (null: shared). */
   ownerMemberId: z.uuid().nullable(),
+  /** The demat account it comes from: its owner decides whose the holdings are. */
+  accountId: z.uuid().nullable().optional(),
   /** A manual asset these holdings replace: it gets a value of 0 today (history kept). */
   retireAssetId: z.uuid().nullable().optional(),
   /** Holdings of this person that are not in the file are sold at their last price today. */
@@ -55,6 +57,7 @@ async function rupeeHoldings(db: Db, familyId: string) {
       trades: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
       prices: true,
       owner: { select: { name: true } },
+      account: { select: { type: true, archived: true } },
       actions: { where: { status: 'applied' } },
     },
     orderBy: { createdAt: 'asc' },
@@ -82,13 +85,78 @@ async function rupeeHoldings(db: Db, familyId: string) {
 }
 type Existing = Awaited<ReturnType<typeof rupeeHoldings>>[number];
 
+/** Whose holdings an import is for: a demat account's (its owner's), or a person's. */
+export type Demat = { owner: string | null; accountId: string | null };
+
+export async function dematOf(
+  db: Db,
+  familyId: string,
+  input: { ownerMemberId: string | null; accountId?: string | null },
+): Promise<Demat> {
+  if (input.accountId) {
+    const a = await assertAccount(db, familyId, input.accountId);
+    if (a.type !== 'investment') {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        'Choose a demat account (an account of the type Investment)',
+      );
+    }
+    return { owner: a.ownerMemberId, accountId: a.id };
+  }
+  if (input.ownerMemberId) await assertMember(db, familyId, input.ownerMemberId);
+  return { owner: input.ownerMemberId, accountId: null };
+}
+
+type Placed = {
+  ownerMemberId: string | null;
+  accountId: string | null;
+  account: { type: string; archived: boolean } | null;
+};
+/** In no open demat: no account, one that is not a demat, or a closed (archived) demat. */
+const loose = (h: Placed) => !h.account || h.account.type !== 'investment' || h.account.archived;
+
 /**
- * The person's holdings by symbol. With two of the same symbol, the open one with the most
+ * A holding the import may update: one in this demat (whoever it was entered for: the demat
+ * decides), or one of the person's in no open demat (it is moved into it). Without a demat,
+ * only the person's in none — never another demat's.
+ */
+export const inDemat = (d: Demat) => (h: Placed) =>
+  (d.accountId !== null && h.accountId === d.accountId) ||
+  (loose(h) && h.ownerMemberId === d.owner);
+
+export const MoveToDematInput = z.object({ accountId: z.uuid() });
+
+/** The demat owner's rupee holdings in no open demat moved into it. */
+export async function moveToDemat(
+  prisma: PrismaClient,
+  familyId: string,
+  input: z.output<typeof MoveToDematInput>,
+) {
+  const d = await dematOf(prisma, familyId, { ownerMemberId: null, accountId: input.accountId });
+  const { count } = await prisma.holding.updateMany({
+    where: {
+      familyId,
+      ownerMemberId: d.owner,
+      currency: CURRENCY,
+      OR: [
+        { accountId: null },
+        { account: { type: { not: 'investment' } } },
+        { account: { archived: true } },
+      ],
+    },
+    data: { accountId: d.accountId },
+  });
+  return { moved: count };
+}
+
+/**
+ * The demat's holdings by symbol. With two of the same symbol, the open one with the most
  * units is the one kept up to date (deterministic, never both).
  */
-function byOwner(all: Existing[], owner: string | null) {
+function byOwner(all: Existing[], d: Demat) {
   const map = new Map<string, Existing>();
-  for (const e of all.filter((x) => x.holding.ownerMemberId === owner)) {
+  for (const e of all.filter((x) => inDemat(d)(x.holding))) {
     const had = map.get(e.key);
     const better =
       !had ||
@@ -97,10 +165,6 @@ function byOwner(all: Existing[], owner: string | null) {
     if (better) map.set(e.key, e);
   }
   return map;
-}
-
-async function checkOwner(db: Db, familyId: string, owner: string | null) {
-  if (owner) await assertMember(db, familyId, owner);
 }
 
 /** The manual asset to retire must be this family's, an investment, in rupees. */
@@ -118,10 +182,10 @@ async function retireTarget(db: Db, familyId: string, id: string) {
 }
 
 export async function previewHoldingImport(prisma: PrismaClient, familyId: string, input: Input) {
-  await checkOwner(prisma, familyId, input.ownerMemberId);
+  const d = await dematOf(prisma, familyId, input);
   const { rows, errors } = readFile(input);
   const all = await rupeeHoldings(prisma, familyId);
-  const mine = byOwner(all, input.ownerMemberId);
+  const mine = byOwner(all, d);
   const inFile = new Set(rows.map((r) => r.symbol));
   const out = rows.map((r) => {
     const had = mine.get(r.symbol);
@@ -141,7 +205,7 @@ export async function previewHoldingImport(prisma: PrismaClient, familyId: strin
           .filter(
             (e) =>
               e.key === r.symbol &&
-              e.holding.ownerMemberId !== input.ownerMemberId &&
+              !inDemat(d)(e.holding) &&
               e.units > 0 &&
               !e.holding.archived,
           )
@@ -162,8 +226,8 @@ export async function previewHoldingImport(prisma: PrismaClient, familyId: strin
   });
 
   // Manual assets that may hold the same money, so it is not counted twice.
-  const owner = input.ownerMemberId
-    ? await prisma.familyMember.findUnique({ where: { id: input.ownerMemberId } })
+  const owner = d.owner
+    ? await prisma.familyMember.findUnique({ where: { id: d.owner } })
     : null;
   const [assets, links] = await Promise.all([
     prisma.asset.findMany({
@@ -239,9 +303,9 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
   // Read and write in one transaction, so two imports at once cannot both create a holding.
   await prisma.$transaction(
     async (tx) => {
-      await checkOwner(tx, familyId, input.ownerMemberId);
+      const d = await dematOf(tx, familyId, input);
       if (input.retireAssetId) await retireTarget(tx, familyId, input.retireAssetId);
-      const mine = byOwner(await rupeeHoldings(tx, familyId), input.ownerMemberId);
+      const mine = byOwner(await rupeeHoldings(tx, familyId), d);
       for (const r of rows) {
         const had = mine.get(r.symbol);
         const price = { date: today, price: r.price, source: 'import' };
@@ -253,7 +317,8 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
               symbol: r.symbol,
               kind: kindOf(r.symbol),
               currency: CURRENCY,
-              ownerMemberId: input.ownerMemberId,
+              ownerMemberId: d.owner,
+              accountId: d.accountId,
               note: `Imported from a Zerodha holdings file on ${date}`,
               trades: {
                 create: { date: today, type: 'buy', units: r.units, amount: r.invested },
@@ -296,13 +361,19 @@ export async function commitHoldingImport(prisma: PrismaClient, familyId: string
           create: { holdingId: id, ...price },
           update: { price: r.price, source: 'import' },
         });
-        if (had.holding.archived) {
+        const moved =
+          d.accountId !== null &&
+          (had.holding.accountId !== d.accountId || had.holding.ownerMemberId !== d.owner);
+        if (had.holding.archived || moved) {
           await tx.holding.update({
             where: { id },
             data: {
-              archived: false,
-              // held again: the dividend import's "no longer held" note is out of date
-              ...(had.holding.note?.startsWith('Added by the dividend import') && { note: null }),
+              ...(moved && { accountId: d.accountId, ownerMemberId: d.owner }),
+              ...(had.holding.archived && {
+                archived: false,
+                // held again: the dividend import's "no longer held" note is out of date
+                ...(had.holding.note?.startsWith('Added by the dividend import') && { note: null }),
+              }),
             },
           });
         }

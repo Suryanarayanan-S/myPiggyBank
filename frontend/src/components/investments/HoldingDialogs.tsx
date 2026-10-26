@@ -52,6 +52,9 @@ export function HoldingForm({
     note: holding?.note ?? '',
     archived: holding?.archived ?? false,
   });
+  const demat = accounts.data?.find(
+    (a) => a.id === f.accountId && a.type === 'investment' && !a.archived,
+  );
   const done = async () => {
     await refresh();
     onDone();
@@ -124,10 +127,16 @@ export function HoldingForm({
             ))}
           </Select>
         </Field>
-        <Field label="Belongs to" htmlFor="h-owner">
+        <Field
+          label="Belongs to"
+          htmlFor="h-owner"
+          hint={demat ? `The owner of ${demat.name}.` : undefined}
+        >
           <Select
             id="h-owner"
-            value={f.ownerMemberId}
+            // in a demat account: its owner's
+            value={demat ? (demat.ownerMemberId ?? '') : f.ownerMemberId}
+            disabled={!!demat}
             onChange={(e) => setF({ ...f, ownerMemberId: e.target.value })}
           >
             <option value="">Shared</option>

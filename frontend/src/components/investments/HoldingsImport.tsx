@@ -6,7 +6,7 @@ import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
 import { fileToBase64 } from '../../lib/files';
 import { formatMoney } from '../../lib/money';
-import { useMembers } from '../../lib/queries';
+import { DematPicker, useDematChoice, type Demat } from './DematPicker';
 
 type Status = 'new' | 'more' | 'less' | 'same';
 type Preview = {
@@ -29,7 +29,7 @@ type Preview = {
   assets: { id: string; name: string; value: number; suggested: boolean; goals: string[] }[];
 };
 type Result = { created: number; updated: number; unchanged: number; sold: number };
-type Request = { fileName: string; data: string; ownerMemberId: string | null };
+type Request = { fileName: string; data: string } & Demat;
 
 const STATUS: Record<Status, string> = {
   new: 'new',
@@ -41,15 +41,12 @@ const STATUS: Record<Status, string> = {
 /** Brings in a Zerodha (Kite) holdings CSV for one person: preview, then create or update. */
 export function HoldingsImport({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
-  const members = useMembers();
   const [file, setFile] = useState<{ fileName: string; data: string } | null>(null);
-  // undefined: not chosen yet (the logged-in person); null: shared.
-  const [owner, setOwner] = useState<string | null | undefined>(undefined);
+  const [demat, setDemat, ready] = useDematChoice();
   const [retire, setRetire] = useState('');
   const [sellMissing, setSellMissing] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const done = useRef<HTMLButtonElement>(null);
-  const ownerId = owner !== undefined ? owner : (members.data?.find((m) => m.isUser)?.id ?? null);
 
   const preview = useMutation({
     mutationFn: (body: Request) => api.post<Preview>('/holdings/import/preview', body),
@@ -74,8 +71,8 @@ export function HoldingsImport({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     if (commit.data) done.current?.focus();
   }, [commit.data]);
-  const run = (next: { fileName: string; data: string } | null, who: string | null) => {
-    if (next) preview.mutate({ ...next, ownerMemberId: who });
+  const run = (next: { fileName: string; data: string } | null, where: Demat) => {
+    if (next) preview.mutate({ ...next, ...where });
   };
   const retiring = preview.data?.assets.find((a) => a.id === retire);
 
@@ -108,30 +105,20 @@ export function HoldingsImport({ onDone }: { onDone: () => void }) {
         a later file updates quantities and prices.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Whose demat is this?" htmlFor="imp-owner">
-          <Select
-            id="imp-owner"
-            value={ownerId ?? ''}
-            onChange={(e) => {
-              const who = e.target.value || null;
-              setOwner(who);
-              run(file, who);
-            }}
-          >
-            {members.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-            <option value="">Shared</option>
-          </Select>
-        </Field>
+        <DematPicker
+          id="imp-demat"
+          value={demat}
+          onChange={(d) => {
+            setDemat(d);
+            run(file, d);
+          }}
+        />
         <Field label="Holdings file (CSV)" htmlFor="imp-file">
           <input
             id="imp-file"
             type="file"
             accept=".csv,text/csv"
-            disabled={!members.data}
+            disabled={!ready}
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm dark:file:bg-slate-800"
             onChange={async (e) => {
               const input = e.target;
@@ -143,7 +130,7 @@ export function HoldingsImport({ onDone }: { onDone: () => void }) {
               try {
                 const next = { fileName: f.name, data: await fileToBase64(f) };
                 setFile(next);
-                run(next, ownerId);
+                run(next, demat);
               } catch {
                 setReadError('This file could not be read. Download it again from Kite.');
               }

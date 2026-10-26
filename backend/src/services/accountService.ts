@@ -161,7 +161,16 @@ export async function updateAccount(
       'The currency cannot be changed while fixed deposits are linked to the account',
     );
   }
-  await prisma.account.update({ where: { id }, data: input });
+  await prisma.$transaction(async (tx) => {
+    const a = await tx.account.update({ where: { id }, data: input });
+    // A demat's holdings are its owner's: they follow a new owner.
+    if (a.type === 'investment') {
+      await tx.holding.updateMany({
+        where: { accountId: id },
+        data: { ownerMemberId: a.ownerMemberId },
+      });
+    }
+  });
   return getDto(prisma, familyId, id);
 }
 

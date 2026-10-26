@@ -15,6 +15,7 @@ import { api } from '../lib/api';
 import type { Converted } from '../lib/dashboardTypes';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 import { depositCount, useDeposits } from '../lib/deposits';
+import type { HoldingsResponse } from '../lib/investments';
 
 export function AccountsPage() {
   const me = useMe();
@@ -32,6 +33,15 @@ export function AccountsPage() {
   const deposits = useDeposits();
   const depositsOf = (id: string) =>
     (deposits.data?.deposits ?? []).filter((d) => d.accountId === id && d.status !== 'closed');
+  // A demat's shares show on it too (their worth is counted with the investments).
+  const holdings = useQuery({
+    queryKey: ['holdings', view],
+    queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
+  });
+  const heldIn = (a: Account) =>
+    (holdings.data?.holdings ?? []).filter(
+      (h) => h.accountId === a.id && !h.archived && Number(h.units) > 0 && h.currency === a.currency,
+    );
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
   const memberName = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
@@ -126,6 +136,26 @@ export function AccountsPage() {
                       Transactions
                     </Link>
                   </p>
+                  {heldIn(a).length > 0 && (
+                    <p className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
+                      <span>
+                        {heldIn(a).length} {heldIn(a).length === 1 ? 'holding' : 'holdings'}:{' '}
+                        <span className="tabular-nums">
+                          {formatMoney(
+                            heldIn(a).reduce((t, h) => t + (h.value ?? 0), 0),
+                            a.currency,
+                          )}
+                        </span>
+                      </span>
+                      <Link
+                        to="/investments/market?tab=holdings"
+                        className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                        aria-label={`Holdings of ${a.name}`}
+                      >
+                        Holdings
+                      </Link>
+                    </p>
+                  )}
                   {depositsOf(a.id).length > 0 && (
                     <p className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800">
                       <span>

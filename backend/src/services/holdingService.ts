@@ -156,8 +156,12 @@ async function checkRefs(
   input: { ownerMemberId?: string | null; accountId?: string | null },
 ) {
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
-  if (input.accountId) await assertAccount(prisma, familyId, input.accountId);
+  return input.accountId ? assertAccount(prisma, familyId, input.accountId) : null;
 }
+
+/** A holding in a demat (an open account of the type Investment) is the demat owner's. */
+const demat = (a: { type: string; archived: boolean; ownerMemberId: string | null } | null) =>
+  a && a.type === 'investment' && !a.archived ? { ownerMemberId: a.ownerMemberId } : {};
 
 /** Holdings with their numbers, plus the totals in one currency (default: wealth currency). */
 export async function listHoldings(prisma: PrismaClient, familyId: string, view?: string) {
@@ -290,8 +294,11 @@ export async function createHolding(
   familyId: string,
   input: z.output<typeof HoldingCreate>,
 ) {
-  await checkRefs(prisma, familyId, input);
-  const h = await prisma.holding.create({ data: { ...input, familyId }, include });
+  const account = await checkRefs(prisma, familyId, input);
+  const h = await prisma.holding.create({
+    data: { ...input, ...demat(account), familyId },
+    include,
+  });
   return computed(h);
 }
 
@@ -303,6 +310,8 @@ export async function updateHolding(
 ) {
   const existing = await owned(prisma, familyId, id);
   await checkRefs(prisma, familyId, input);
+  const accountId = input.accountId !== undefined ? input.accountId : existing.accountId;
+  const account = accountId ? await prisma.account.findUnique({ where: { id: accountId } }) : null;
   if (input.currency && input.currency !== existing.currency && existing.trades.length > 0) {
     throw new AppError(
       409,
@@ -310,7 +319,9 @@ export async function updateHolding(
       'The currency cannot be changed once there are trades',
     );
   }
-  return computed(await prisma.holding.update({ where: { id }, data: input, include }));
+  return computed(
+    await prisma.holding.update({ where: { id }, data: { ...input, ...demat(account) }, include }),
+  );
 }
 
 export async function deleteHolding(prisma: PrismaClient, familyId: string, id: string) {

@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
-import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
 import { checkDividends } from './DividendCheck';
 import { dayLabel } from '../../lib/deposits';
 import { fileToBase64 } from '../../lib/files';
-import { useMembers } from '../../lib/queries';
+import { DematPicker, useDematChoice, type Demat } from './DematPicker';
 
 type Action = 'replace' | 'history' | 'mismatch' | 'not-held' | 'oversold' | 'several';
 type Preview = {
@@ -26,18 +25,15 @@ type Preview = {
   errors: { line: number; symbol: string; message: string }[];
 };
 type Result = { replaced: number; history: number; skipped: number };
-type Request = { fileName: string; data: string; ownerMemberId: string | null };
+type Request = { fileName: string; data: string } & Demat;
 
 /** Brings in a full tradebook (Zerodha Console's format): real buy and sell dates. */
 export function TradebookImport({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
-  const members = useMembers();
   const [file, setFile] = useState<{ fileName: string; data: string } | null>(null);
-  // undefined: not chosen yet (the logged-in person); null: shared.
-  const [owner, setOwner] = useState<string | null | undefined>(undefined);
+  const [demat, setDemat, ready] = useDematChoice();
   const [readError, setReadError] = useState<string | null>(null);
   const done = useRef<HTMLButtonElement>(null);
-  const ownerId = owner !== undefined ? owner : (members.data?.find((m) => m.isUser)?.id ?? null);
   const preview = useMutation({
     mutationFn: (body: Request) => api.post<Preview>('/holdings/tradebook/preview', body),
   });
@@ -52,8 +48,8 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     if (commit.data) done.current?.focus();
   }, [commit.data]);
-  const run = (next: { fileName: string; data: string } | null, who: string | null) => {
-    if (next) preview.mutate({ ...next, ownerMemberId: who });
+  const run = (next: { fileName: string; data: string } | null, where: Demat) => {
+    if (next) preview.mutate({ ...next, ...where });
   };
   const p = preview.data;
   const of = (a: Action) => p?.symbols.filter((s) => s.action === a) ?? [];
@@ -87,30 +83,20 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
         nothing.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Whose demat is this?" htmlFor="tb-owner">
-          <Select
-            id="tb-owner"
-            value={ownerId ?? ''}
-            onChange={(e) => {
-              const who = e.target.value || null;
-              setOwner(who);
-              run(file, who);
-            }}
-          >
-            {members.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-            <option value="">Shared</option>
-          </Select>
-        </Field>
+        <DematPicker
+          id="tb-demat"
+          value={demat}
+          onChange={(d) => {
+            setDemat(d);
+            run(file, d);
+          }}
+        />
         <Field label="Tradebook (CSV)" htmlFor="tb-file">
           <input
             id="tb-file"
             type="file"
             accept=".csv,text/csv"
-            disabled={!members.data}
+            disabled={!ready}
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm dark:file:bg-slate-800"
             onChange={async (e) => {
               const input = e.target;
@@ -121,7 +107,7 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
               try {
                 const next = { fileName: f.name, data: await fileToBase64(f) };
                 setFile(next);
-                run(next, ownerId);
+                run(next, demat);
               } catch {
                 setReadError('This file could not be read. Download it again from Console.');
               }
@@ -177,7 +163,7 @@ export function TradebookImport({ onDone }: { onDone: () => void }) {
           <div className="flex justify-end">
             <Button
               disabled={replace.length + history.length === 0 || commit.isPending || !file}
-              onClick={() => file && commit.mutate({ ...file, ownerMemberId: ownerId })}
+              onClick={() => preview.variables && commit.mutate(preview.variables)}
             >
               {commit.isPending
                 ? 'Importing…'

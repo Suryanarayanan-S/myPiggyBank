@@ -45,18 +45,26 @@ export type AccountDto = {
   monthChange: number;
 };
 
+/** A name is one person's once (each family member may have their own "Zerodha"). */
 async function assertNameFree(
   prisma: PrismaClient,
   familyId: string,
   name: string,
+  ownerMemberId: string | null,
   exceptId?: string,
 ) {
   const all = await prisma.account.findMany({
-    where: { familyId },
+    where: { familyId, ownerMemberId },
     select: { id: true, name: true },
   });
   if (all.some((a) => a.id !== exceptId && a.name.toLowerCase() === name.toLowerCase())) {
-    throw new AppError(409, 'ACCOUNT_EXISTS', 'An account with this name already exists');
+    throw new AppError(
+      409,
+      'ACCOUNT_EXISTS',
+      ownerMemberId
+        ? 'This person already has an account with this name'
+        : 'A shared account with this name already exists',
+    );
   }
 }
 
@@ -118,8 +126,8 @@ export async function createAccount(
   familyId: string,
   input: z.output<typeof AccountCreate>,
 ) {
-  await assertNameFree(prisma, familyId, input.name);
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
+  await assertNameFree(prisma, familyId, input.name, input.ownerMemberId ?? null);
   const account = await prisma.account.create({
     data: {
       ...input,
@@ -140,8 +148,14 @@ export async function updateAccount(
   input: z.output<typeof AccountUpdate>,
 ) {
   const existing = await assertAccount(prisma, familyId, id);
-  if (input.name) await assertNameFree(prisma, familyId, input.name, id);
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
+  const name = input.name ?? existing.name;
+  const owner = input.ownerMemberId !== undefined ? input.ownerMemberId : existing.ownerMemberId;
+  // Only a new name or owner is checked: two shared accounts named alike (left by a deleted
+  // member) can still be edited, archived or renamed apart.
+  if (name.toLowerCase() !== existing.name.toLowerCase() || owner !== existing.ownerMemberId) {
+    await assertNameFree(prisma, familyId, name, owner, id);
+  }
   if (input.currency && input.currency !== existing.currency && (await isUsed(prisma, id))) {
     throw new AppError(
       400,

@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import type { Goal } from '../../lib/goals';
 import { formatMoney, parseAmountInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
-import { useAccounts, useMembers } from '../../lib/queries';
+import { useAccountLabel, useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 import type { HoldingsResponse } from '../../lib/investments';
 import { KIND_LABEL, useDeposits } from '../../lib/deposits';
@@ -30,6 +30,7 @@ export function GoalForm({
 }) {
   const queryClient = useQueryClient();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const members = useMembers();
   const assets = useQuery({ queryKey: ['assets'], queryFn: () => api.get<Asset[]>('/assets') });
   const deposits = useDeposits();
@@ -176,7 +177,7 @@ export function GoalForm({
                     checked={f.links.has(`account:${a.id}`)}
                     onChange={() => toggle(`account:${a.id}`)}
                   />
-                  {a.name}
+                  {accountLabel(a)}
                   {a.archived && <span className="text-xs text-slate-400">archived</span>}
                 </span>
                 <span className="text-xs text-slate-500 tabular-nums">

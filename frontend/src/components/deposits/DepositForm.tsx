@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import { COMPOUNDING, parseRatePercent, type Compounding, type Deposit } from '../../lib/deposits';
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
-import { useAccounts, useCategories, useMembers } from '../../lib/queries';
+import { useAccountLabel, useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 
 /** Deposits count in net worth (and show on their account), so refresh those with them. */
@@ -48,6 +48,7 @@ export function DepositForm({
   const refresh = useDepositRefresh();
   const members = useMembers();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const today = localDay();
   const [f, setF] = useState({
     name: deposit?.name ?? '',
@@ -151,7 +152,7 @@ export function DepositForm({
           <option value="">—</option>
           {open.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} ({a.currency})
+              {accountLabel(a)} ({a.currency})
             </option>
           ))}
         </Select>

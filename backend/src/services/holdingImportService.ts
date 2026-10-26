@@ -204,10 +204,7 @@ export async function previewHoldingImport(prisma: PrismaClient, familyId: strin
         all
           .filter(
             (e) =>
-              e.key === r.symbol &&
-              !inDemat(d)(e.holding) &&
-              e.units > 0 &&
-              !e.holding.archived,
+              e.key === r.symbol && !inDemat(d)(e.holding) && e.units > 0 && !e.holding.archived,
           )
           .map((e) => e.holding.owner?.name ?? 'Shared'),
       ),
@@ -226,9 +223,7 @@ export async function previewHoldingImport(prisma: PrismaClient, familyId: strin
   });
 
   // Manual assets that may hold the same money, so it is not counted twice.
-  const owner = d.owner
-    ? await prisma.familyMember.findUnique({ where: { id: d.owner } })
-    : null;
+  const owner = d.owner ? await prisma.familyMember.findUnique({ where: { id: d.owner } }) : null;
   const [assets, links] = await Promise.all([
     prisma.asset.findMany({
       where: { familyId, assetClass: 'investment', currency: CURRENCY },

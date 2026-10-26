@@ -12,7 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { formatMoney } from '../lib/money';
-import { useAccounts, useCategories, useMembers } from '../lib/queries';
+import { useAccountLabel, useAccounts, useCategories, useMembers } from '../lib/queries';
 import { useBucketNames } from '../lib/buckets';
 import { type Page, type Transaction } from '../lib/types';
 import { isMonth, localMonth, monthEnd } from '../lib/months';
@@ -47,6 +47,11 @@ export function TransactionsPage() {
   const me = useMe();
   const [view] = useViewCurrency();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
+  const accountName = (id: string | null, name: string | null) => {
+    const a = id ? accounts.data?.find((x) => x.id === id) : undefined;
+    return a ? accountLabel(a) : name;
+  };
   const categories = useCategories();
   const members = useMembers();
 
@@ -151,7 +156,7 @@ export function TransactionsPage() {
           <option value="none">No account</option>
           {accounts.data?.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {accountLabel(a)}
             </option>
           ))}
         </Select>
@@ -203,13 +208,14 @@ export function TransactionsPage() {
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">
                       {t.type === 'transfer'
-                        ? `${t.accountName} → ${t.transferAccountName}`
+                        ? `${accountName(t.accountId, t.accountName)} → ${accountName(t.transferAccountId, t.transferAccountName)}`
                         : t.merchant || t.categoryName || 'Uncategorised'}
                     </span>
                     <span className="block truncate text-xs text-slate-500">
                       {t.type !== 'transfer' && (t.categoryName ?? 'Uncategorised')}
                       {t.bucket && ` · ${names[t.bucket]}`}
-                      {t.type !== 'transfer' && ` · ${t.accountName ?? 'No account'}`}
+                      {t.type !== 'transfer' &&
+                        ` · ${accountName(t.accountId, t.accountName) ?? 'No account'}`}
                       {` · ${t.memberName ?? 'Shared'}`}
                       {t.notes && !t.isMonthlyTotal && ` · ${t.notes}`}
                       {t.isMonthlyTotal && ' · monthly total'}

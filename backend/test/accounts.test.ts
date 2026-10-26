@@ -72,6 +72,38 @@ describe('accounts', () => {
     expect(dup.json().error.code).toBe('ACCOUNT_EXISTS');
   });
 
+  it('allows one name for different people (each their own Zerodha), never twice for one', async () => {
+    const [me] = (await call('GET', '/api/members')).json().data;
+    const appa = (await call('POST', '/api/members', { name: 'Appa' })).json().data;
+    const zerodha = { name: 'Zerodha', type: 'investment', currency: 'INR' };
+    const mine = await call('POST', '/api/accounts', { ...zerodha, ownerMemberId: me.id });
+    expect(mine.statusCode).toBe(201);
+    const his = await call('POST', '/api/accounts', { ...zerodha, ownerMemberId: appa.id });
+    expect(his.statusCode).toBe(201);
+    const shared = await call('POST', '/api/accounts', zerodha);
+    expect(shared.statusCode).toBe(201);
+    // the same person twice: refused, also when an owner changes onto a name taken
+    expect(
+      (await call('POST', '/api/accounts', { ...zerodha, ownerMemberId: appa.id })).statusCode,
+    ).toBe(409);
+    expect((await call('POST', '/api/accounts', zerodha)).statusCode).toBe(409);
+    const moved = await call('PUT', `/api/accounts/${his.json().data.id}`, {
+      ownerMemberId: me.id,
+    });
+    expect(moved.statusCode).toBe(409);
+    expect(
+      (await call('PUT', `/api/accounts/${his.json().data.id}`, { ownerMemberId: null }))
+        .statusCode,
+    ).toBe(409);
+    // a deleted member leaves two shared "Zerodha"s: each can still be edited
+    await call('DELETE', `/api/members/${appa.id}`);
+    const edit = await call('PUT', `/api/accounts/${his.json().data.id}`, {
+      name: 'Zerodha',
+      archived: true,
+    });
+    expect(edit.statusCode).toBe(200);
+  });
+
   it('updates and archives an account, then deletes it', async () => {
     const id = (await call('POST', '/api/accounts', sparkasse)).json().data.id;
     const res = await call('PUT', `/api/accounts/${id}`, {

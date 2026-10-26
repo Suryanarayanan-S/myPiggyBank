@@ -34,10 +34,10 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
   const person = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
   const money = (c: number) => formatMoney(c, currency);
-  const total = rows.reduce(
-    (t, r) => ({ cost: t.cost + r.cost, value: t.value + r.value }),
-    { cost: 0, value: 0 },
-  );
+  const total = rows.reduce((t, r) => ({ cost: t.cost + r.cost, value: t.value + r.value }), {
+    cost: 0,
+    value: 0,
+  });
   const totalBp =
     total.cost > 0 ? Math.round(((total.value - total.cost) * 10_000) / total.cost) : null;
   const loose = rows.some((r) => !r.accountId);
@@ -92,9 +92,7 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
                         className="mt-1 !w-auto !py-1 !text-xs"
                         value=""
                         disabled={move.isPending}
-                        onChange={(e) =>
-                          e.target.value && move.mutate(e.target.value)
-                        }
+                        onChange={(e) => e.target.value && move.mutate(e.target.value)}
                       >
                         <option value="">Not in a demat account — move into…</option>
                         {theirs.map((a) => (
@@ -151,15 +149,15 @@ export function DematAccounts({ holdings, currency }: { holdings: Holding[]; cur
       <FormError error={move.error} />
       {move.data && (
         <p role="status" className="mt-3 text-xs text-slate-500">
-          {move.data.moved === 1 ? '1 holding' : `${move.data.moved} holdings`} moved into the
-          demat account.
+          {move.data.moved === 1 ? '1 holding' : `${move.data.moved} holdings`} moved into the demat
+          account.
         </p>
       )}
       {loose && (
         <p className="mt-3 text-xs text-slate-500">
-          Add a demat account for each person (broker and client ID), then import their tradebook
-          or holdings file into it — <span className="font-medium">Which demat is this?</span> in
-          the import.
+          Add a demat account for each person (broker and client ID), then import their tradebook or
+          holdings file into it — <span className="font-medium">Which demat is this?</span> in the
+          import.
         </p>
       )}
       {adding && (

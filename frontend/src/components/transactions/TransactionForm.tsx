@@ -10,7 +10,7 @@ import { useMe } from '../../auth/auth';
 import { defaultAccountId, rememberAccountId, selectableAccounts } from '../../lib/accounts';
 import { localDay } from '../../lib/months';
 import { parseMoneyInput } from '../../lib/money';
-import { useAccounts, useCategories, useMembers } from '../../lib/queries';
+import { useAccountLabel, useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { useBucketNames } from '../../lib/buckets';
 import { BUCKET_KEYS, CURRENCIES, type Transaction, type TransactionType } from '../../lib/types';
 
@@ -21,6 +21,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const categories = useCategories();
   const members = useMembers();
   const spendingCurrency = useMe().data?.family.spendingCurrency ?? 'EUR';
@@ -197,7 +198,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
             </option>
             {active.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} ({a.currency})
+                {accountLabel(a)} ({a.currency})
               </option>
             ))}
           </Select>
@@ -233,7 +234,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
                 .filter((a) => a.id !== form.accountId)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({a.currency})
+                    {accountLabel(a)} ({a.currency})
                   </option>
                 ))}
             </Select>

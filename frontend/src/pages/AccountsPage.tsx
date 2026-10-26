@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { formatMoney } from '../lib/money';
-import { useAccounts, useMembers } from '../lib/queries';
+import { useAccountLabel, useAccounts, useMembers } from '../lib/queries';
 import { ACCOUNT_TYPES, type Account } from '../lib/types';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
@@ -22,6 +22,7 @@ import clsx from 'clsx';
 export function AccountsPage() {
   const me = useMe();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const [view] = useViewCurrency();
   const total = useQuery({
     queryKey: ['accounts', 'total', view],
@@ -117,7 +118,7 @@ export function AccountsPage() {
                     </div>
                     <Button
                       variant="ghost"
-                      aria-label={`Edit ${a.name}`}
+                      aria-label={`Edit ${accountLabel(a)}`}
                       onClick={() => setEditing(a)}
                     >
                       <Pencil size={16} aria-hidden />
@@ -134,7 +135,7 @@ export function AccountsPage() {
                     <Link
                       to={`/transactions?accountId=${a.id}`}
                       className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                      aria-label={`Transactions of ${a.name}`}
+                      aria-label={`Transactions of ${accountLabel(a)}`}
                     >
                       Transactions
                     </Link>
@@ -157,7 +158,7 @@ export function AccountsPage() {
                             : '/investments/deposits'
                         }
                         className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                        aria-label={`Deposits of ${a.name}`}
+                        aria-label={`Deposits of ${accountLabel(a)}`}
                       >
                         Deposits
                       </Link>
@@ -178,18 +179,18 @@ export function AccountsPage() {
             </h2>
             {holdings.data &&
               new Set(demats.filter((a) => !a.archived).map((a) => a.currency)).size === 1 && (
-              <span className="text-sm text-slate-500">
-                Total{' '}
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  {formatMoney(
-                    demats
-                      .filter((a) => !a.archived)
-                      .reduce((t, a) => t + worth(a).value + a.balance, 0),
-                    demats.find((a) => !a.archived)!.currency,
-                  )}
+                <span className="text-sm text-slate-500">
+                  Total{' '}
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {formatMoney(
+                      demats
+                        .filter((a) => !a.archived)
+                        .reduce((t, a) => t + worth(a).value + a.balance, 0),
+                      demats.find((a) => !a.archived)!.currency,
+                    )}
+                  </span>
                 </span>
-              </span>
-            )}
+              )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {demats.map((a) => {
@@ -206,7 +207,7 @@ export function AccountsPage() {
                     </div>
                     <Button
                       variant="ghost"
-                      aria-label={`Edit ${a.name}`}
+                      aria-label={`Edit ${accountLabel(a)}`}
                       onClick={() => setEditing(a)}
                     >
                       <Pencil size={16} aria-hidden />
@@ -256,7 +257,7 @@ export function AccountsPage() {
                       <Link
                         to={`/transactions?accountId=${a.id}`}
                         className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                        aria-label={`Transactions of ${a.name}`}
+                        aria-label={`Transactions of ${accountLabel(a)}`}
                       >
                         Transactions
                       </Link>
@@ -264,7 +265,7 @@ export function AccountsPage() {
                     <Link
                       to="/investments/market?tab=holdings"
                       className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                      aria-label={`Holdings of ${a.name}`}
+                      aria-label={`Holdings of ${accountLabel(a)}`}
                     >
                       Holdings
                     </Link>

@@ -10,7 +10,7 @@ import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { formatMoney, parseAmountInput } from '../lib/money';
 import { localDay } from '../lib/months';
-import { useAccounts, useCategories, useMembers } from '../lib/queries';
+import { useAccountLabel, useAccounts, useCategories, useMembers } from '../lib/queries';
 import { useBucketNames } from '../lib/buckets';
 import { BUCKET_KEYS } from '../lib/types';
 
@@ -53,6 +53,12 @@ export function RecurringPage() {
     queryKey: ['recurring', 'upcoming'],
     queryFn: () => api.get<Upcoming[]>('/recurring/upcoming?days=31'),
   });
+  const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
+  const accountName = (r: Rule) => {
+    const a = accounts.data?.find((x) => x.id === r.accountId);
+    return a ? accountLabel(a) : r.accountName;
+  };
   const [editing, setEditing] = useState<Rule | 'new' | null>(null);
   const toggle = useMutation({
     mutationFn: (r: Rule) => api.put(`/recurring/${r.id}`, { active: !r.active }),
@@ -88,7 +94,7 @@ export function RecurringPage() {
                   )}
                 </span>
                 <span className="block text-xs text-slate-500">
-                  {FREQ[r.frequency]} · {r.accountName}
+                  {FREQ[r.frequency]} · {accountName(r)}
                   {r.categoryName && ` · ${r.categoryName}`}
                   {r.nextDate ? ` · next ${r.nextDate}` : r.active ? ' · ended' : ''}
                 </span>
@@ -158,6 +164,7 @@ function RuleForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
   const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const categories = useCategories();
   const members = useMembers();
   const active = (accounts.data ?? []).filter((a) => !a.archived);
@@ -262,7 +269,7 @@ function RuleForm({ rule, onDone }: { rule?: Rule; onDone: () => void }) {
           >
             {active.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} ({a.currency})
+                {accountLabel(a)} ({a.currency})
               </option>
             ))}
           </Select>

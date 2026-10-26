@@ -14,7 +14,7 @@ import { fileToBase64 } from '../lib/files';
 import { defaultImportMode, type ImportMode } from '../lib/importDefaults';
 import { formatMoney } from '../lib/money';
 import { monthTitle } from '../lib/months';
-import { useAccounts, useCategories } from '../lib/queries';
+import { useAccountLabel, useAccounts, useCategories } from '../lib/queries';
 import { useBucketNames } from '../lib/buckets';
 import {
   BUCKET_KEYS,
@@ -46,6 +46,7 @@ function SpreadsheetImport() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const currency = me.data?.family.spendingCurrency ?? 'EUR';
   const targetAccounts = useAccountsIn(currency);
+  const accountLabel = useAccountLabel();
 
   const upload = useMutation({
     mutationFn: async (file: File) =>
@@ -221,7 +222,7 @@ function SpreadsheetImport() {
                   <option value="new">A “Spreadsheet history” account (recommended)</option>
                   {targetAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name} ({a.currency})
+                      {accountLabel(a)} ({a.currency})
                     </option>
                   ))}
                 </Select>

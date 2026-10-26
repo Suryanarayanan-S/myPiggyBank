@@ -151,7 +151,7 @@ model Account {
   holdings       Holding[]
   deposits       Deposit[]
 
-  @@unique([familyId, name])
+  /// a name is unique per person (checked by the app: each member may have their own "Zerodha")
   @@index([familyId])
 }
 

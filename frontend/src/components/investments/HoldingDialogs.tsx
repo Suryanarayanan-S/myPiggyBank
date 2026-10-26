@@ -16,7 +16,7 @@ import {
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
 import { localDay } from '../../lib/months';
-import { useAccounts, useMembers } from '../../lib/queries';
+import { useAccountLabel, useAccounts, useMembers } from '../../lib/queries';
 import { CURRENCIES } from '../../lib/types';
 
 /** Holdings change net worth and goals too, so refresh those with them. */
@@ -42,6 +42,7 @@ export function HoldingForm({
   const refresh = useRefresh();
   const members = useMembers();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const [f, setF] = useState({
     name: holding?.name ?? '',
     kind: holding?.kind ?? ('etf' as HoldingKind),
@@ -159,7 +160,7 @@ export function HoldingForm({
             ?.filter((a) => !a.archived || a.id === f.accountId)
             .map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
+                {accountLabel(a)}
               </option>
             ))}
         </Select>

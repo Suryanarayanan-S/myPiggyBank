@@ -143,7 +143,8 @@ export async function commitImport(
         accountId = acc.id;
       } else {
         const name = input.account.newName;
-        const same = (await tx.account.findMany({ where: { familyId } })).find(
+        // the account it would create is shared: only a shared one of that name is the same
+        const same = (await tx.account.findMany({ where: { familyId, ownerMemberId: null } })).find(
           (a) => norm(a.name) === norm(name),
         );
         if (same && same.currency !== currency) {

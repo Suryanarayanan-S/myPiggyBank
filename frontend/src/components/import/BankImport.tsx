@@ -17,7 +17,7 @@ import {
 } from '../../lib/bankImportTypes';
 import { fileToBase64 } from '../../lib/files';
 import { formatMoney } from '../../lib/money';
-import { useAccounts, useCategories } from '../../lib/queries';
+import { useAccountLabel, useAccounts, useCategories } from '../../lib/queries';
 import { useBucketNames } from '../../lib/buckets';
 import { BUCKET_KEYS } from '../../lib/types';
 
@@ -27,6 +27,7 @@ export function BankImport() {
   const names = useBucketNames();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const categories = useCategories();
   const active = (accounts.data ?? []).filter((a) => !a.archived);
   const [preview, setPreview] = useState<CsvPreview | null>(null);
@@ -236,7 +237,7 @@ export function BankImport() {
               >
                 {active.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({a.currency})
+                    {accountLabel(a)} ({a.currency})
                   </option>
                 ))}
               </Select>

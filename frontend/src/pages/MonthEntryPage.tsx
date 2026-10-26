@@ -11,7 +11,7 @@ import { Select } from '../components/ui/Select';
 import { api } from '../lib/api';
 import { formatMoney, parseMoneyInput } from '../lib/money';
 import { isMonth, localMonth } from '../lib/months';
-import { useAccounts } from '../lib/queries';
+import { useAccountLabel, useAccounts } from '../lib/queries';
 import { useBucketNames } from '../lib/buckets';
 import { BUCKET_KEYS, type Bucket, type MonthEntry } from '../lib/types';
 
@@ -24,6 +24,7 @@ export function MonthEntryPage() {
   const month = isMonth(params.get('month')) ? params.get('month')! : localMonth();
   const me = useMe();
   const accounts = useAccounts();
+  const accountLabel = useAccountLabel();
   const queryClient = useQueryClient();
   const active = (accounts.data ?? []).filter((a) => !a.archived);
   const spending = me.data?.family.spendingCurrency;
@@ -139,7 +140,7 @@ export function MonthEntryPage() {
               {active.length === 0 && <option value="">Add an account first</option>}
               {active.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} ({a.currency})
+                  {accountLabel(a)} ({a.currency})
                 </option>
               ))}
             </Select>

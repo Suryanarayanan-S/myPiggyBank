@@ -1,12 +1,38 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
+import { firstDematTakes } from '../../lib/demat';
+import type { HoldingsResponse } from '../../lib/investments';
 import { useAccounts, useMembers } from '../../lib/queries';
 import type { Account } from '../../lib/types';
+import { useViewCurrency, withView } from '../../lib/viewCurrency';
+
+/** How many of the person's holdings a new demat of theirs would take (their first demat). */
+export function useFirstDematTakes(ownerMemberId: string | null) {
+  const accounts = useAccounts();
+  const [view] = useViewCurrency();
+  const holdings = useQuery({
+    queryKey: ['holdings', view],
+    queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
+  });
+  return firstDematTakes(holdings.data?.holdings ?? [], accounts.data ?? [], ownerMemberId);
+}
+
+/** The note under a new demat's owner: what it will take. */
+export function TakesNote({ count, owner }: { count: number; owner: string | null }) {
+  if (count === 0) return null;
+  const what = count === 1 ? 'holding' : `${count} holdings`;
+  return (
+    <p className="text-xs text-slate-500">
+      {owner ? `${owner}’s ${what}` : `The ${what} shared by the family`} not in a demat account
+      will be moved into it.
+    </p>
+  );
+}
 
 /** Where an import goes: a demat account (whose owner it is), or a person without one. */
 export type Demat = { accountId: string | null; ownerMemberId: string | null };
@@ -35,6 +61,8 @@ export function NewDematForm({
   // the logged-in person until another is chosen
   const [owner, setOwner] = useState<string | undefined>(undefined);
   const ownerId = owner ?? members.data?.find((m) => m.isUser)?.id ?? '';
+  const takes = useFirstDematTakes(ownerId || null);
+  const ownerName = members.data?.find((m) => m.id === ownerId)?.name ?? null;
   const create = useMutation({
     mutationFn: () =>
       api.post<Account>('/accounts', {
@@ -44,7 +72,9 @@ export function NewDematForm({
         ownerMemberId: ownerId || null,
       }),
     onSuccess: async (a) => {
+      // a first demat takes the person's holdings
       await queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      await queryClient.invalidateQueries({ queryKey: ['holdings'] });
       onCreated(a);
     },
   });
@@ -71,6 +101,7 @@ export function NewDematForm({
           </Select>
         </Field>
       </div>
+      <TakesNote count={takes} owner={ownerName} />
       <FormError error={create.error} />
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>

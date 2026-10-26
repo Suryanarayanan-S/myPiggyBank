@@ -563,6 +563,8 @@ model Deposit {
   /// the bank account the money came from and is paid back to
   accountId       String?
   account         Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  /// how net worth counts it: liquid | property | investment | other
+  assetClass      String         @default("investment")
   /// minor units
   principal       BigInt
   /// yearly rate in basis points (7.25 % = 725)

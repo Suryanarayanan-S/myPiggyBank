@@ -397,7 +397,7 @@ describe('importing broker holdings', () => {
         archived: boolean;
       }[];
 
-    it('imports into a demat account: its owner\'s holdings, kept in it', async () => {
+    it("imports into a demat account: its owner's holdings, kept in it", async () => {
       const zerodha = await demat('Zerodha · OYM940', appa);
       // the account decides whose they are, whatever person is sent
       const r = await commit(first, { ownerMemberId: surya, accountId: zerodha });
@@ -422,7 +422,7 @@ describe('importing broker holdings', () => {
       expect(ports).toMatchObject({ ownerMemberId: appa, accountId: zerodha, archived: true });
     });
 
-    it('moves a person\'s holdings without a demat into the first one imported', async () => {
+    it("moves a person's holdings without a demat into the first one imported", async () => {
       await commit(first);
       const zerodha = await demat('Zerodha · XVH685', surya);
       await call('POST', '/api/holdings/tradebook/commit', {
@@ -448,7 +448,9 @@ describe('importing broker holdings', () => {
       expect(infy.map((h) => h.accountId).sort()).toEqual([one, two].sort());
     });
 
-    it('moves a person\'s holdings outside a demat into theirs, archived ones too', async () => {
+    it("moves a person's holdings outside a demat into theirs, archived ones too", async () => {
+      // the demat first (it takes nothing yet), then holdings imported outside it
+      const zerodha = await demat('Zerodha · XVH685', surya);
       await commit(first);
       await commit(first, { ownerMemberId: appa });
       const old = await call('POST', '/api/holdings', {
@@ -460,7 +462,6 @@ describe('importing broker holdings', () => {
         archived: true,
       });
       expect(old.statusCode).toBe(201);
-      const zerodha = await demat('Zerodha · XVH685', surya);
       const move = (body: object) => call('POST', '/api/holdings/move-to-demat', body);
       const usd = await call('POST', '/api/holdings', {
         name: 'AAPL',
@@ -494,7 +495,7 @@ describe('importing broker holdings', () => {
       expect(await all()).toHaveLength(3);
     });
 
-    it('without a demat touches only the person\'s holdings outside one', async () => {
+    it("without a demat touches only the person's holdings outside one", async () => {
       const zerodha = await demat('Zerodha', surya);
       await commit(first, { accountId: zerodha });
       const r = await commit(file('"INFY",5,1000,1000,5000,5000,0,0,0,""'), {
@@ -510,7 +511,7 @@ describe('importing broker holdings', () => {
       );
     });
 
-    it('treats a closed demat\'s holdings as in none: a new demat takes them', async () => {
+    it("treats a closed demat's holdings as in none: a new demat takes them", async () => {
       const old = await demat('Upstox', surya);
       await commit(first, { accountId: old });
       await call('PUT', `/api/accounts/${old}`, { archived: true });
@@ -539,14 +540,19 @@ describe('importing broker holdings', () => {
       const r = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
       expect(r.json().data).toMatchObject({ added: 2, skipped: 0 });
       const list = await all();
-      expect(list.map((h) => [h.symbol, h.units, h.ownerMemberId, h.accountId, h.archived])).toEqual(
+      expect(
+        list.map((h) => [h.symbol, h.units, h.ownerMemberId, h.accountId, h.archived]),
+      ).toEqual(
         expect.arrayContaining([
           ['GOLDBEES', '929', appa, zerodha, false],
           ['GOLD1', '2', appa, zerodha, false],
         ]),
       );
       // again: they are held now, so their trades are simply used again
-      const again = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
+      const again = await call('POST', '/api/holdings/tradebook/commit', {
+        ...body,
+        addMissing: true,
+      });
       expect(again.json().data).toMatchObject({ replaced: 2, added: 0 });
       expect(await all()).toHaveLength(2);
       const q = (await call('POST', '/api/holdings/tradebook/preview', body)).json().data;
@@ -576,6 +582,38 @@ describe('importing broker holdings', () => {
       const r = await call('POST', '/api/holdings/tradebook/commit', { ...body, addMissing: true });
       expect(r.json().data).toMatchObject({ added: 1, skipped: 1 });
       expect((await all()).filter((h) => h.symbol === 'INFY')).toHaveLength(1);
+    });
+
+    it("gives a person's first demat their holdings in none; a second starts empty", async () => {
+      await commit(first);
+      await commit(first, { ownerMemberId: appa });
+      // a euro broker first: not a demat, it takes nothing and does not count as the first
+      await call('POST', '/api/accounts', {
+        name: 'Trade Republic',
+        type: 'investment',
+        currency: 'EUR',
+        ownerMemberId: surya,
+      });
+      expect((await all()).every((h) => !h.accountId)).toBe(true);
+      const zerodha = await demat('Zerodha', surya);
+      let list = await all();
+      expect(
+        list.filter((h) => h.ownerMemberId === surya).every((h) => h.accountId === zerodha),
+      ).toBe(true);
+      // Appa's are his: not moved
+      expect(list.filter((h) => h.ownerMemberId === appa).every((h) => !h.accountId)).toBe(true);
+      // a second demat of Surya's takes nothing (a holding added outside stays outside)
+      await call('POST', '/api/holdings', {
+        name: 'TCS',
+        kind: 'stock',
+        symbol: 'TCS',
+        currency: 'INR',
+        ownerMemberId: surya,
+      });
+      await demat('Groww', surya);
+      list = await all();
+      expect(list.find((h) => h.symbol === 'TCS')!.accountId).toBeNull();
+      expect(list.filter((h) => h.accountId === zerodha)).toHaveLength(3);
     });
 
     it('takes only an investment account of the family', async () => {

@@ -355,7 +355,7 @@ async function currentNetWorth(
     rates,
     members,
     accounts,
-    // Holdings, deposits and gold count like assets of the investment class.
+    // Holdings and gold count like assets of the investment class; deposits as chosen.
     assets: [...assets, ...holdings, ...deposits, ...gold],
     liabilities,
   });

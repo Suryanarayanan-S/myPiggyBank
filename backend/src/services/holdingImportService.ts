@@ -15,6 +15,7 @@ import { formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertAccount, assertMember } from './ownership.js';
 import { awaitingCredit } from './corporateActionService.js';
+import { moveLooseHoldings } from './accountService.js';
 
 /** Zerodha (Kite) holdings are Indian instruments, priced in rupees. */
 const CURRENCY = 'INR';
@@ -95,11 +96,11 @@ export async function dematOf(
 ): Promise<Demat> {
   if (input.accountId) {
     const a = await assertAccount(db, familyId, input.accountId);
-    if (a.type !== 'investment') {
+    if (a.type !== 'investment' || a.currency !== CURRENCY) {
       throw new AppError(
         400,
         'VALIDATION_ERROR',
-        'Choose a demat account (an account of the type Investment)',
+        'Choose a demat account (an account of the type Investment, in rupees)',
       );
     }
     return { owner: a.ownerMemberId, accountId: a.id };
@@ -134,20 +135,7 @@ export async function moveToDemat(
   input: z.output<typeof MoveToDematInput>,
 ) {
   const d = await dematOf(prisma, familyId, { ownerMemberId: null, accountId: input.accountId });
-  const { count } = await prisma.holding.updateMany({
-    where: {
-      familyId,
-      ownerMemberId: d.owner,
-      currency: CURRENCY,
-      OR: [
-        { accountId: null },
-        { account: { type: { not: 'investment' } } },
-        { account: { archived: true } },
-      ],
-    },
-    data: { accountId: d.accountId },
-  });
-  return { moved: count };
+  return { moved: await moveLooseHoldings(prisma, familyId, d.owner, d.accountId!) };
 }
 
 /**

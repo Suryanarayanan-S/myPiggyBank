@@ -17,6 +17,8 @@ export type Deposit = {
   currency: string;
   ownerMemberId: string | null;
   accountId: string | null;
+  /** how net worth counts it */
+  assetClass: 'liquid' | 'property' | 'investment' | 'other';
   /** put in: a fixed deposit's amount; a recurring one's instalments due so far */
   principal: number;
   rateBp: number;

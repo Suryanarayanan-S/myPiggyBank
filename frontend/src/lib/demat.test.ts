@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byDemat, dematWorth } from './demat';
+import { byDemat, dematWorth, firstDematTakes } from './demat';
 import type { Holding } from './investments';
 
 const h = (p: Partial<Holding>) =>
@@ -85,5 +85,55 @@ describe('what a demat account holds', () => {
       unpriced: 1,
       other: 1,
     });
+  });
+});
+
+describe('what a first demat takes', () => {
+  const accounts = [
+    {
+      id: 'z',
+      type: 'investment' as const,
+      archived: false,
+      ownerMemberId: 'appa',
+      currency: 'INR',
+    },
+    {
+      id: 'old',
+      type: 'investment' as const,
+      archived: true,
+      ownerMemberId: 'surya',
+      currency: 'INR',
+    },
+    {
+      id: 'bank',
+      type: 'savings' as const,
+      archived: false,
+      ownerMemberId: 'surya',
+      currency: 'INR',
+    },
+    // a euro broker is not a demat: it does not count as Surya's first
+    {
+      id: 'eu',
+      type: 'investment' as const,
+      archived: false,
+      ownerMemberId: 'surya',
+      currency: 'EUR',
+    },
+  ];
+  const list = [
+    h({ ownerMemberId: 'surya', currency: 'INR' } as Partial<Holding>),
+    h({ ownerMemberId: 'surya', currency: 'INR', accountId: 'old' } as Partial<Holding>),
+    h({ ownerMemberId: 'surya', currency: 'INR', accountId: 'bank' } as Partial<Holding>),
+    // sold, archived or in dollars: not counted (the archived one moves along, unshown)
+    h({ ownerMemberId: 'surya', currency: 'INR', units: '0' } as Partial<Holding>),
+    h({ ownerMemberId: 'surya', currency: 'INR', archived: true } as Partial<Holding>),
+    h({ ownerMemberId: 'surya', currency: 'USD' } as Partial<Holding>),
+    h({ ownerMemberId: 'appa', currency: 'INR' } as Partial<Holding>),
+  ];
+  it('counts the person’s open rupee holdings in no open demat', () => {
+    expect(firstDematTakes(list, accounts, 'surya')).toBe(3);
+  });
+  it('takes nothing when the person already has a demat', () => {
+    expect(firstDematTakes(list, accounts, 'appa')).toBe(0);
   });
 });

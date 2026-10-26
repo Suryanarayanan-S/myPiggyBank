@@ -3,6 +3,7 @@
  * account of the type Investment) cost and is worth, and holdings outside any demat by person.
  */
 import type { Holding } from './investments';
+import type { Account } from './types';
 import { ranked } from './portfolio';
 
 export type DematRow = {
@@ -73,4 +74,32 @@ export function dematWorth(holdings: Holding[], account: { id: string; currency:
         h.currency !== account.currency,
     ).length,
   };
+}
+
+/**
+ * How many of a person's held rupee holdings a new demat of theirs takes: those in no open demat,
+ * when it is their first (a second demat starts empty).
+ */
+export function firstDematTakes(
+  holdings: Holding[],
+  accounts: Pick<Account, 'id' | 'type' | 'archived' | 'ownerMemberId' | 'currency'>[],
+  ownerMemberId: string | null,
+) {
+  const open = new Set(
+    accounts.filter((a) => a.type === 'investment' && !a.archived).map((a) => a.id),
+  );
+  const rupeeDemat = (id: string) => accounts.some((a) => a.id === id && a.currency === 'INR');
+  if (
+    accounts.some((a) => open.has(a.id) && rupeeDemat(a.id) && a.ownerMemberId === ownerMemberId)
+  ) {
+    return 0;
+  }
+  return holdings.filter(
+    (h) =>
+      h.ownerMemberId === ownerMemberId &&
+      h.currency === 'INR' &&
+      !h.archived &&
+      Number(h.units) > 0 &&
+      !(h.accountId && open.has(h.accountId)),
+  ).length;
 }

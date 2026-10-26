@@ -8,6 +8,7 @@ import { api } from '../../lib/api';
 import { parseMoneyInput } from '../../lib/money';
 import { useMembers } from '../../lib/queries';
 import { ACCOUNT_TYPES, ASSET_CLASSES, CURRENCIES, type Account } from '../../lib/types';
+import { TakesNote, useFirstDematTakes } from '../investments/DematPicker';
 
 export function AccountForm({
   account,
@@ -29,13 +30,17 @@ export function AccountForm({
     assetClass: account?.assetClass ?? '',
     archived: account?.archived ?? false,
   });
+  const takes = useFirstDematTakes(form.ownerMemberId || null);
   const [localError, setLocalError] = useState<string | null>(null);
   const set = (key: keyof typeof form) => (value: string | boolean) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const done = async () => {
     await Promise.all(
-      ['accounts', 'goals'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+      // a first demat takes the person's holdings
+      ['accounts', 'goals', 'holdings'].map((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      ),
     );
     onDone();
   };
@@ -159,6 +164,12 @@ export function AccountForm({
         <p role="alert" className="text-sm text-rose-600">
           {localError}
         </p>
+      )}
+      {!account && form.type === 'investment' && form.currency === 'INR' && (
+        <TakesNote
+          count={takes}
+          owner={members.data?.find((m) => m.id === form.ownerMemberId)?.name ?? null}
+        />
       )}
       <FormError error={save.error ?? remove.error} />
       <div className="flex items-center justify-between gap-2 pt-2">

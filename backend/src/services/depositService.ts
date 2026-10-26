@@ -16,6 +16,7 @@ import {
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { getFamily } from './familyService.js';
+import { ASSET_CLASSES } from '../domain/networth.js';
 import { assertAccount, assertCategory, assertMember } from './ownership.js';
 import { loadRates } from './rateService.js';
 import { createRecurring, deleteRecurring, updateRecurring } from './recurringService.js';
@@ -26,6 +27,8 @@ const fields = {
   currency: CurrencySchema,
   ownerMemberId: z.uuid().nullable().optional(),
   accountId: z.uuid().nullable().optional(),
+  /** how net worth counts it (default: investment) */
+  assetClass: z.enum(ASSET_CLASSES).optional(),
   /** a fixed deposit's amount; a recurring deposit's monthly instalment */
   principal: z
     .number()
@@ -123,6 +126,7 @@ function dto(d: Row, today = todayLocal()) {
     currency: d.currency,
     ownerMemberId: d.ownerMemberId,
     accountId: d.accountId,
+    assetClass: d.assetClass as (typeof ASSET_CLASSES)[number],
     /** put in: a fixed deposit's amount; for a recurring one, the instalments due so far */
     principal: rd ? (now?.paidIn ?? 0) : Number(d.principal),
     rateBp: d.rateBp,
@@ -214,7 +218,7 @@ export async function depositValues(prisma: PrismaClient, familyId: string, onDa
       name: d.name,
       currency: d.currency,
       ownerMemberId: d.ownerMemberId,
-      assetClass: 'investment',
+      assetClass: d.assetClass,
       value: w === null ? null : atCost ? w.paidIn : w.value,
     };
   });

@@ -77,6 +77,23 @@ describe('fixed deposits', () => {
     });
   });
 
+  it('counts as what it is chosen to be (an investment unless said otherwise)', async () => {
+    const id = (await call('POST', '/api/deposits', fd())).json().data.id;
+    const byClass = async () =>
+      (await call('GET', '/api/net-worth')).json().data.current.byClass as Record<string, number>;
+    const value = (await call('GET', '/api/deposits')).json().data.deposits[0].value;
+    expect((await call('GET', '/api/deposits')).json().data.deposits[0].assetClass).toBe(
+      'investment',
+    );
+    expect((await byClass()).investment).toBe(value);
+    // an emergency fund: counted with the money at hand
+    await call('PUT', `/api/deposits/${id}`, { assetClass: 'liquid' });
+    expect(await byClass()).toMatchObject({ liquid: value, investment: 0 });
+    const made = await call('POST', '/api/deposits', fd({ name: 'Other', assetClass: 'liquid' }));
+    expect(made.json().data.assetClass).toBe('liquid');
+    expect((await call('POST', '/api/deposits', fd({ assetClass: 'gold' }))).statusCode).toBe(400);
+  });
+
   it('says when it matures, and what it pays out', async () => {
     await call(
       'POST',

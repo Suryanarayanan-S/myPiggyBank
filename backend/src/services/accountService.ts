@@ -7,6 +7,7 @@ import { computeBalances, type BalanceTxn } from '../domain/balances.js';
 import { monthRange, todayLocal } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
 import { assertAccount, assertMember } from './ownership.js';
+import type { Db } from '../lib/db.js';
 
 export const ACCOUNT_TYPES = [
   'current',
@@ -128,14 +129,56 @@ export async function createAccount(
 ) {
   if (input.ownerMemberId) await assertMember(prisma, familyId, input.ownerMemberId);
   await assertNameFree(prisma, familyId, input.name, input.ownerMemberId ?? null);
-  const account = await prisma.account.create({
-    data: {
-      ...input,
-      familyId,
-      assetClass: input.assetClass ?? (input.type === 'investment' ? 'investment' : 'liquid'),
-    },
+  let created = '';
+  await prisma.$transaction(async (tx) => {
+    const account = await tx.account.create({
+      data: {
+        ...input,
+        familyId,
+        assetClass: input.assetClass ?? (input.type === 'investment' ? 'investment' : 'liquid'),
+      },
+    });
+    created = account.id;
+    // A person's first rupee demat takes their rupee holdings in none (a second one starts
+    // empty: which broker they are with cannot be told; a euro broker's account is not a demat).
+    if (account.type === 'investment' && account.currency === 'INR' && !account.archived) {
+      const others = await tx.account.count({
+        where: {
+          familyId,
+          ownerMemberId: account.ownerMemberId,
+          type: 'investment',
+          currency: 'INR',
+          archived: false,
+          NOT: { id: account.id },
+        },
+      });
+      if (others === 0) {
+        await moveLooseHoldings(tx, familyId, account.ownerMemberId, account.id);
+      }
+    }
   });
-  return getDto(prisma, familyId, account.id);
+  return getDto(prisma, familyId, created);
+}
+
+/** A person's rupee holdings in no open demat (none, an account that is not one, a closed one). */
+const LOOSE = [
+  { accountId: null },
+  { account: { type: { not: 'investment' } } },
+  { account: { archived: true } },
+];
+
+/** Moves the person's rupee holdings in no open demat into this demat; how many. */
+export async function moveLooseHoldings(
+  db: Db,
+  familyId: string,
+  ownerMemberId: string | null,
+  accountId: string,
+) {
+  const { count } = await db.holding.updateMany({
+    where: { familyId, ownerMemberId, currency: 'INR', OR: LOOSE },
+    data: { accountId },
+  });
+  return count;
 }
 
 const isUsed = (prisma: PrismaClient, id: string) =>

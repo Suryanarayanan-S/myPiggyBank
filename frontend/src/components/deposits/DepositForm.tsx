@@ -10,7 +10,7 @@ import { COMPOUNDING, parseRatePercent, type Compounding, type Deposit } from '.
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import { useAccountLabel, useAccounts, useCategories, useMembers } from '../../lib/queries';
-import { CURRENCIES } from '../../lib/types';
+import { ASSET_CLASSES, CURRENCIES } from '../../lib/types';
 
 /** Deposits count in net worth (and show on their account), so refresh those with them. */
 export const useDepositRefresh = () => {
@@ -55,6 +55,7 @@ export function DepositForm({
     accountId: deposit?.accountId ?? '',
     currency: deposit?.currency ?? defaultCurrency,
     ownerMemberId: deposit?.ownerMemberId ?? '',
+    assetClass: deposit?.assetClass ?? ('investment' as keyof typeof ASSET_CLASSES),
     // a recurring deposit's amount is its monthly instalment
     principal: deposit
       ? formatMoney(rd ? deposit.instalment! : deposit.principal, deposit.currency).replace(
@@ -113,6 +114,7 @@ export function DepositForm({
           currency: f.currency,
           accountId: f.accountId || null,
           ownerMemberId: f.ownerMemberId || null,
+          assetClass: f.assetClass,
           principal,
           rateBp,
           startDate: f.startDate,
@@ -292,6 +294,21 @@ export function DepositForm({
             {members.data?.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Counts as" htmlFor="d-class" hint="Where net worth counts it.">
+          <Select
+            id="d-class"
+            value={f.assetClass}
+            onChange={(e) =>
+              setF({ ...f, assetClass: e.target.value as keyof typeof ASSET_CLASSES })
+            }
+          >
+            {Object.entries(ASSET_CLASSES).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
               </option>
             ))}
           </Select>

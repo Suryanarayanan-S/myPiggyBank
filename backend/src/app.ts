@@ -36,6 +36,8 @@ import { depositRoutes } from './routes/deposits.js';
 import { goldRoutes } from './routes/gold.js';
 import { reportRoutes } from './routes/reports.js';
 import { insightRoutes } from './routes/insights.js';
+import { aiRoutes } from './routes/ai.js';
+import type { AiSetup } from './services/aiService.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
 
@@ -59,6 +61,8 @@ export interface AppOptions {
   goldSources?: GoldSources;
   /** onvista and the ECB, for shares outside India and the euro markets */
   worldSources?: WorldSources;
+  /** Claude, for suggestions; without it (no ANTHROPIC_API_KEY) the app never asks an AI. */
+  ai?: AiSetup | null;
 }
 
 function safeHost(origin: string): string | null {
@@ -91,6 +95,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
         }
       : null,
   );
+  app.decorate('ai', opts.ai ?? null);
   app.decorateRequest('user', null);
 
   // Only JSON bodies are accepted; text/plain is a CORS-"simple" type usable for CSRF.
@@ -173,6 +178,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(goldRoutes);
       await api.register(reportRoutes);
       await api.register(insightRoutes);
+      await api.register(aiRoutes);
     },
     { prefix: '/api' },
   );

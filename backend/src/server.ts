@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from './app.js';
+import { anthropicClient } from './ai/client.js';
 import { loadConfig } from './config.js';
 import { liveRatesWanted, refreshLiveRates } from './services/liveRateService.js';
 import { livePricesWanted, refreshLivePrices } from './services/livePriceService.js';
@@ -42,6 +43,17 @@ const app = await buildApp({
     history: config.GOLD_HISTORY_URL,
   },
   worldSources: { onvista: config.ONVISTA_URL, ecb: config.ECB_URL },
+  ai: config.ANTHROPIC_API_KEY
+    ? {
+        client: anthropicClient({
+          apiKey: config.ANTHROPIC_API_KEY,
+          model: config.AI_MODEL,
+          baseURL: config.ANTHROPIC_BASE_URL,
+        }),
+        model: config.AI_MODEL,
+        monthlyTokens: config.AI_MONTHLY_TOKENS,
+      }
+    : null,
 });
 
 const shutdown = async () => {

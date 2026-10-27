@@ -28,6 +28,8 @@ model Family {
   investmentsAt    String             @default("value")
   /// Download daily closing prices from NSE for rupee holdings
   livePrices       Boolean            @default(false)
+  /// AI suggestions (categories for bank lines); needs ANTHROPIC_API_KEY on the server too
+  aiSuggestions    Boolean            @default(false)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   users            User[]
@@ -46,6 +48,7 @@ model Family {
   holdings         Holding[]
   deposits         Deposit[]
   goldItems        GoldItem[]
+  aiUsage          AiUsage[]
 }
 
 model User {
@@ -646,4 +649,19 @@ model SymbolAlias {
   former String
 
   @@id([symbol, former])
+}
+
+/// One request to the AI (for the monthly usage shown in Settings and its limit).
+model AiUsage {
+  id           String   @id @default(uuid())
+  familyId     String
+  family       Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  /// what it was for, e.g. "categorize"
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  createdAt    DateTime @default(now())
+
+  @@index([familyId, createdAt])
 }

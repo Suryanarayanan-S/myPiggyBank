@@ -1,16 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, FileText, Lock } from 'lucide-react';
+import { CheckCircle2, FileText, Lock, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Field, FormError } from '../ui/Field';
 import { Select } from '../ui/Select';
-import { api } from '../../lib/api';
+import { api, errorMessage } from '../../lib/api';
+import { useAiStatus, type AiCategorySuggestions } from '../../lib/ai';
 import {
   guessDateFormat,
   guessDecimal,
   rememberPatternFor,
+  type AnalysedRow,
   type Analysis,
   type CsvPreview,
   type DateFormat,
@@ -44,10 +46,15 @@ export function BankImport() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [result, setResult] = useState<number | null>(null);
+  const aiOn = !!useAiStatus().data?.enabled;
+  // what the AI suggested per row; a newer check makes an older answer stale
+  const [aiPicks, setAiPicks] = useState<Record<number, string>>({});
+  const aiRun = useRef(0);
   // Any change to the columns or account makes an earlier check out of date.
   const changeMap = (next: typeof map) => {
     setMap(next);
     setAnalysis(null);
+    aiRun.current += 1;
   };
   const account = active.find((a) => a.id === (accountId || active[0]?.id));
 
@@ -57,7 +64,9 @@ export function BankImport() {
         fileName: file.name,
         data: await fileToBase64(file),
       }),
-    onMutate: () => (setPreview(null), setAnalysis(null), setResult(null)),
+    onMutate: () => (
+      setPreview(null), setAnalysis(null), setResult(null), (aiRun.current += 1)
+    ),
     onSuccess: (p) => {
       setPreview(p);
       const col = (i: number | null) => (i === null ? -1 : i);
@@ -86,8 +95,16 @@ export function BankImport() {
           description: map.description < 0 ? null : map.description,
         },
       }),
+    onMutate: () => (aiRun.current += 1),
     onSuccess: (a) => {
       setAnalysis(a);
+      setAiPicks({});
+      suggest.reset();
+      // lines no rule or keyword could place, and not already imported
+      const ask = a.rows.filter(
+        (r) => !r.error && !r.suggestion && r.duplicate !== 'existing' && r.duplicate !== 'file',
+      );
+      if (aiOn && ask.length) suggest.mutate({ run: aiRun.current, rows: ask });
       setChoices(
         Object.fromEntries(
           a.rows.map((r) => [
@@ -96,6 +113,34 @@ export function BankImport() {
           ]),
         ),
       );
+    },
+  });
+
+  const suggest = useMutation({
+    mutationFn: ({ rows }: { run: number; rows: AnalysedRow[] }) =>
+      api.post<AiCategorySuggestions>('/ai/categorize', {
+        currency: account!.currency,
+        rows: rows.map((r) => ({
+          index: r.index,
+          description: r.description,
+          type: r.type,
+          amount: r.amount,
+        })),
+      }),
+    onSuccess: (s, { run }) => {
+      void queryClient.invalidateQueries({ queryKey: ['ai-status'] });
+      if (run !== aiRun.current) return;
+      const picks = Object.fromEntries(s.suggestions.map((x) => [x.index, x.categoryId]));
+      setAiPicks(picks);
+      // only boxes still empty: a category chosen meanwhile stays
+      setChoices((prev) => {
+        const next = { ...prev };
+        for (const [i, categoryId] of Object.entries(picks)) {
+          const c = next[Number(i)];
+          if (c && !c.categoryId) next[Number(i)] = { ...c, categoryId };
+        }
+        return next;
+      });
     },
   });
 
@@ -123,6 +168,7 @@ export function BankImport() {
       });
     },
     onSuccess: async ({ created }) => {
+      aiRun.current += 1;
       setResult(created);
       setAnalysis(null);
       setPreview(null);
@@ -192,7 +238,9 @@ export function BankImport() {
           />
         </label>
         <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-          <Lock size={14} aria-hidden /> Read on this laptop only. The file itself is not stored.
+          <Lock size={14} aria-hidden /> Read on this server only. The file itself is not stored.
+          {aiOn &&
+            ' Lines nothing else can place are sent to Claude for a category (account numbers masked).'}
         </p>
         <FormError error={upload.error} />
       </Card>
@@ -233,7 +281,9 @@ export function BankImport() {
               <Select
                 id="map-account"
                 value={account?.id ?? ''}
-                onChange={(e) => (setAccountId(e.target.value), setAnalysis(null))}
+                onChange={(e) => (
+                  setAccountId(e.target.value), setAnalysis(null), (aiRun.current += 1)
+                )}
               >
                 {active.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -275,6 +325,23 @@ export function BankImport() {
             </span>
           }
         >
+          {(suggest.isPending || suggest.data || suggest.error) && (
+            <p
+              role="status"
+              className="mb-3 flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
+            >
+              <Sparkles size={16} className="shrink-0" aria-hidden />
+              {suggest.isPending
+                ? `Asking AI about ${suggest.variables.rows.length} uncategorised lines…`
+                : suggest.error
+                  ? `No AI suggestions: ${errorMessage(suggest.error)}`
+                  : `AI suggested a category for ${Object.keys(aiPicks).length} of ${
+                      suggest.variables!.rows.length
+                    } uncategorised lines; check them before importing.${
+                      suggest.data!.left ? ' Only the first 200 different texts were asked.' : ''
+                    }${suggest.data!.error ? ` Stopped early: ${suggest.data!.error}` : ''}`}
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
@@ -377,6 +444,14 @@ export function BankImport() {
                                     </option>
                                   ))}
                             </Select>
+                            {c?.categoryId && c.categoryId === aiPicks[r.index] && (
+                              <span
+                                title="Suggested by AI: check it"
+                                className="rounded bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/60 dark:text-violet-200"
+                              >
+                                AI<span className="sr-only"> suggestion</span>
+                              </span>
+                            )}
                             {c?.categoryId &&
                               c.categoryId !== r.suggestion &&
                               rememberPatternFor(r.description) && (

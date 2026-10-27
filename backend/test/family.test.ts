@@ -26,6 +26,7 @@ describe('family settings', () => {
       extras: { quickEntrySuggestions: true },
       investmentsAt: 'value',
       livePrices: false,
+      aiSuggestions: false,
     });
   });
 

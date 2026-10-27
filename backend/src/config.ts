@@ -24,6 +24,20 @@ const EnvSchema = z.object({
   ONVISTA_URL: z.url().default('https://api.onvista.de/api/v1'),
   /** the ECB's reference exchange rates (dollars per euro, for gold in euros) */
   ECB_URL: z.url().default('https://data-api.ecb.europa.eu/service/data/EXR'),
+  /** Claude, for suggestions (categories of bank lines). Empty = no AI at all. */
+  ANTHROPIC_API_KEY: z
+    .string()
+    .trim()
+    .optional()
+    .transform((k) => k || undefined),
+  /** only for a stand-in server (e2e); empty = Anthropic's own */
+  ANTHROPIC_BASE_URL: z
+    .union([z.url(), z.literal('')])
+    .optional()
+    .transform((u) => u || undefined),
+  AI_MODEL: z.string().trim().min(1).default('claude-opus-5-5'),
+  /** tokens a month for the whole server (one key pays for all); then the AI waits a month */
+  AI_MONTHLY_TOKENS: z.coerce.number().int().positive().default(2_000_000),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

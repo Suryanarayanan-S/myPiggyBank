@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../ui/Card';
 import { FormError } from '../ui/Field';
+import { Switch } from '../ui/Switch';
 import { api } from '../../lib/api';
 import type { Family } from '../../lib/types';
 
@@ -33,25 +34,13 @@ export function ExtrasCard({ family }: { family: Family }) {
                   {x.hint}
                 </p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={on}
-                aria-labelledby={`extra-${x.key}`}
-                aria-describedby={`extra-${x.key}-hint`}
+              <Switch
+                on={on}
+                labelId={`extra-${x.key}`}
+                hintId={`extra-${x.key}-hint`}
                 disabled={save.isPending}
-                onClick={() => save.mutate({ [x.key]: !on })}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
-                  on ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    on ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
+                onChange={(next) => save.mutate({ [x.key]: next })}
+              />
             </li>
           );
         })}

@@ -4,6 +4,7 @@ import type { AuthUser } from './auth/sessions.js';
 import type { FetchRates } from './services/liveRateService.js';
 import type { FetchText, GoldSources } from './services/livePriceService.js';
 import type { WorldSources } from './services/worldPriceService.js';
+import type { AiSetup } from './services/aiService.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -20,6 +21,8 @@ declare module 'fastify' {
       /** onvista (shares outside India) and the ECB (dollars per euro) */
       world: WorldSources;
     } | null;
+    /** Claude for suggestions, or null when the server has no key */
+    ai: AiSetup | null;
   }
   interface FastifyRequest {
     user: AuthUser | null;

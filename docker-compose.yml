@@ -16,5 +16,9 @@ services:
       # "Today" for recurring transactions and snapshots (the container clock is UTC otherwise).
       TZ: ${TZ:-Europe/Berlin}
       RATES_URL: ${RATES_URL:-https://api.frankfurter.dev/v1}
+      # AI suggestions (Claude): no key = no AI. Each family still switches it on in Settings.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+      AI_MONTHLY_TOKENS: ${AI_MONTHLY_TOKENS:-2000000}
     volumes:
       - ${DATA_DIR:-./data}:/app/data

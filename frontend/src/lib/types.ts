@@ -20,6 +20,8 @@ export type Family = {
   investmentsAt: 'value' | 'invested';
   /** Daily closing prices from NSE for rupee holdings. */
   livePrices: boolean;
+  /** AI category suggestions for bank lines (the server needs a key too). */
+  aiSuggestions: boolean;
 };
 export type Me = { user: AuthUser; family: Family };
 export type Member = { id: string; name: string; isUser: boolean };

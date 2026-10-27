@@ -27,6 +27,17 @@ test('a long dividend list scrolls in its box until "Show all"; corporate action
       data: { date: daysAgo(320 - i * 25), type: 'dividend', amount: 10_000 + i * 100 },
     });
   }
+  // sold off long ago and archived by hand
+  await page.request.post('/api/holdings', {
+    data: {
+      name: 'OLDCO',
+      kind: 'stock',
+      symbol: 'OLDCO',
+      currency: 'INR',
+      ownerMemberId: null,
+      archived: true,
+    },
+  });
   // splits, a bonus and a demerger as NSE's history would give them (offline here)
   const event = (purpose: string, kind: string, exDate: string, before: number, after: number) => ({
     holdingId: id,
@@ -102,4 +113,11 @@ test('a long dividend list scrolls in its box until "Show all"; corporate action
   await history.getByRole('tab', { name: 'Mergers & others 1' }).click();
   await expect(history.getByRole('tabpanel')).toContainText('Demerger of ITC Hotels');
   await page.screenshot({ path: 'e2e/screenshots/dividends-tab.png', fullPage: true });
+
+  // archived holdings are listed in the Holdings tab only
+  const archivedHeading = page.getByRole('heading', { name: 'Archived' });
+  await expect(archivedHeading).toBeHidden();
+  await page.getByRole('tab', { name: /^Holdings/ }).click();
+  await expect(archivedHeading).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'OLDCO' })).toBeVisible();
 });

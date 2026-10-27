@@ -130,6 +130,12 @@ export function InvestmentsPage() {
     // from every holding: an edit may move it into a demat ticked off
     dialog?.kind === 'activity' ? all.data?.holdings.find((h) => h.id === dialog.id) : undefined;
 
+  const archivedList = archived.length > 0 && (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Archived</h2>
+      <HoldingsTable list={archived} owner={owner} onOpen={setDialog} />
+    </section>
+  );
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -337,10 +343,14 @@ export function InvestmentsPage() {
                 <HoldingsTable list={soldOut} owner={owner} onOpen={setDialog} />
               </section>
             )}
+            {/* Archived by hand: listed with the holdings only, not under every tab. */}
+            {archivedList}
           </div>
         </div>
       )}
 
+      {/* everything archived: no tabs, the list on its own */}
+      {open.length === 0 && archivedList}
       {data.data && data.data.holdings.length === 0 && (
         <Card>
           <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -349,12 +359,6 @@ export function InvestmentsPage() {
             page.
           </p>
         </Card>
-      )}
-      {archived.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Archived</h2>
-          <HoldingsTable list={archived} owner={owner} onOpen={setDialog} />
-        </section>
       )}
 
       {dialog?.kind === 'form' && (

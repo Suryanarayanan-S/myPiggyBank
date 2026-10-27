@@ -499,7 +499,9 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(
     page.locator('section', { has: page.getByText('XIRR', { exact: true }) }).first(),
   ).toContainText(/[+−-]\d+\.\d %/);
-  // Bought and sold entirely: archived, with what the sale booked (10 × (682.04 − 745.83))
+  // Bought and sold entirely: archived (in the Holdings tab), with what the sale booked
+  // (10 × (682.04 − 745.83))
+  await page.getByRole('tab', { name: /^Holdings/ }).click();
   const adani = page.getByRole('row').filter({ hasText: 'ADANIPORTS' });
   await expect(adani).toContainText('−₹637.90');
   await expect(adani).toContainText('booked');

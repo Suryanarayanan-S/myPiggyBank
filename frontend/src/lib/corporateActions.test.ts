@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionText, recentActions } from './corporateActions';
+import { actionText, eventGroup, recentActions } from './corporateActions';
 import type { Holding, HoldingAction } from './investments';
 
 const action = (p: Partial<HoldingAction>): HoldingAction => ({
@@ -48,5 +48,14 @@ describe('corporate actions notice', () => {
     ).toBe(
       'Corporate action on 8 Oct 2026 (DEMERGER): this cannot be worked out automatically — check its units and cost.',
     );
+  });
+});
+
+describe('eventGroup', () => {
+  it('puts reverse splits with splits, and demergers, mergers and rights with the others', () => {
+    expect(eventGroup('split')).toBe('splits');
+    expect(eventGroup('consolidation')).toBe('splits');
+    expect(eventGroup('bonus')).toBe('bonuses');
+    expect(eventGroup('review')).toBe('others');
   });
 });

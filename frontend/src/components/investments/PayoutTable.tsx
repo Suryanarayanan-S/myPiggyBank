@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Download, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Download, Search } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
@@ -68,6 +69,9 @@ export function PayoutTable({
     rangeOf('year', today),
   );
   const [search, setSearch] = useState('');
+  // "Show all" holds for the rows it was clicked on: another type, period, search or demat
+  // choice starts in the box again
+  const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const [sort, setSort] = useState<{ by: PayoutSort; desc: boolean }>({ by: 'date', desc: true });
   const range = period === 'custom' ? custom : rangeOf(period, today);
   const mine = useMemo(
@@ -86,6 +90,28 @@ export function PayoutTable({
       }),
     [mine, kind, range.from, range.to, search, sort],
   );
+  const shownFor = [
+    kind,
+    range.from,
+    range.to,
+    search,
+    holdingIds ? [...holdingIds].sort().join() : '',
+  ].join('|');
+  const expanded = expandedFor === shownFor;
+  // a long table scrolls in its box; whether it is long is measured, as rows differ in height
+  const box = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || expanded) return;
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight);
+    check();
+    const watch = new ResizeObserver(check);
+    watch.observe(el);
+    if (el.firstElementChild) watch.observe(el.firstElementChild);
+    return () => watch.disconnect();
+  }, [rows, expanded]);
+  const scrolls = overflows && !expanded;
   const totals = payoutTotals(rows);
   // the person's name when the family's payouts are on more than one person's holdings
   const owners = new Set(mine.map((r) => r.ownerMemberId));
@@ -222,48 +248,83 @@ export function PayoutTable({
             No {word.many} {search ? 'match the search' : 'in this period'}.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <caption className="sr-only">
-                {word.many} from {range.from ?? 'the start'} to {range.to ?? today}
-              </caption>
-              <thead>
-                <tr className="border-y border-slate-200 text-left text-xs text-slate-500 dark:border-slate-800">
-                  {header('symbol', 'Symbol', false)}
-                  {header('date', 'Ex-date')}
-                  {header('units', 'Qty.')}
-                  {header('perShare', kind === 'interest' ? 'Interest per bond' : 'Per share')}
-                  {header('amount', 'Total')}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 tabular-nums dark:divide-slate-800">
-                {rows.map((r, i) => (
-                  <tr key={`${r.holdingId}|${r.date}|${r.kind}|${i}`}>
-                    <th scope="row" className="px-4 py-2 text-left font-medium">
-                      {r.symbol}
-                      <span className="block text-xs font-normal text-slate-500">
-                        {[
-                          r.name !== r.symbol && r.name,
-                          kind === 'all' && r.kind,
-                          owners.size > 1 && ownerName(r.ownerMemberId),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    </th>
-                    <td className="px-3 py-2 text-right">{r.date}</td>
-                    <td className="px-3 py-2 text-right">{r.units.toLocaleString('en-IN')}</td>
-                    <td className="px-3 py-2 text-right">
-                      {r.perShare === null ? '—' : each(r.perShare, r.currency)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium">
-                      {formatMoney(r.amount, r.currency)}
-                    </td>
+          <>
+            <div
+              // other rows or another order start at the top
+              key={`${shownFor}|${sort.by}|${sort.desc}`}
+              ref={box}
+              className={clsx('overflow-x-auto', !expanded && 'max-h-[24rem] overflow-y-auto')}
+              tabIndex={scrolls ? 0 : undefined}
+              role={scrolls ? 'region' : undefined}
+              aria-label={scrolls ? `${word.many}, scrollable` : undefined}
+            >
+              <table className="w-full text-sm">
+                <caption className="sr-only">
+                  {word.many} from {range.from ?? 'the start'} to {range.to ?? today}
+                </caption>
+                <thead>
+                  <tr className="sticky top-0 z-10 border-y border-slate-200 bg-white text-left text-xs text-slate-500 shadow-[0_1px_0_var(--color-slate-200)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_1px_0_var(--color-slate-800)]">
+                    {header('symbol', 'Symbol', false)}
+                    {header('date', 'Ex-date')}
+                    {header('units', 'Qty.')}
+                    {header('perShare', kind === 'interest' ? 'Interest per bond' : 'Per share')}
+                    {header('amount', 'Total')}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 tabular-nums dark:divide-slate-800">
+                  {rows.map((r, i) => (
+                    <tr key={`${r.holdingId}|${r.date}|${r.kind}|${i}`}>
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {r.symbol}
+                        <span className="block text-xs font-normal text-slate-500">
+                          {[
+                            r.name !== r.symbol && r.name,
+                            kind === 'all' && r.kind,
+                            owners.size > 1 && ownerName(r.ownerMemberId),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </th>
+                      <td className="px-3 py-2 text-right">{r.date}</td>
+                      <td className="px-3 py-2 text-right">{r.units.toLocaleString('en-IN')}</td>
+                      <td className="px-3 py-2 text-right">
+                        {r.perShare === null ? '—' : each(r.perShare, r.currency)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatMoney(r.amount, r.currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {(overflows || expanded) && (
+              <div className="border-t border-slate-200 px-4 py-2 dark:border-slate-800">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setExpandedFor(expanded ? null : shownFor);
+                    // collapsing a long table: back to where it starts
+                    if (expanded)
+                      requestAnimationFrame(() =>
+                        box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+                      );
+                  }}
+                >
+                  {expanded ? (
+                    <>
+                      <ChevronUp size={16} aria-hidden /> Show fewer
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={16} aria-hidden /> Show all {rows.length} {word.many}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>

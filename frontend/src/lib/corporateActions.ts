@@ -52,3 +52,16 @@ export function actionText(h: Holding, a: HoldingAction): { text: string; check:
     check: true,
   };
 }
+
+export type EventGroup = 'splits' | 'bonuses' | 'others';
+export const EVENT_GROUPS: { key: EventGroup; label: string }[] = [
+  { key: 'splits', label: 'Splits' },
+  { key: 'bonuses', label: 'Bonuses' },
+  { key: 'others', label: 'Mergers & others' },
+];
+
+/** Which tab a corporate action is listed under: a consolidation is a split the other way. */
+export function eventGroup(kind: HoldingAction['kind']): EventGroup {
+  if (kind === 'split' || kind === 'consolidation') return 'splits';
+  return kind === 'bonus' ? 'bonuses' : 'others';
+}

@@ -10,7 +10,6 @@ import {
   dayChanges,
   dayMovers,
   dayTotal,
-  incomeByQuarter,
   portfolioXirr,
   xirr,
   returnIndex,
@@ -483,40 +482,6 @@ describe('portfolio', () => {
     ]);
     // nothing ticked: nothing to draw
     expect(compareSince({})).toEqual([]);
-  });
-
-  it('adds up dividends and interest per quarter, sold holdings included', () => {
-    const pay = (date: string, type: 'dividend' | 'interest', amount: number) => ({
-      id: date + type,
-      date,
-      type,
-      units: null,
-      amount,
-      fees: 0,
-    });
-    const r = incomeByQuarter(
-      [
-        h('INFY', {
-          trades: [pay('2025-10-27', 'dividend', 59_800), pay('2026-06-10', 'dividend', 75_000)],
-        }),
-        h('HDBFS', { archived: true, trades: [pay('2025-10-24', 'dividend', 4_000)] }),
-        h('SGB', { trades: [pay('2026-02-06', 'interest', 62_630)] }),
-        h('EUR', { currency: 'EUR', trades: [pay('2026-02-06', 'dividend', 999)] }),
-        h('LATER', { trades: [pay('2026-12-01', 'dividend', 1)] }), // after today
-      ] as Holding[],
-      'INR',
-      '2026-10-22',
-    )!;
-    expect(r.quarters.map((q) => [q.label, q.dividend, q.interest])).toEqual([
-      ['Oct – Dec ’25', 63_800, 0],
-      ['Jan – Mar ’26', 0, 62_630],
-      ['Apr – Jun ’26', 75_000, 0],
-      ['Jul – Sep ’26', 0, 0],
-      ['Oct – Dec ’26', 0, 0],
-    ]);
-    expect(r.total).toBe(201_430);
-    expect(r.count).toBe(4);
-    expect(incomeByQuarter([h('A')], 'INR', '2026-10-22')).toBeNull();
   });
 
   it('finds the yearly return of cash flows (XIRR)', () => {

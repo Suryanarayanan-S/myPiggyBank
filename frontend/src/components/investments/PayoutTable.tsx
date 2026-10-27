@@ -7,6 +7,7 @@ import { Card } from '../ui/Card';
 import { Field } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
+import { IncomeChart } from './IncomeChart';
 import { Tile } from './Tiles';
 import { api } from '../../lib/api';
 import { formatMoney, localeFor } from '../../lib/money';
@@ -167,7 +168,10 @@ export function PayoutTable({
               const next = e.target.value as Period;
               // a chosen range starts from what was shown
               if (next === 'custom' && period !== 'custom') {
-                setCustom({ from: range.from ?? '2015-01-01', to: range.to ?? today });
+                setCustom({
+                  from: range.from ?? mine.map((r) => r.date).sort()[0] ?? today,
+                  to: range.to ?? today,
+                });
               }
               setPeriod(next);
             }}
@@ -219,6 +223,7 @@ export function PayoutTable({
         />
         <Tile label={`No. of ${word.many} received`} value={String(totals.count)} />
       </div>
+      <IncomeChart payouts={rows} from={range.from} to={range.to ?? today} />
 
       <Card className="!p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4">

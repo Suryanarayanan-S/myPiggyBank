@@ -105,3 +105,71 @@ export function rangeOf(period: Exclude<Period, 'custom'>, today: string) {
   }
   return { from: null, to: null };
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const QUARTERS = ['Jan – Mar', 'Apr – Jun', 'Jul – Sep', 'Oct – Dec'];
+const yy = (y: number) => String(y).slice(2);
+/** months counted from year 0, so that a span is a subtraction */
+const monthNo = (day: string) => Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1;
+
+const STEPS = {
+  month: { size: 1, label: (m: number) => `${MONTHS[m % 12]} ’${yy(Math.floor(m / 12))}` },
+  quarter: {
+    size: 3,
+    label: (m: number) => `${QUARTERS[Math.floor((m % 12) / 3)]} ’${yy(Math.floor(m / 12))}`,
+  },
+  // India's financial year, April to March, as the periods above
+  year: {
+    size: 12,
+    label: (m: number) => `FY ${Math.floor(m / 12)}-${yy(Math.floor(m / 12) + 1)}`,
+  },
+} as const;
+/** where a bar starts: the month itself, its quarter's first month, its April */
+const startOf = (m: number, step: keyof typeof STEPS) =>
+  step === 'month' ? m : step === 'quarter' ? m - (m % 3) : m - ((m + 9) % 12);
+
+/**
+ * The payouts shown, added up per bar for the chart: by month for up to about a year, by quarter
+ * up to four years, by financial year beyond. Every bar from `from` (or the first payout) to `to`
+ * is drawn, empty ones too. One currency: the one with the most payouts; `others` are left out.
+ */
+export function payoutBars(rows: Payout[], from: string | null, to: string) {
+  if (rows.length === 0) return null;
+  const byCurrency = new Map<string, number>();
+  for (const r of rows) byCurrency.set(r.currency, (byCurrency.get(r.currency) ?? 0) + 1);
+  // the most payouts; on a tie rupees, then by name (not the table's order)
+  const [currency] = [...byCurrency].sort(
+    (a, b) =>
+      b[1] - a[1] || Number(b[0] === 'INR') - Number(a[0] === 'INR') || a[0].localeCompare(b[0]),
+  )[0]!;
+  const mine = rows.filter((r) => r.currency === currency);
+  const days = mine.map((r) => r.date).sort();
+  // the days asked for, and any payout outside them (one dated ahead): every one gets its bar
+  const first = Math.min(monthNo(from ?? days[0]!), monthNo(days[0]!));
+  const last = Math.max(monthNo(to), monthNo(days.at(-1)!));
+  const span = last - first + 1;
+  const step: keyof typeof STEPS = span <= 13 ? 'month' : span <= 48 ? 'quarter' : 'year';
+  const { size, label } = STEPS[step];
+  const start = startOf(first, step);
+  const bars = Array.from(
+    { length: Math.floor((startOf(last, step) - start) / size) + 1 },
+    (_, i) => ({
+      key: String(start + i * size),
+      label: label(start + i * size),
+      dividend: 0,
+      interest: 0,
+    }),
+  );
+  for (const r of mine) {
+    const bar = bars[Math.floor((startOf(monthNo(r.date), step) - start) / size)];
+    if (bar) bar[r.kind] += r.amount;
+  }
+  return {
+    step,
+    currency,
+    others: [...byCurrency.keys()].filter((c) => c !== currency).sort(),
+    bars,
+    total: mine.reduce((s, r) => s + r.amount, 0),
+    count: mine.length,
+  };
+}

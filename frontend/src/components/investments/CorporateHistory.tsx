@@ -61,7 +61,24 @@ export function CorporateHistory({
   });
   const [chosen, setChosen] = useState<EventGroup | null>(null);
   const events = (q.data ?? []).filter((e) => !holdingIds || holdingIds.has(e.holdingId));
-  if (events.length === 0) return null;
+  if (q.isPending) return null;
+  if (q.isError)
+    return (
+      <Card title="Splits, bonuses and mergers">
+        <p className="text-sm text-amber-800 dark:text-amber-300">
+          Could not load them just now: try again later.
+        </p>
+      </Card>
+    );
+  if (events.length === 0)
+    return (
+      <Card title="Splits, bonuses and mergers">
+        <p className="text-sm text-slate-500">
+          None for these holdings. They come from NSE’s history of Indian shares, looked up with the
+          dividends.
+        </p>
+      </Card>
+    );
   const count = (g: EventGroup) => events.filter((e) => eventGroup(e.kind) === g).length;
   // the chosen tab, or the first with something in it
   const group =

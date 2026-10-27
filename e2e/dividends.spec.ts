@@ -76,6 +76,18 @@ test('a long dividend list scrolls in its box until "Show all"; corporate action
   await page.getByLabel('Period').selectOption({ label: 'Last 12 months' });
   await expect(page.getByRole('region', { name: 'dividends, scrollable' })).toBeVisible();
 
+  // the chart draws what the table shows: the period chosen
+  const chart = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Dividend and interest' }),
+  });
+  await expect(chart).toContainText('from 12 payouts, by month');
+  await chart.screenshot({ path: 'e2e/screenshots/dividends-chart.png' });
+  await page.getByLabel('Period').selectOption({ label: 'Choose days…' });
+  await page.locator('#po-from').fill(daysAgo(100));
+  await page.locator('#po-to').fill(daysAgo(0));
+  await expect(chart).toContainText('from 3 payouts, by month');
+
+  await page.getByRole('tab', { name: 'Corporate actions' }).click();
   const history = page.locator('section', {
     has: page.getByRole('heading', { name: 'Splits, bonuses and mergers' }),
   });

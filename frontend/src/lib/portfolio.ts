@@ -464,50 +464,6 @@ export function compareSince(
   }));
 }
 
-const QUARTER_MONTHS = ['Jan – Mar', 'Apr – Jun', 'Jul – Sep', 'Oct – Dec'];
-/** At most this many quarters are drawn (the latest ones). */
-const MAX_QUARTERS = 8;
-
-/**
- * Dividends and interest received per calendar quarter (like Console's report), from the first
- * payout up to the quarter of `today`, the last eight at most. Only holdings in `currency` (the
- * summary currency) are added up; archived ones too — the money came in all the same.
- */
-export function incomeByQuarter(holdings: Holding[], currency: string, today: string) {
-  const quarterOf = (d: string) =>
-    Number(d.slice(0, 4)) * 4 + Math.floor((Number(d.slice(5, 7)) - 1) / 3);
-  const payouts = holdings
-    .filter((h) => h.currency === currency)
-    .flatMap((h) => h.trades)
-    .filter((t) => (t.type === 'dividend' || t.type === 'interest') && t.date <= today);
-  if (payouts.length === 0) return null;
-  const last = quarterOf(today);
-  const first = Math.max(
-    Math.min(...payouts.map((t) => quarterOf(t.date))),
-    last - MAX_QUARTERS + 1,
-  );
-  const quarters = Array.from({ length: last - first + 1 }, (_, i) => {
-    const q = first + i;
-    return {
-      key: `${Math.floor(q / 4)}-Q${(q % 4) + 1}`,
-      label: `${QUARTER_MONTHS[q % 4]} ’${String(Math.floor(q / 4)).slice(2)}`,
-      dividend: 0,
-      interest: 0,
-    };
-  });
-  let count = 0;
-  for (const t of payouts) {
-    const q = quarterOf(t.date) - first;
-    if (q < 0) continue;
-    quarters[q]![t.type as 'dividend' | 'interest'] += t.amount;
-    count++;
-  }
-  const total = quarters.reduce((s, q) => s + q.dividend + q.interest, 0);
-  /** older payouts were left out (only the last eight quarters are drawn) */
-  const trimmed = count < payouts.length;
-  return { quarters, total, count, trimmed };
-}
-
 /**
  * The yearly rate that makes these cash flows worth nothing together (money in negative, money
  * out positive), like a spreadsheet's XIRR. Null when there is no answer (all one sign).

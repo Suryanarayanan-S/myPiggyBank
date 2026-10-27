@@ -8,7 +8,6 @@ import { HoldingActivity, HoldingForm } from '../components/investments/HoldingD
 import { HoldingsImport } from '../components/investments/HoldingsImport';
 import { CountAt } from '../components/investments/CountAt';
 import { CorporateActions } from '../components/investments/CorporateActions';
-import { IncomeChart } from '../components/investments/IncomeChart';
 import { TradebookImport } from '../components/investments/TradebookImport';
 import { TradeRepublicImport } from '../components/investments/TradeRepublicImport';
 import { DividendCheck } from '../components/investments/DividendCheck';
@@ -45,7 +44,7 @@ import { formatPercent } from '../lib/percent';
 import { useMembers } from '../lib/queries';
 import { useViewCurrency, withView } from '../lib/viewCurrency';
 
-const TABS = ['overview', 'performance', 'dividends', 'holdings'] as const;
+const TABS = ['overview', 'performance', 'dividends', 'actions', 'holdings'] as const;
 const HIDDEN_KEY = 'pb-demats-hidden';
 
 function readHidden(): string[] {
@@ -247,13 +246,14 @@ export function InvestmentsPage() {
           <div
             role="tablist"
             aria-label="Investments view"
-            className="flex gap-1 border-b border-slate-200 dark:border-slate-800"
+            className="flex gap-1 overflow-x-auto border-b border-slate-200 whitespace-nowrap dark:border-slate-800"
           >
             {(
               [
                 ['overview', 'Overview'],
                 ['performance', 'Performance'],
                 ['dividends', 'Dividends'],
+                ['actions', 'Corporate actions'],
                 ['holdings', `Holdings (${listed(open, s.currency).length})`],
               ] as const
             ).map(([key, label]) => (
@@ -266,7 +266,7 @@ export function InvestmentsPage() {
                 aria-controls={`panel-${key}`}
                 onClick={() => setParams(key === 'overview' ? {} : { tab: key }, { replace: true })}
                 className={clsx(
-                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
+                  '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium',
                   tab === key
                     ? 'border-indigo-600 text-indigo-700 dark:text-indigo-300'
                     : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
@@ -308,9 +308,16 @@ export function InvestmentsPage() {
             className="space-y-5"
           >
             <DividendCheck empty={!paidOut} />
-            <PayoutTable holdingIds={shownIds} />
             {/* Sold holdings' payouts count too (archived ones included). */}
-            <IncomeChart holdings={data.data?.holdings ?? []} currency={s.currency} />
+            <PayoutTable holdingIds={shownIds} />
+          </div>
+          <div
+            role="tabpanel"
+            id="panel-actions"
+            aria-labelledby="tab-actions"
+            hidden={tab !== 'actions'}
+            className="space-y-5"
+          >
             <CorporateHistory holdingIds={shownIds} />
           </div>
           <div

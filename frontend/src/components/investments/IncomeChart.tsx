@@ -11,10 +11,8 @@ import {
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
 import { AXIS, GRID, SURFACE, axisTick, niceTicks } from '../../lib/chart';
-import type { Holding } from '../../lib/investments';
 import { formatCompact, formatMoney } from '../../lib/money';
-import { localDay } from '../../lib/months';
-import { incomeByQuarter } from '../../lib/portfolio';
+import { payoutBars, type Payout } from '../../lib/payouts';
 
 /** Colours follow the entity, as in Console: dividends blue, interest orange. */
 const SERIES = [
@@ -22,23 +20,41 @@ const SERIES = [
   { key: 'interest', label: 'Interest', color: 'var(--c-cat-2)' },
 ] as const;
 
-/** Dividends and interest received per quarter (sold holdings included), stacked. */
-export function IncomeChart({ holdings, currency }: { holdings: Holding[]; currency: string }) {
-  const r = incomeByQuarter(holdings, currency, localDay());
-  // nothing in the quarters shown (older payouts only): no empty chart
-  if (!r || r.count === 0) return null;
+const STEP_WORD = { month: 'by month', quarter: 'by quarter', year: 'by financial year' } as const;
+
+/**
+ * The payouts the table shows (same type, period, search and demats; sold holdings included),
+ * stacked per month, quarter or financial year as the period's length suits.
+ */
+export function IncomeChart({
+  payouts,
+  from,
+  to,
+}: {
+  payouts: Payout[];
+  /** the period's first and last day; no first day: from the first payout */
+  from: string | null;
+  to: string;
+}) {
+  const r = payoutBars(payouts, from, to);
+  if (!r) return null;
+  const currency = r.currency;
   const money = (c: number) => formatMoney(c, currency);
-  const rows = r.quarters.map((q) => ({ ...q, total: q.dividend + q.interest }));
+  const rows = r.bars.map((q) => ({ ...q, total: q.dividend + q.interest }));
   const ticks = niceTicks(Math.max(...rows.map((q) => q.total)));
   const shown = SERIES.filter((s) => rows.some((q) => q[s.key] > 0));
   return (
     <ChartCard
       title="Dividend and interest"
-      subtitle={`${money(r.total)} from ${r.count} ${r.count === 1 ? 'payout' : 'payouts'} since ${rows[0]!.label}, by quarter${r.trimmed ? ' (the last eight)' : ''}`}
+      subtitle={`${money(r.total)} from ${r.count} ${r.count === 1 ? 'payout' : 'payouts'}, ${STEP_WORD[r.step]}${r.others.length ? ` (${currency} only; ${r.others.join(', ')} in the table)` : ''}`}
       legend={shown.map((s) => ({ label: s.label, color: s.color }))}
       table={
         <DataTable
-          head={['Quarter', ...shown.map((s) => s.label), 'Total']}
+          head={[
+            { month: 'Month', quarter: 'Quarter', year: 'Financial year' }[r.step],
+            ...shown.map((s) => s.label),
+            'Total',
+          ]}
           rows={rows.map((q) => [q.label, ...shown.map((s) => money(q[s.key])), money(q.total)])}
         />
       }
@@ -52,7 +68,8 @@ export function IncomeChart({ holdings, currency }: { holdings: Holding[]; curre
               tick={axisTick}
               tickLine={false}
               axisLine={{ stroke: AXIS }}
-              interval={0}
+              // a year by month: every label where they fit, else some
+              interval={rows.length > 8 ? 'preserveStartEnd' : 0}
               minTickGap={4}
             />
             <YAxis
@@ -101,8 +118,8 @@ export function IncomeChart({ holdings, currency }: { holdings: Holding[]; curre
                 radius={i === shown.length - 1 ? [4, 4, 0, 0] : undefined}
                 isAnimationActive={false}
               >
-                {/* each quarter's total, written once above its bar */}
-                {i === shown.length - 1 && (
+                {/* each bar's total, written once above it (when there is room) */}
+                {i === shown.length - 1 && rows.length <= 8 && (
                   <LabelList
                     dataKey="total"
                     position="top"

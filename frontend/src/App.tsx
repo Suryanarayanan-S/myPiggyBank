@@ -8,6 +8,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { BudgetPage } from './pages/BudgetPage';
+import { BudgetOverviewPage } from './pages/BudgetOverviewPage';
 import { MonthEntryPage } from './pages/MonthEntryPage';
 import { ImportPage } from './pages/ImportPage';
 import { WealthPage } from './pages/WealthPage';
@@ -25,6 +26,10 @@ const TRANSACTION_TABS: SectionTab[] = [
   { to: '/transactions', label: 'All', end: true },
   { to: '/transactions/recurring', label: 'Recurring' },
   { to: '/transactions/import', label: 'Import' },
+];
+const BUDGET_TABS: SectionTab[] = [
+  { to: '/budget', label: 'Month', end: true },
+  { to: '/budget/overview', label: 'Overview' },
 ];
 const WEALTH_TABS: SectionTab[] = [
   { to: '/wealth', label: 'Net worth & assets', end: true },
@@ -59,7 +64,10 @@ export function App() {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="budget" element={<BudgetPage />} />
+          <Route path="budget" element={<SectionLayout name="Budget" tabs={BUDGET_TABS} />}>
+            <Route index element={<BudgetPage />} />
+            <Route path="overview" element={<BudgetOverviewPage />} />
+          </Route>
           <Route path="budget/entry" element={<MonthEntryPage />} />
           <Route
             path="transactions"

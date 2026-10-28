@@ -73,6 +73,40 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await cashFlow.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '12-dashboard');
 
+  // the spending in detail moved to Budget → Overview, for the same period
+  await expect(page.getByRole('heading', { name: 'Savings rate' })).toBeHidden();
+  await page.getByRole('link', { name: /Budget → Overview/ }).click();
+  await expect(page).toHaveURL(/\/budget\/overview\?period=last-3/);
+  await expect(page.getByRole('radio', { name: 'Last 3 months' })).toBeChecked();
+  for (const title of [
+    'Savings rate',
+    'Share of income',
+    'Where the money went',
+    'Spending by family member',
+  ])
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('link', { name: 'Month', exact: true }).click();
+  await expect(page).toHaveURL(/\/budget$/);
+
+  // a payment without a category: the dashboard says so and leads to them
+  const added = await page.request.post('/api/transactions', {
+    data: {
+      date: new Date().toISOString().slice(0, 10),
+      type: 'expense',
+      amount: 1_500,
+      accountId: null,
+      categoryId: null,
+    },
+  });
+  expect(added.status(), await added.text()).toBe(201);
+  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  const attention = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Needs your attention' }),
+  });
+  await attention.getByRole('link', { name: '1 payment or income without a category' }).click();
+  await expect(page.getByLabel('Category')).toHaveValue('none');
+  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+
   await page.getByRole('radio', { name: 'All time' }).click();
   await expect(tile('Net income')).toContainText('14.250,00 €');
   await page.setViewportSize({ width: 390, height: 844 });

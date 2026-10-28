@@ -64,9 +64,7 @@ export function BankImport() {
         fileName: file.name,
         data: await fileToBase64(file),
       }),
-    onMutate: () => (
-      setPreview(null), setAnalysis(null), setResult(null), (aiRun.current += 1)
-    ),
+    onMutate: () => (setPreview(null), setAnalysis(null), setResult(null), (aiRun.current += 1)),
     onSuccess: (p) => {
       setPreview(p);
       const col = (i: number | null) => (i === null ? -1 : i);
@@ -282,7 +280,9 @@ export function BankImport() {
                 id="map-account"
                 value={account?.id ?? ''}
                 onChange={(e) => (
-                  setAccountId(e.target.value), setAnalysis(null), (aiRun.current += 1)
+                  setAccountId(e.target.value),
+                  setAnalysis(null),
+                  (aiRun.current += 1)
                 )}
               >
                 {active.map((a) => (

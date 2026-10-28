@@ -1,73 +1,36 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { AlertTriangle } from 'lucide-react';
 import { useMe } from '../auth/auth';
+import { Attention } from '../components/dashboard/Attention';
 import { CashFlowChart } from '../components/dashboard/CashFlowChart';
 import { Insights } from '../components/dashboard/Insights';
 import { InvestmentsSummary } from '../components/dashboard/InvestmentsSummary';
+import { NetWorthSummary } from '../components/dashboard/NetWorthSummary';
 import { PeriodFilter } from '../components/dashboard/PeriodFilter';
-import { CategoryBars, MemberBars } from '../components/dashboard/RankBars';
 import { StatTiles } from '../components/dashboard/StatTiles';
-import { SavingsRateChart, ShareChart } from '../components/dashboard/TrendCharts';
+import { useDashboardPeriod } from '../components/dashboard/useDashboardPeriod';
 import { StatusBadge } from '../components/goals/GoalCard';
 import { Card } from '../components/ui/Card';
 import { Progress } from '../components/ui/Progress';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
-import type { Dashboard } from '../lib/dashboardTypes';
 import { insightsFor } from '../lib/insights';
 import { useBucketNames } from '../lib/buckets';
 import { insightText, type InsightsResponse } from '../lib/insightText';
 import { formatMoney } from '../lib/money';
-import { isMonth, localMonth, monthTitle } from '../lib/months';
-import { PRESETS, periodRange, type Preset } from '../lib/periods';
 import { useGoals } from '../lib/queries';
-import { useViewCurrency, withView } from '../lib/viewCurrency';
+import { withView } from '../lib/viewCurrency';
 
 export function DashboardPage() {
   const me = useMe();
   const names = useBucketNames();
-  const [params, setParams] = useSearchParams();
-  const today = localMonth();
-  const [view] = useViewCurrency();
-  const preset = (
-    PRESETS.some((p) => p.value === params.get('period')) ? params.get('period') : 'last-12'
-  ) as Preset;
-  const custom = {
-    from: isMonth(params.get('from')) ? params.get('from')! : today,
-    to: isMonth(params.get('to')) ? params.get('to')! : today,
-  };
-
-  // "All time" needs the first recorded month, which the API returns with every response.
-  const first = useQuery({
-    queryKey: ['dashboard', 'first'],
-    queryFn: () => api.get<Dashboard>(`/dashboard?from=${today}&to=${today}`),
-    select: (d) => d.firstMonth,
-    enabled: preset === 'all',
-  });
-  const range = periodRange(preset, today, first.data ?? null, custom);
-  const dash = useQuery({
-    queryKey: ['dashboard', range.from, range.to, view],
-    queryFn: () =>
-      api.get<Dashboard>(withView(`/dashboard?from=${range.from}&to=${range.to}`, view)),
-    placeholderData: keepPreviousData,
-    enabled: preset !== 'all' || first.isSuccess,
-  });
+  const { today, view, preset, custom, range, dash, change, label } = useDashboardPeriod();
   const d = dash.data;
   const observations = useQuery({
     queryKey: ['insights', view],
     queryFn: () => api.get<InsightsResponse>(withView('/insights', view)),
   });
-
-  const change = (p: Preset, c?: { from: string; to: string }) =>
-    setParams(p === 'custom' && c ? { period: p, from: c.from, to: c.to } : { period: p }, {
-      replace: true,
-    });
-
-  const label =
-    range.from === range.to
-      ? monthTitle(range.from)
-      : `${monthTitle(range.from)} – ${monthTitle(range.to)}`;
 
   return (
     <div className="space-y-5">
@@ -78,6 +41,12 @@ export function DashboardPage() {
           </h1>
           <p className="text-sm text-slate-500">{label}</p>
         </div>
+      </div>
+      {/* today's picture first (each loads on its own), then the chosen period's figures */}
+      <Attention uncategorised={d?.uncategorised ?? null} />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <NetWorthSummary />
+        <InvestmentsSummary />
       </div>
       <PeriodFilter preset={preset} custom={custom} onChange={change} />
       <FormError error={dash.error} />
@@ -143,16 +112,19 @@ export function DashboardPage() {
             ]}
           />
           <CashFlowChart d={d} />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <SavingsRateChart d={d} />
-            <ShareChart d={d} />
-          </div>
-          <div className="grid gap-5 lg:grid-cols-2">
-            <CategoryBars d={d} />
-            <MemberBars d={d} />
-          </div>
+          <p className="-mt-2 text-sm">
+            <Link
+              to={`/budget/overview?${new URLSearchParams(
+                preset === 'custom'
+                  ? { period: preset, from: custom.from, to: custom.to }
+                  : { period: preset },
+              )}`}
+              className="text-indigo-600 hover:underline"
+            >
+              Savings rate, 50/30/20 and where the money went: Budget → Overview
+            </Link>
+          </p>
           <GoalsSummary />
-          <InvestmentsSummary />
           {d.accounts.length > 0 && (
             <Card title="Account balances today">
               <dl className="flex flex-wrap gap-x-8 gap-y-2">

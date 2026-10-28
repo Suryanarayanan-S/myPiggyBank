@@ -94,6 +94,14 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   await expect(page.getByText('₹1.35 Cr')).toBeVisible(); // the past entry keeps its two decimals
   await shot(page, '14-wealth');
 
+  // the dashboard shows the same net worth, with each person's share and the change
+  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  const worth = page.locator('section', { has: page.getByRole('heading', { name: 'Net worth' }) });
+  await expect(worth).toContainText('since 26 Jan 2024');
+  await expect(worth.getByRole('link', { name: 'Family wealth' })).toBeVisible();
+  await worth.screenshot({ path: 'e2e/screenshots/dashboard-net-worth.png' });
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await shot(page, '15-mobile-wealth');
 });

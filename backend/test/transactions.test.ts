@@ -62,6 +62,30 @@ describe('transactions', () => {
     tags: [' Food ', 'food', 'Weekly'],
   });
 
+  it('the list can show only income and payments without a category', async () => {
+    const add = (categoryId: string | null) =>
+      create({
+        date: '2026-08-20',
+        type: 'expense',
+        amount: 1_000,
+        accountId: f.sparkasse.id,
+        categoryId,
+      });
+    await add(null);
+    await add(f.cat('Rent'));
+    await create({
+      date: '2026-08-21',
+      type: 'transfer',
+      amount: 500,
+      accountId: f.sparkasse.id,
+      transferAccountId: f.revolut.id,
+    });
+    const list = (await call('GET', '/api/transactions?categoryId=none')).json().data;
+    // a transfer has no category by nature: not listed
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0].categoryId).toBeNull();
+  });
+
   it('creates income and expense transactions and updates the balance', async () => {
     expect((await create(salary())).statusCode).toBe(201);
     const res = await create(groceries());

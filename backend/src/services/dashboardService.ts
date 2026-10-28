@@ -36,31 +36,44 @@ export async function getDashboard(
   start.setUTCMonth(start.getUTCMonth() - length);
   const end = monthRange(to).end;
 
-  const [family, rows, rates, categories, members, accounts, first] = await Promise.all([
-    getFamily(prisma, familyId),
-    prisma.transaction.findMany({
-      where: { familyId, date: { gte: start, lt: end } },
-      select: {
-        date: true,
-        type: true,
-        amount: true,
-        isMonthlyTotal: true,
-        categoryId: true,
-        memberId: true,
-        currency: true,
-        category: { select: { name: true, bucket: true } },
-      },
-    }),
-    loadRates(prisma, familyId),
-    listCategories(prisma, familyId),
-    prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
-    listAccounts(prisma, familyId),
-    prisma.transaction.findFirst({
-      where: { familyId },
-      orderBy: { date: 'asc' },
-      select: { date: true },
-    }),
-  ]);
+  const [family, rows, rates, categories, members, accounts, first, uncategorised] =
+    await Promise.all([
+      getFamily(prisma, familyId),
+      prisma.transaction.findMany({
+        where: { familyId, date: { gte: start, lt: end } },
+        select: {
+          date: true,
+          type: true,
+          amount: true,
+          isMonthlyTotal: true,
+          categoryId: true,
+          memberId: true,
+          currency: true,
+          category: { select: { name: true, bucket: true } },
+        },
+      }),
+      loadRates(prisma, familyId),
+      listCategories(prisma, familyId),
+      prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
+      listAccounts(prisma, familyId),
+      prisma.transaction.findFirst({
+        where: { familyId },
+        orderBy: { date: 'asc' },
+        select: { date: true },
+      }),
+      // the period's income and payments without a category: how many, and the newest
+      prisma.transaction.aggregate({
+        where: {
+          familyId,
+          // the period itself, not the one before it (loaded for the comparison)
+          date: { gte: monthRange(from).start, lt: end },
+          type: { in: ['income', 'expense'] },
+          categoryId: null,
+        },
+        _count: true,
+        _max: { date: true },
+      }),
+    ]);
 
   const dashboard = buildDashboard({
     from,
@@ -85,11 +98,10 @@ export async function getDashboard(
 
   const currency = view ?? family.spendingCurrency;
   const now = todayLocal().slice(0, 7);
-  const live = accounts.filter((a) => !a.archived);
+  // bank accounts only: demat and broker accounts hold investments, counted on their own
+  const live = accounts.filter((a) => !a.archived && a.type !== 'investment');
   const balances = new Map<string, number>();
-  for (const a of accounts) {
-    if (!a.archived) balances.set(a.currency, (balances.get(a.currency) ?? 0) + a.balance);
-  }
+  for (const a of live) balances.set(a.currency, (balances.get(a.currency) ?? 0) + a.balance);
   return {
     ...dashboard,
     targets: family.targets,
@@ -102,6 +114,12 @@ export async function getDashboard(
       ),
     },
     firstMonth: first ? first.date.toISOString().slice(0, 7) : null,
+    /** income and payments of the period without a category (to sort out), and the month of
+     * the newest (where the list of them opens) */
+    uncategorised: {
+      count: uncategorised._count,
+      latestMonth: uncategorised._max.date?.toISOString().slice(0, 7) ?? null,
+    },
     accounts: [...balances]
       .map(([currency, balance]) => ({ currency, balance }))
       .sort((a, b) => a.currency.localeCompare(b.currency)),

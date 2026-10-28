@@ -52,7 +52,8 @@ export const ListQuery = z.object({
   type: z.enum(TYPES).optional(),
   /** An account's id, or "none" for transactions without one. */
   accountId: z.union([z.uuid(), z.literal('none')]).optional(),
-  categoryId: z.uuid().optional(),
+  /** A category's id, or "none" for income and payments without one. */
+  categoryId: z.union([z.uuid(), z.literal('none')]).optional(),
   memberId: z.union([z.uuid(), z.literal('shared')]).optional(),
   q: z.string().trim().max(100).optional(),
   sort: z.enum(['date', 'amount']).default('date'),
@@ -215,7 +216,9 @@ export function filterWhere(
   if (q.accountId === 'none') and.push({ accountId: null });
   else if (q.accountId)
     and.push({ OR: [{ accountId: q.accountId }, { transferAccountId: q.accountId }] });
-  if (q.categoryId) and.push({ categoryId: q.categoryId });
+  if (q.categoryId === 'none')
+    and.push({ categoryId: null, type: { in: ['income', 'expense'] } });
+  else if (q.categoryId) and.push({ categoryId: q.categoryId });
   if (q.memberId) and.push({ memberId: q.memberId === 'shared' ? null : q.memberId });
   if (q.q) {
     and.push({

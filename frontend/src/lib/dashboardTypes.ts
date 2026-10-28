@@ -25,6 +25,8 @@ export type Dashboard = {
   unconverted: { currency: string; amount: number }[];
   targets: { essentials: number; fun: number; future: number };
   firstMonth: string | null;
+  /** income and payments of the period without a category, and the month of the newest */
+  uncategorised: { count: number; latestMonth: string | null };
   accounts: { currency: string; balance: number }[];
   /** Open accounts together, in the dashboard currency at today's rate. */
   accountsTotal: Converted;

@@ -37,9 +37,9 @@ export function AiCard({ family }: { family: Family }) {
           <p id="ai-categories-hint" className="text-xs text-slate-500">
             When you import a bank statement, lines that no saved rule or known shop can place are
             sent to Claude with their amount and your category names. Payee names go too (that is
-            how a shop is recognised); IBANs, account and card
-            numbers, emails, UPI IDs and phone numbers are masked first. You check every suggestion before
-            importing, and the ones you keep are remembered, so a payee is asked about only once.
+            how a shop is recognised); IBANs, account and card numbers, emails, UPI IDs and phone
+            numbers are masked first. You check every suggestion before importing, and the ones you
+            keep are remembered, so a payee is asked about only once.
           </p>
         </div>
         <Switch
@@ -58,8 +58,8 @@ export function AiCard({ family }: { family: Family }) {
       )}
       {s?.available && s.monthlyTokens !== null && (
         <p className="mt-3 text-xs text-slate-500">
-          This month: {n(s.usedTokens)} tokens used · {n(s.monthlyTokens)} a month on this
-          server · {s.model}
+          This month: {n(s.usedTokens)} tokens used · {n(s.monthlyTokens)} a month on this server ·{' '}
+          {s.model}
         </p>
       )}
       <FormError error={save.error} />

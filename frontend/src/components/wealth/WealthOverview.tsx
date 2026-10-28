@@ -39,7 +39,7 @@ const longDate = (d: string) =>
     timeZone: 'UTC',
   });
 
-function Change({
+export function Change({
   now,
   then,
   currency,

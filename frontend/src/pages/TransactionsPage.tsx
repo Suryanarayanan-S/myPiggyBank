@@ -167,6 +167,7 @@ export function TransactionsPage() {
           onChange={(e) => update({ categoryId: e.target.value })}
         >
           <option value="">All categories</option>
+          <option value="none">Without a category</option>
           {categories.data?.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

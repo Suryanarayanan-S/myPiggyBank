@@ -19,7 +19,7 @@ const noon = (d: string) => Date.parse(`${d}T12:00:00Z`) / 1000;
  * 2026-01-07 when `split` is set; each benchmark ETF; daily closes 5–9 Jan 2026 (the split day
  * onward at a fifth). The ECB: dollars per euro those days.
  */
-function fake(opts: { split?: boolean; price?: number } = {}) {
+function fake(opts: { split?: boolean; price?: number; ecb?: string } = {}) {
   const urls: string[] = [];
   const isins = ['JP3633400001', ...WORLD_BENCHMARKS.map((b) => b.isin)];
   const ok = (body: unknown) => ({
@@ -68,7 +68,10 @@ function fake(opts: { split?: boolean; price?: number } = {}) {
     }
     if (url.startsWith(SRC.ecb)) {
       return ok(
-        ['KEY,FREQ,TIME_PERIOD,OBS_VALUE', 'x,D,2026-01-05,1.10', 'x,D,2026-01-08,1.25'].join('\n'),
+        opts.ecb ??
+          ['KEY,FREQ,TIME_PERIOD,OBS_VALUE', 'x,D,2026-01-05,1.10', 'x,D,2026-01-08,1.25'].join(
+            '\n',
+          ),
       );
     }
     return { ok: false, status: 404, text: async () => '' };
@@ -229,6 +232,15 @@ describe('world prices (onvista)', () => {
     expect(
       inEuros([{ date: '2019-01-01', value: 1 }], [{ date: '2020-01-01', value: 1.1 }]),
     ).toEqual([]);
+  });
+
+  it('no new ECB rate yet (it answers with nothing at all) is no error', async () => {
+    expect(await refreshWorldPrices(prisma, fake({ ecb: '' }).fetchText, TODAY, SRC, 0)).toEqual(
+      [],
+    );
+    // something that is no rates is still said
+    const odd = await refreshWorldPrices(prisma, fake({ ecb: '<html>' }).fetchText, TODAY, SRC, 0);
+    expect(odd.join()).toMatch(/something else than its rates/);
   });
 
   it('says which ISINs onvista does not quote, and asks nothing for families without prices', async () => {

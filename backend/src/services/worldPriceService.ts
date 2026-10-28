@@ -382,10 +382,13 @@ async function usdRun(ctx: Ctx, today: string) {
   const res = await ctx.fetchText(
     `${ctx.src.ecb}/D.USD.EUR.SP00.A?startPeriod=${from}&format=csvdata`,
   );
-  // nothing published since: the ECB answers 404
+  // nothing published since: the ECB answers 404, or 200 with nothing at all (asked from today,
+  // before the afternoon's rate is out)
   if (res.status === 404) return;
   if (!res.ok) throw new Error(`the ECB answered ${res.status}`);
-  const [head, ...rows] = (await res.text()).trim().split(/\r?\n/);
+  const body = (await res.text()).trim();
+  if (body === '') return;
+  const [head, ...rows] = body.split(/\r?\n/);
   const cols = (head ?? '').split(',');
   const [d, v] = [cols.indexOf('TIME_PERIOD'), cols.indexOf('OBS_VALUE')];
   if (d < 0 || v < 0) throw new Error('the ECB sent something else than its rates');

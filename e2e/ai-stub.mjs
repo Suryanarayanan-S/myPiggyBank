@@ -1,5 +1,7 @@
-// A stand-in for the Anthropic API in e2e tests: answers category requests from a word table,
-// so no test ever reaches Claude. Listens on 127.0.0.1:3102.
+// Stand-ins for outside services in e2e tests, so no test goes online. Listens on 127.0.0.1:3102.
+// - the Anthropic API: answers category requests from a word table (never Claude)
+// - the ECB: dollars and rupees per euro for the working days of the last 400 days, a smooth
+//   made-up path ending at 1.12 $ and 100.80 ₹ per euro
 import http from 'node:http';
 
 const TABLE = { Bäckerei: 'Groceries' };
@@ -15,9 +17,31 @@ const answer = (prompt) => {
   };
 };
 
+function ecbRates() {
+  const today = Date.parse(new Date().toISOString().slice(0, 10));
+  const days = [];
+  for (let n = 400; n >= 0; n--) {
+    const d = new Date(today - n * 86_400_000);
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) days.push(d.toISOString().slice(0, 10));
+  }
+  // counted back from the latest working day, which has the round rates
+  const rows = days.flatMap((day, i) => {
+    const k = days.length - 1 - i;
+    return [
+      `x,D,USD,${day},${(1.12 - k * 0.0001).toFixed(4)}`,
+      `x,D,INR,${day},${(100.8 - k * 0.02).toFixed(4)}`,
+    ];
+  });
+  return ['KEY,FREQ,CURRENCY,TIME_PERIOD,OBS_VALUE', ...rows].join('\n');
+}
+
 http
   .createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') return res.end('ok');
+    if (req.method === 'GET' && req.url?.startsWith('/ecb/')) {
+      res.setHeader('Content-Type', 'text/csv');
+      return res.end(ecbRates());
+    }
     if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
       res.statusCode = 404;
       return res.end();

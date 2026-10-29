@@ -9,6 +9,7 @@ import { AccountsPage } from './pages/AccountsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { BudgetPage } from './pages/BudgetPage';
 import { BudgetOverviewPage } from './pages/BudgetOverviewPage';
+import { CurrenciesPage } from './pages/CurrenciesPage';
 import { MonthEntryPage } from './pages/MonthEntryPage';
 import { ImportPage } from './pages/ImportPage';
 import { WealthPage } from './pages/WealthPage';
@@ -31,6 +32,7 @@ const BUDGET_TABS: SectionTab[] = [
   { to: '/budget', label: 'Month', end: true },
   { to: '/budget/overview', label: 'Overview' },
 ];
+const ANALYTICS_TABS: SectionTab[] = [{ to: '/analytics', label: 'Currencies', end: true }];
 const WEALTH_TABS: SectionTab[] = [
   { to: '/wealth', label: 'Net worth & assets', end: true },
   { to: '/wealth/accounts', label: 'Accounts' },
@@ -94,6 +96,12 @@ export function App() {
             <Route path="gold" element={<GoldPage />} />
           </Route>
           <Route path="goals" element={<GoalsPage />} />
+          <Route
+            path="analytics"
+            element={<SectionLayout name="Analytics" tabs={ANALYTICS_TABS} />}
+          >
+            <Route index element={<CurrenciesPage />} />
+          </Route>
           <Route path="reports" element={<SectionLayout name="Reports" tabs={REPORT_TABS} />}>
             <Route index element={<ReportsPage />} />
             <Route path="insights" element={<InsightsPage />} />

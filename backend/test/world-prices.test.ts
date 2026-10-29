@@ -69,9 +69,13 @@ function fake(opts: { split?: boolean; price?: number; ecb?: string } = {}) {
     if (url.startsWith(SRC.ecb)) {
       return ok(
         opts.ecb ??
-          ['KEY,FREQ,TIME_PERIOD,OBS_VALUE', 'x,D,2026-01-05,1.10', 'x,D,2026-01-08,1.25'].join(
-            '\n',
-          ),
+          [
+            'KEY,FREQ,CURRENCY,TIME_PERIOD,OBS_VALUE',
+            'x,D,USD,2026-01-05,1.10',
+            'x,D,INR,2026-01-05,98.5',
+            'x,D,USD,2026-01-08,1.25',
+            'x,D,INR,2026-01-08,99.1',
+          ].join('\n'),
       );
     }
     return { ok: false, status: 404, text: async () => '' };

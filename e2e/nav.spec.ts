@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('eight sections, related pages as tabs, and old links still work', async ({ page }) => {
+test('nine sections, related pages as tabs, and old links still work', async ({ page }) => {
   await page.goto('/register');
   await page.getByLabel('Your name').fill('Surya');
   await page.getByLabel('Email').fill(`nav-${Date.now()}@example.com`);
@@ -15,6 +15,7 @@ test('eight sections, related pages as tabs, and old links still work', async ({
     'Wealth',
     'Investments',
     'Goals',
+    'Analytics',
     'Reports',
     'Settings',
   ]);

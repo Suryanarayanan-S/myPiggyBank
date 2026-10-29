@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  ChartLine,
   Landmark,
   LayoutDashboard,
   PieChart,
@@ -30,6 +31,7 @@ export const navItems: NavItem[] = [
   { to: '/wealth', label: 'Wealth', icon: Landmark, primary: true },
   { to: '/investments', label: 'Investments', icon: TrendingUp },
   { to: '/goals', label: 'Goals', icon: Target },
+  { to: '/analytics', label: 'Analytics', icon: ChartLine },
   { to: '/reports', label: 'Reports', icon: FileText },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];

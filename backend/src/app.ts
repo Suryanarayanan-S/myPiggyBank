@@ -37,6 +37,7 @@ import { goldRoutes } from './routes/gold.js';
 import { reportRoutes } from './routes/reports.js';
 import { insightRoutes } from './routes/insights.js';
 import { aiRoutes } from './routes/ai.js';
+import { analyticsRoutes } from './routes/analytics.js';
 import type { AiSetup } from './services/aiService.js';
 
 export type AppConfig = Pick<Config, 'COOKIE_SECURE' | 'ALLOW_REGISTRATION' | 'SESSION_DAYS'>;
@@ -179,6 +180,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(reportRoutes);
       await api.register(insightRoutes);
       await api.register(aiRoutes);
+      await api.register(analyticsRoutes);
     },
     { prefix: '/api' },
   );

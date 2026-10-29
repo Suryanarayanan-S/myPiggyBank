@@ -374,13 +374,23 @@ async function benchmarksRun(ctx: Ctx, today: string) {
   if (failed.length) throw new Error(failed.join('; '));
 }
 
-/** US dollars per euro (ECB reference rate), since 2020: turns the world gold price into euros. */
-async function usdRun(ctx: Ctx, today: string) {
-  const last = await lastPoint(ctx.prisma, 'usdPerEur');
-  const from = last ? addDays(last, 1) : HISTORY_FROM;
+/**
+ * Dollars and rupees per euro (ECB reference rates), since 2020, in one request: they turn the
+ * world gold price into euros and are the Analytics page's currencies.
+ */
+export async function refreshEcbRates(
+  prisma: PrismaClient,
+  fetchText: FetchText,
+  ecbUrl: string,
+  today: string,
+) {
+  const lasts = await Promise.all(ECB_SERIES.map((x) => lastPoint(prisma, x.series)));
+  // from the day after the series that is furthest behind (a new one: from the start)
+  const behind = lasts.some((l) => l === null) ? null : lasts.reduce((a, b) => (a! < b! ? a : b));
+  const from = behind ? addDays(behind, 1) : HISTORY_FROM;
   if (from > today) return;
-  const res = await ctx.fetchText(
-    `${ctx.src.ecb}/D.USD.EUR.SP00.A?startPeriod=${from}&format=csvdata`,
+  const res = await fetchText(
+    `${ecbUrl}/D.${ECB_SERIES.map((x) => x.currency).join('+')}.EUR.SP00.A?startPeriod=${from}&format=csvdata`,
   );
   // nothing published since: the ECB answers 404, or 200 with nothing at all (asked from today,
   // before the afternoon's rate is out)
@@ -390,17 +400,25 @@ async function usdRun(ctx: Ctx, today: string) {
   if (body === '') return;
   const [head, ...rows] = body.split(/\r?\n/);
   const cols = (head ?? '').split(',');
-  const [d, v] = [cols.indexOf('TIME_PERIOD'), cols.indexOf('OBS_VALUE')];
-  if (d < 0 || v < 0) throw new Error('the ECB sent something else than its rates');
-  await storePoints(
-    ctx.prisma,
-    'usdPerEur',
-    rows
-      .map((r) => r.split(','))
-      .filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c[d] ?? '') && Number(c[v]) > 0)
-      .map((c) => ({ date: c[d]!, value: Math.round(Number(c[v]) * 1_000_000) })),
-  );
+  const [d, v, c] = ['TIME_PERIOD', 'OBS_VALUE', 'CURRENCY'].map((k) => cols.indexOf(k));
+  if (d! < 0 || v! < 0 || c! < 0) throw new Error('the ECB sent something else than its rates');
+  const cells = rows.map((r) => r.split(','));
+  for (const x of ECB_SERIES)
+    await storePoints(
+      prisma,
+      x.series,
+      cells
+        .filter(
+          (r) =>
+            r[c!] === x.currency && /^\d{4}-\d{2}-\d{2}$/.test(r[d!] ?? '') && Number(r[v!]) > 0,
+        )
+        .map((r) => ({ date: r[d!]!, value: Math.round(Number(r[v!]) * 1_000_000) })),
+    );
 }
+const ECB_SERIES = [
+  { currency: 'USD', series: 'usdPerEur' },
+  { currency: 'INR', series: 'inrPerEur' },
+] as const;
 
 let running: Promise<string[]> | null = null;
 
@@ -432,7 +450,10 @@ export function refreshWorldPrices(
     );
     for (const [step, fn] of [
       ['World markets not updated', () => benchmarksRun(ctx, today)],
-      ['Euro gold not updated', () => usdRun(ctx, today)],
+      [
+        'Euro gold and exchange rates not updated',
+        () => refreshEcbRates(prisma, fetchText, src.ecb, today),
+      ],
     ] as const) {
       try {
         await fn();

@@ -10,7 +10,7 @@ type MonthMoney = {
   unused: number;
 };
 
-/** Chart rows: Essentials exactly as on the Budget page; uncategorised spending is its own segment. */
+/** Chart rows: Essentials exactly as on Spending → Budget; uncategorised spending is its own segment. */
 export function cashFlowRows<T extends MonthMoney>(months: T[]) {
   return months.map((m) => ({
     ...m,

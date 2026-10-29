@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('nine sections, related pages as tabs, and old links still work', async ({ page }) => {
+test('eight sections, related pages as tabs, and old links still work', async ({ page }) => {
   await page.goto('/register');
   await page.getByLabel('Your name').fill('Surya');
   await page.getByLabel('Email').fill(`nav-${Date.now()}@example.com`);
@@ -10,8 +10,7 @@ test('nine sections, related pages as tabs, and old links still work', async ({ 
 
   await expect(page.getByRole('navigation', { name: 'Sections' }).getByRole('link')).toHaveText([
     'Dashboard',
-    'Budget',
-    'Transactions',
+    'Spending',
     'Wealth',
     'Investments',
     'Goals',
@@ -20,19 +19,30 @@ test('nine sections, related pages as tabs, and old links still work', async ({ 
     'Settings',
   ]);
 
-  // Transactions: All · Recurring · Import
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
-  const tabs = page.getByRole('navigation', { name: 'Transactions pages' });
-  await expect(tabs.getByRole('link')).toHaveText(['All', 'Recurring', 'Import']);
+  // Spending: Overview · Budget · Transactions · Recurring · Import; the month goes along
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await expect(page).toHaveURL(/\/spending$/);
+  const tabs = page.getByRole('navigation', { name: 'Spending pages' });
+  await expect(tabs.getByRole('link')).toHaveText([
+    'Overview',
+    'Budget',
+    'Transactions',
+    'Recurring',
+    'Import',
+  ]);
+  await page.goto('/spending/budget?month=2026-05');
+  await tabs.getByRole('link', { name: 'Transactions' }).click();
+  await expect(page).toHaveURL(/\/spending\/transactions\?month=2026-05$/);
+  await tabs.getByRole('link', { name: 'Budget' }).click();
+  await expect(page).toHaveURL(/\/spending\/budget\?month=2026-05$/);
   await tabs.getByRole('link', { name: 'Recurring' }).click();
-  await expect(page).toHaveURL(/\/transactions\/recurring$/);
   await expect(tabs.getByRole('link', { name: 'Recurring' })).toHaveAttribute(
     'aria-current',
     'page',
   );
   // the section stays highlighted in the sidebar
   await expect(
-    page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Transactions' }),
+    page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Spending' }),
   ).toHaveAttribute('aria-current', 'page');
 
   // Wealth: Net worth & assets · Accounts; Reports: Year report · Insights
@@ -48,8 +58,13 @@ test('nine sections, related pages as tabs, and old links still work', async ({ 
   // Bookmarks to the old pages land on the right tab (with their filters).
   for (const [from, to] of [
     ['/accounts', '/wealth/accounts'],
-    ['/recurring', '/transactions/recurring'],
-    ['/import', '/transactions/import'],
+    ['/recurring', '/spending/recurring'],
+    ['/import', '/spending/import'],
+    ['/budget?month=2026-05', '/spending/budget?month=2026-05'],
+    ['/budget/overview', '/spending'],
+    ['/budget/entry?month=2026-05', '/spending/entry?month=2026-05'],
+    ['/transactions?categoryId=none', '/spending/transactions?categoryId=none'],
+    ['/transactions/import', '/spending/import'],
     ['/insights?x=1', '/reports/insights?x=1'],
   ]) {
     await page.goto(from);

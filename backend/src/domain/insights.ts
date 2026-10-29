@@ -149,7 +149,7 @@ export function findInsights(input: InsightInput): Insight[] {
         kind: 'rising',
         tone: upTone(cat),
         data: { category: name.get(cat), amounts: a, months: full.slice(3) },
-        link: `/budget?month=${last}`,
+        link: `/spending/budget?month=${last}`,
         size: a[2]! - a[0]!,
       });
     }
@@ -171,7 +171,7 @@ export function findInsights(input: InsightInput): Insight[] {
         kind: 'vsAverage',
         tone: diff > 0 ? upTone(cat) : downTone(cat),
         data: { category: name.get(cat), month: last, amount, usual, bp: bp(diff, usual) },
-        link: `/budget?month=${last}`,
+        link: `/spending/budget?month=${last}`,
         size: Math.abs(diff),
       };
     }
@@ -193,7 +193,7 @@ export function findInsights(input: InsightInput): Insight[] {
       kind: 'overLimit',
       tone: 'warning',
       data: { category: name.get(l.categoryId), over: actual - l.amount, pastMonthsOver },
-      link: `/budget?month=${current}`,
+      link: `/spending/budget?month=${current}`,
       size: actual - l.amount,
     });
   }
@@ -222,7 +222,7 @@ export function findInsights(input: InsightInput): Insight[] {
       kind: 'subscription',
       tone: 'info',
       data: { merchant: e.label, monthly, yearly: monthly * 12 },
-      link: `/transactions?month=${last}&q=${encodeURIComponent(e.label)}`,
+      link: `/spending/transactions?month=${last}&q=${encodeURIComponent(e.label)}`,
       size: monthly * 12,
     });
   }
@@ -318,7 +318,7 @@ export function findInsights(input: InsightInput): Insight[] {
         category: name.get(t.categoryId!),
         times: Math.round(t.amount / usual),
       },
-      link: `/transactions?month=${t.date.slice(0, 7)}${
+      link: `/spending/transactions?month=${t.date.slice(0, 7)}${
         t.merchant?.trim() ? `&q=${encodeURIComponent(t.merchant.trim())}` : ''
       }`,
       size: t.amount,

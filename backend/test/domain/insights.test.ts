@@ -65,7 +65,7 @@ describe('findInsights', () => {
     expect(r.find((i) => i.kind === 'rising')).toMatchObject({
       tone: 'warning',
       data: { category: 'Groceries', amounts: [31_000, 35_500, 40_200] },
-      link: '/budget?month=2026-09',
+      link: '/spending/budget?month=2026-09',
     });
   });
 

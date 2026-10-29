@@ -29,7 +29,11 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
 
   // Bank statement import
   const csv = { name: 'umsatz.csv', mimeType: 'text/csv', buffer: sparkasseCsv() };
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.getByRole('tab', { name: 'Bank statement (CSV)' }).click();
   await page.locator('#bank-file').setInputFiles(csv);
@@ -55,7 +59,11 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await expect(page.getByText('3 · Review')).toBeHidden(); // a changed mapping needs a new check
 
   // Recurring rent starting today creates today's transaction
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
   await page.getByRole('link', { name: 'Recurring' }).first().click();
   await page.getByRole('button', { name: 'Add recurring' }).click();
   const d = page.getByRole('dialog');
@@ -70,7 +78,11 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await shot(page, '17-recurring');
 
   // Transactions: bank rows + recurring rent; export
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
   await expect(page.getByText('Recurring').first()).toBeVisible();
   const download = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Export CSV' }).click();

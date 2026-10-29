@@ -378,14 +378,14 @@ function ResultCard({ result }: { result: ImportResult }) {
           {result.newCategories.length > 0 &&
             ` and created ${result.newCategories.join(', ')}`}.{' '}
           {first && (
-            <Link to={`/budget?month=${first}`} className="font-medium underline">
+            <Link to={`/spending/budget?month=${first}`} className="font-medium underline">
               Open {monthTitle(first)}
             </Link>
           )}
           {last && last !== first && (
             <>
               {' · '}
-              <Link to={`/budget?month=${last}`} className="font-medium underline">
+              <Link to={`/spending/budget?month=${last}`} className="font-medium underline">
                 Open {monthTitle(last)}
               </Link>
             </>

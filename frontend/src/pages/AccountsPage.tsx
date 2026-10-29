@@ -131,9 +131,9 @@ export function AccountsPage() {
                     <span>
                       <Amount cents={a.monthChange} currency={a.currency} signed /> this month
                     </span>
-                    {/* The account's money in and out lives on the Transactions page. */}
+                    {/* The account's money in and out lives on Spending → Transactions. */}
                     <Link
-                      to={`/transactions?accountId=${a.id}`}
+                      to={`/spending/transactions?accountId=${a.id}`}
                       className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
                       aria-label={`Transactions of ${accountLabel(a)}`}
                     >
@@ -255,7 +255,7 @@ export function AccountsPage() {
                   <p className="mt-2 flex justify-end gap-3 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
                     {a.balance !== 0 && (
                       <Link
-                        to={`/transactions?accountId=${a.id}`}
+                        to={`/spending/transactions?accountId=${a.id}`}
                         className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
                         aria-label={`Transactions of ${accountLabel(a)}`}
                       >

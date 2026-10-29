@@ -114,7 +114,12 @@ test('mobile bottom bar has four main items and a More menu', async ({ page }) =
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
   const bar = page.getByRole('navigation', { name: 'Main' });
-  await expect(bar.getByRole('link')).toHaveText(['Dashboard', 'Budget', 'Transactions', 'Wealth']);
+  await expect(bar.getByRole('link')).toHaveText([
+    'Dashboard',
+    'Spending',
+    'Wealth',
+    'Investments',
+  ]);
   for (const link of await bar.getByRole('link').all()) {
     const fits = await link.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
     expect(fits, 'bottom bar labels must not overflow').toBe(true);

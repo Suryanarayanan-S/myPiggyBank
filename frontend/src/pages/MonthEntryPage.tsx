@@ -122,7 +122,7 @@ export function MonthEntryPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <MonthNav month={month} onChange={(m) => navigate({ month: m })} />
         <Link
-          to={`/budget?month=${month}`}
+          to={`/spending/budget?month=${month}`}
           className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline"
         >
           <ArrowLeft size={16} aria-hidden /> Back to budget

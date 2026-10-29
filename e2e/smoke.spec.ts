@@ -72,7 +72,11 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('1.000,00 €').first()).toBeVisible();
 
   // Income + expense
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
   const add = async (
     type: 'Income' | 'Expense',
     amount: string,

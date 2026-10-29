@@ -27,7 +27,11 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
-  await page.getByRole('link', { name: 'Budget' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Budget' })
+    .click();
   await page.getByRole('link', { name: 'Quick entry' }).click();
   const amounts: Record<string, string> = {
     Salary: '3750',

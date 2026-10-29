@@ -44,7 +44,10 @@ describe('attentionItems', () => {
       ],
     });
     expect(items.map((i) => [i.text, i.link])).toEqual([
-      ['3 payments or income without a category', '/transactions?categoryId=none&month=2026-08'],
+      [
+        '3 payments or income without a category',
+        '/spending/transactions?categoryId=none&month=2026-08',
+      ],
       ['1 new corporate action to check: Sony Group', '/investments/market'],
       ['No price yet: NATCO-RE, SCTL', '/investments/market?tab=holdings'],
     ]);

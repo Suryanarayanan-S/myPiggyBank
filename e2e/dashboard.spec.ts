@@ -40,7 +40,11 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
 
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page
@@ -73,10 +77,10 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await cashFlow.getByRole('button', { name: 'Show chart' }).click();
   await shot(page, '12-dashboard');
 
-  // the spending in detail moved to Budget → Overview, for the same period
+  // the spending in detail is under Spending → Overview, for the same period
   await expect(page.getByRole('heading', { name: 'Savings rate' })).toBeHidden();
-  await page.getByRole('link', { name: /Budget → Overview/ }).click();
-  await expect(page).toHaveURL(/\/budget\/overview\?period=last-3/);
+  await page.getByRole('link', { name: /Spending → Overview/ }).click();
+  await expect(page).toHaveURL(/\/spending\?period=last-3/);
   await expect(page.getByRole('radio', { name: 'Last 3 months' })).toBeChecked();
   for (const title of [
     'Savings rate',
@@ -85,8 +89,8 @@ test('dashboard shows period totals, insights, charts with table views', async (
     'Spending by family member',
   ])
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
-  await page.getByRole('link', { name: 'Month', exact: true }).click();
-  await expect(page).toHaveURL(/\/budget$/);
+  await page.getByRole('link', { name: 'Budget', exact: true }).click();
+  await expect(page).toHaveURL(/\/spending\/budget(\?|$)/);
 
   // a payment without a category: the dashboard says so and leads to them
   const added = await page.request.post('/api/transactions', {

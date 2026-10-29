@@ -61,11 +61,11 @@ export function DashboardPage() {
             <Card>
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 Nothing recorded for this period yet. Add transactions, use{' '}
-                <Link to="/budget/entry" className="font-medium text-indigo-600 underline">
+                <Link to="/spending/entry" className="font-medium text-indigo-600 underline">
                   Quick entry
                 </Link>
                 , or{' '}
-                <Link to="/transactions/import" className="font-medium text-indigo-600 underline">
+                <Link to="/spending/import" className="font-medium text-indigo-600 underline">
                   import your spreadsheet
                 </Link>
                 .
@@ -114,14 +114,14 @@ export function DashboardPage() {
           <CashFlowChart d={d} />
           <p className="-mt-2 text-sm">
             <Link
-              to={`/budget/overview?${new URLSearchParams(
+              to={`/spending?${new URLSearchParams(
                 preset === 'custom'
                   ? { period: preset, from: custom.from, to: custom.to }
                   : { period: preset },
               )}`}
               className="text-indigo-600 hover:underline"
             >
-              Savings rate, 50/30/20 and where the money went: Budget → Overview
+              Savings rate, 50/30/20 and where the money went: Spending → Overview
             </Link>
           </p>
           <GoalsSummary />

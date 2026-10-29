@@ -1,10 +1,25 @@
-import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
+import { NavLink, Navigate, Outlet, useLocation, useSearchParams } from 'react-router';
 import clsx from 'clsx';
 
 export type SectionTab = { to: string; label: string; end?: boolean };
 
-/** A section with its pages as tabs (links, so each tab has its own address). */
-export function SectionLayout({ name, tabs }: { name: string; tabs: SectionTab[] }) {
+/**
+ * A section with its pages as tabs (links, so each tab has its own address). `carry`: address
+ * settings kept when moving between the tabs (e.g. the month, shared by Budget and Transactions).
+ */
+export function SectionLayout({
+  name,
+  tabs,
+  carry = [],
+}: {
+  name: string;
+  tabs: SectionTab[];
+  carry?: string[];
+}) {
+  const [params] = useSearchParams();
+  const kept = new URLSearchParams(
+    carry.flatMap((k) => (params.get(k) ? [[k, params.get(k)!] as [string, string]] : [])),
+  ).toString();
   return (
     <div className="space-y-5">
       <nav
@@ -14,7 +29,7 @@ export function SectionLayout({ name, tabs }: { name: string; tabs: SectionTab[]
         {tabs.map((t) => (
           <NavLink
             key={t.to}
-            to={t.to}
+            to={kept ? `${t.to}?${kept}` : t.to}
             end={t.end}
             className={({ isActive }) =>
               clsx(

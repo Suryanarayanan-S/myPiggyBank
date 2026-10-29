@@ -17,7 +17,9 @@ test('AI suggests categories for bank lines nothing else can place, and a kept o
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByText(/This month: 0 tokens used · 2,000,000 a month on this server/)).toBeVisible();
+  await expect(
+    page.getByText(/This month: 0 tokens used · 2,000,000 a month on this server/),
+  ).toBeVisible();
 
   await page.goto('/wealth/accounts');
   await page.getByRole('button', { name: 'Add account' }).click();

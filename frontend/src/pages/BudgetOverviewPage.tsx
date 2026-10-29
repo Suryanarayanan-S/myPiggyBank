@@ -7,7 +7,7 @@ import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
 
 /**
- * The budget over a period (the Month tab shows one month): the savings rate and the 50/30/20
+ * The budget over a period (the Budget tab shows one month): the savings rate and the 50/30/20
  * split month by month, the biggest categories and what each person spent.
  */
 export function BudgetOverviewPage() {
@@ -17,7 +17,7 @@ export function BudgetOverviewPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Budget overview</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Spending overview</h1>
         <p className="text-sm text-slate-500">{label}</p>
       </div>
       <PeriodFilter preset={preset} custom={custom} onChange={change} />
@@ -26,7 +26,7 @@ export function BudgetOverviewPage() {
         <Card>
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Nothing recorded for this period yet. Add transactions or use{' '}
-            <Link to="/budget/entry" className="font-medium text-indigo-600 underline">
+            <Link to="/spending/entry" className="font-medium text-indigo-600 underline">
               Quick entry
             </Link>
             .

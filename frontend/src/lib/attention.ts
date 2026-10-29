@@ -45,7 +45,7 @@ export function attentionItems(i: {
       key: 'uncategorised',
       text: `${plural(u.count, 'payment or income', 'payments or income')} without a category`,
       // the newest of them: the list steps back month by month from there
-      link: `/transactions?categoryId=none${u.latestMonth ? `&month=${u.latestMonth}` : ''}`,
+      link: `/spending/transactions?categoryId=none${u.latestMonth ? `&month=${u.latestMonth}` : ''}`,
     });
   const check = recentActions(i.holdings, i.today).filter(
     (r) =>

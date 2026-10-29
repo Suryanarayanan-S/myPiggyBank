@@ -17,7 +17,11 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('link', { name: 'Budget' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Budget' })
+    .click();
   await page.getByRole('link', { name: 'Quick entry' }).click();
   await page.getByLabel('Salary', { exact: true }).fill('1000');
   await page.getByLabel('Groceries', { exact: true }).fill('200');
@@ -34,7 +38,11 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await expect(page.getByText(/1 EUR = 100 INR/)).toBeVisible();
 
   const showIn = page.getByRole('combobox', { name: 'Show amounts in' }).filter({ visible: true });
-  await page.getByRole('link', { name: 'Budget' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Budget' })
+    .click();
   const card = (label: string) =>
     page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
   await expect(card('Net income')).toContainText('1.000,00 €');
@@ -64,7 +72,11 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await page.screenshot({ path: 'e2e/screenshots/23-show-in-inr.png', fullPage: true });
 
   await showIn.selectOption('default');
-  await page.getByRole('link', { name: 'Budget' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Budget' })
+    .click();
   await expect(card('Net income')).toContainText('1.000,00 €');
   await expect(page.getByRole('button', { name: 'Change limit for Groceries' })).toBeVisible();
 });

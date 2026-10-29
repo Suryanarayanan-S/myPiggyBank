@@ -8,7 +8,7 @@ import { useViewCurrency, withView } from '../../lib/viewCurrency';
 
 /**
  * The period chosen in the address (?period=…, or from/to for a custom one; the last 12 months
- * when none) and the dashboard figures for it — shared by the Dashboard and Budget → Overview, so
+ * when none) and the dashboard figures for it — shared by the Dashboard and Spending → Overview, so
  * the two load them once.
  */
 export function useDashboardPeriod() {
@@ -37,10 +37,17 @@ export function useDashboardPeriod() {
     placeholderData: keepPreviousData,
     enabled: preset !== 'all' || first.isSuccess,
   });
-  const change = (p: Preset, c?: { from: string; to: string }) =>
-    setParams(p === 'custom' && c ? { period: p, from: c.from, to: c.to } : { period: p }, {
-      replace: true,
-    });
+  // a new period keeps the rest of the address (e.g. the month the other Spending tabs show)
+  const change = (p: Preset, c?: { from: string; to: string }) => {
+    const next = new URLSearchParams(params);
+    for (const k of ['period', 'from', 'to']) next.delete(k);
+    next.set('period', p);
+    if (p === 'custom' && c) {
+      next.set('from', c.from);
+      next.set('to', c.to);
+    }
+    setParams(next, { replace: true });
+  };
   const label =
     range.from === range.to
       ? monthTitle(range.from)

@@ -114,7 +114,11 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(rdCard).toContainText('booked from the account each month');
   await shot(page, '38-recurring-deposits');
   // today's instalment is booked, and the rule is among the recurring transactions
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Transactions' })
+    .click();
   await expect(page.getByText('RD: Post RD').first()).toBeVisible();
   await page.getByRole('link', { name: 'Recurring' }).first().click();
   await expect(page.getByText('RD: Post RD').first()).toBeVisible();

@@ -29,7 +29,11 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('link', { name: 'Budget' }).first().click();
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Spending pages' })
+    .getByRole('link', { name: 'Budget' })
+    .click();
   await page.getByRole('link', { name: 'Quick entry' }).click();
   await page.getByLabel('Salary', { exact: true }).fill('3000');
   await page.getByLabel('Groceries', { exact: true }).fill('300');

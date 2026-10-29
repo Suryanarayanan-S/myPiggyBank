@@ -27,6 +27,8 @@ import {
   indexed,
   pairRate,
   since,
+  sinceEcb,
+  type LiveQuotes,
   type CurrencyAnalytics,
   type FxPoint,
   type FxTransfer,
@@ -90,7 +92,7 @@ function Segmented<T extends string>({
  * A move of a rate. Neutral ink: whether a stronger euro is good depends on which way the money
  * goes, so there is no green or red here.
  */
-function Move({ label, change }: { label: string; change: ReturnType<typeof since> }) {
+function Move({ label, change }: { label: string; change: { pct: number } | null }) {
   if (!change) return null;
   const Icon = change.pct >= 0 ? ArrowUpRight : ArrowDownRight;
   return (
@@ -102,8 +104,31 @@ function Move({ label, change }: { label: string; change: ReturnType<typeof sinc
   );
 }
 
-function PairTile({ pair, series }: { pair: Pair; series: FxPoint[] }) {
+/** "11:00" today, "28 Oct 11:00" another day — in the viewer's own time. */
+const quotedAt = (iso: string) => {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${time}`;
+};
+
+function PairTile({
+  pair,
+  series,
+  quote,
+}: {
+  pair: Pair;
+  series: FxPoint[];
+  /** the pair during the day, when onvista quoted it */
+  quote?: { rate: number; at: string };
+}) {
   const last = series.at(-1)!;
+  // a quote older than the last ECB rate says nothing new; one over two hours old is the market
+  // closed (a weekend, a night), said as such — "now" only when it is
+  const shown = quote && quote.at.slice(0, 10) >= last.date ? quote : undefined;
+  const fresh = !!shown && Date.now() - Date.parse(shown.at) < 2 * 60 * 60_000;
+  const vsEcb = shown ? sinceEcb(series, pair, shown.rate) : null;
   return (
     <Card className="!p-4">
       <p className="flex items-center gap-2 text-xs text-slate-500">
@@ -114,12 +139,26 @@ function PairTile({ pair, series }: { pair: Pair; series: FxPoint[] }) {
         <span className="mr-1 text-base font-normal text-slate-500">
           1 {pair.from === 'EUR' ? '€' : '$'} =
         </span>
-        {formatRate(pairRate(last, pair), pair.to)}
+        {formatRate(shown ? shown.rate : pairRate(last, pair), pair.to)}
+      </p>
+      <p className="text-xs text-slate-500">
+        {!shown
+          ? `ECB rate of ${dayLabel(last.date)}`
+          : fresh
+            ? `Now · quoted ${quotedAt(shown.at)}, about 15 min late`
+            : `Last quote · ${quotedAt(shown.at)} (the market is closed)`}
       </p>
       <div className="mt-1 space-y-0.5">
-        <Move label="since the day before" change={since(series, pair, 'day')} />
-        <Move label="in a month" change={since(series, pair, 'month')} />
-        <Move label="in a year" change={since(series, pair, 'year')} />
+        {vsEcb ? (
+          <Move
+            label={`since the ECB rate of ${dayLabel(vsEcb.date, false)} (${formatRate(vsEcb.ecb, pair.to)})`}
+            change={vsEcb}
+          />
+        ) : (
+          <Move label="since the day before" change={since(series, pair, 'day')} />
+        )}
+        <Move label="in a month (ECB)" change={since(series, pair, 'month')} />
+        <Move label="in a year (ECB)" change={since(series, pair, 'year')} />
       </div>
     </Card>
   );
@@ -383,15 +422,26 @@ export function CurrenciesPage() {
     // the server asks the ECB at most hourly; the page can look again every quarter hour
     refetchInterval: 15 * 60_000,
   });
+  // the pairs during the day: asked again every five minutes while the page is open
+  const live = useQuery({
+    queryKey: ['analytics', 'currencies', 'live'],
+    queryFn: () => api.get<LiveQuotes>('/analytics/currencies/live'),
+    refetchInterval: 5 * 60_000,
+  });
+  const quote = (key: Pair['key']) => live.data?.quotes.find((x) => x.pair === key);
   const d = q.data;
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Currencies</h1>
         <p className="text-sm text-slate-500">
-          Euro, dollar and rupee: ECB reference rates
-          {d?.asOf ? `, latest of ${dayLabel(d.asOf)}` : ''}. The ECB publishes once a working day
-          around 16:00 CET; this page checks for a new rate when it opens (at most hourly).
+          Euro, dollar and rupee
+          {live.data?.quotes.length
+            ? ' now (onvista’s quotes, about 15 minutes late, every five minutes while this page is open) and'
+            : ''}{' '}
+          over time (the ECB’s reference rates
+          {d?.asOf ? `, latest of ${dayLabel(d.asOf)}` : ''}, published once a working day around
+          16:00 CET). The history and your transfers use the ECB rates.
         </p>
       </div>
       <FormError error={q.error} />
@@ -399,6 +449,12 @@ export function CurrenciesPage() {
         <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
           {d.refreshError}
+        </p>
+      )}
+      {live.data?.error && (
+        <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+          {live.data.error}
         </p>
       )}
       {d && d.series.length === 0 && (
@@ -413,7 +469,7 @@ export function CurrenciesPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             {PAIRS.map((p) => (
-              <PairTile key={p.key} pair={p} series={d.series} />
+              <PairTile key={p.key} pair={p} series={d.series} quote={quote(p.key)} />
             ))}
           </div>
           <RatesChart series={d.series} />

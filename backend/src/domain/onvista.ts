@@ -105,3 +105,16 @@ export function splitRatio(factor: number): { num: number; den: number } | null 
   }
   return null;
 }
+
+/** A currency pair's latest quote (FactSet, delayed): the rate and when; null when there is none. */
+export function readCurrencyQuote(text: string): { rate: number; at: string } | null {
+  let q: { last?: unknown; datetimeLast?: unknown } | null | undefined;
+  try {
+    q = (JSON.parse(text) as { quote?: typeof q }).quote;
+  } catch {
+    return null;
+  }
+  const at = typeof q?.datetimeLast === 'string' ? Date.parse(q.datetimeLast) : NaN;
+  if (!q || typeof q.last !== 'number' || !(q.last > 0) || Number.isNaN(at)) return null;
+  return { rate: q.last, at: new Date(at).toISOString() };
+}

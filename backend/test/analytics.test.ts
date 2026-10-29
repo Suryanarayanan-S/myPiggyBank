@@ -11,6 +11,16 @@ function fakeEcb(down = false) {
   const urls: string[] = [];
   const fetchText: FetchText = async (url) => {
     urls.push(url);
+    // onvista's currency quotes (FactSet, delayed)
+    const pair = url.match(/instruments\/CURRENCY\/(\w+)\/snapshot/)?.[1];
+    if (pair) {
+      if (down) return { ok: false, status: 503, text: async () => '' };
+      const last = { EURINR: 106.05, USDINR: 95.25, EURUSD: 1.1136 }[pair];
+      const body = JSON.stringify({
+        quote: { last, datetimeLast: '2026-10-29T10:00:03.818+00:00' },
+      });
+      return { ok: true, status: 200, text: async () => body };
+    }
     if (!url.startsWith(SRC.ecb)) return { ok: false, status: 404, text: async () => '' };
     if (down) return { ok: false, status: 503, text: async () => '' };
     const body = [
@@ -124,6 +134,30 @@ describe('Analytics: currencies', () => {
     });
     const d = (await call('GET', '/api/analytics/currencies')).json().data;
     expect(d).toMatchObject({ transfers: [], uncompared: 1 });
+  });
+
+  it('quotes the three pairs during the day (onvista), asking at most every five minutes', async () => {
+    const live = async () => (await call('GET', '/api/analytics/currencies/live')).json().data;
+    expect(await live()).toEqual({
+      quotes: [
+        { pair: 'EURINR', rate: 106.05, at: '2026-10-29T10:00:03.818Z' },
+        { pair: 'USDINR', rate: 95.25, at: '2026-10-29T10:00:03.818Z' },
+        { pair: 'EURUSD', rate: 1.1136, at: '2026-10-29T10:00:03.818Z' },
+      ],
+      error: null,
+    });
+    await live();
+    expect(ecb.urls.filter((u) => u.includes('/CURRENCY/'))).toHaveLength(3);
+  });
+
+  it('says when the quotes during the day cannot be had (the daily rates stay)', async () => {
+    const down = fakeEcb(true);
+    const a = await makeApp({ fetchPrices: down.fetchText, worldSources: SRC });
+    const c = client(a, (await signUp(a)).cookie);
+    const d = (await c('GET', '/api/analytics/currencies/live')).json().data;
+    expect(d.quotes).toEqual([]);
+    expect(d.error).toMatch(/onvista/);
+    await a.close();
   });
 
   it('without a way online (or before any rate): says so, no rates', async () => {

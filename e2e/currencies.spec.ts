@@ -29,11 +29,30 @@ test('Analytics → Currencies: euro, dollar and rupee rates, their moves, and t
   });
   expect(sent.status()).toBe(201);
 
+  // the pairs during the day (onvista, offline here): 1 % above the ECB's € → ₹, a little later
+  const at = new Date(Date.now() - 20 * 60_000).toISOString();
+  await page.route('**/api/analytics/currencies/live', (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          quotes: [
+            { pair: 'EURINR', rate: 101.808, at },
+            { pair: 'USDINR', rate: 90, at },
+            { pair: 'EURUSD', rate: 1.12, at },
+          ],
+          error: null,
+        },
+      },
+    }),
+  );
   await page.getByRole('link', { name: 'Analytics' }).first().click();
   await expect(page).toHaveURL(/\/analytics$/);
   await expect(page.getByRole('heading', { name: 'Currencies' })).toBeVisible();
-  // the three pairs: 100.80 ₹ per €, 1.12 $ per €, so 90.00 ₹ per $
-  await expect(page.getByText('₹100.80').first()).toBeVisible();
+  // now: the quotes, each against the last ECB rate (100.80 ₹ per €, 1.12 $ per €, 90 ₹ per $)
+  await expect(page.getByText('₹101.81')).toBeVisible();
+  await expect(page.getByText(/since the ECB rate of .* \(₹100\.80\)/)).toBeVisible();
+  await expect(page.getByText('+1.00 %')).toBeVisible();
+  await expect(page.getByText(/Now · quoted \d\d:\d\d, about 15 min late/).first()).toBeVisible();
   await expect(page.getByText('$1.1200').first()).toBeVisible();
   await expect(page.getByText('₹90.00').first()).toBeVisible();
   await expect(page.getByText('in a year').first()).toBeVisible();

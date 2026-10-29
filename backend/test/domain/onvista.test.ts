@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { readEod, readSearch, readSnapshot, splitRatio } from '../../src/domain/onvista.js';
+import {
+  readCurrencyQuote,
+  readEod,
+  readSearch,
+  readSnapshot,
+  splitRatio,
+} from '../../src/domain/onvista.js';
 
 const fixture = (name: string) =>
   readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8');
@@ -50,5 +56,15 @@ describe('onvista', () => {
     expect(splitRatio(1.1)).toBeNull();
     expect(splitRatio(1)).toBeNull();
     expect(splitRatio(0)).toBeNull();
+  });
+
+  it('reads a currency quote: the rate and when it was quoted', () => {
+    expect(readCurrencyQuote(fixture('onvista-currency.json'))).toEqual({
+      rate: 106.0514,
+      at: '2026-10-29T10:00:03.818Z',
+    });
+    expect(readCurrencyQuote('{"quote":{"last":0}}')).toBeNull();
+    expect(readCurrencyQuote('{"quote":null}')).toBeNull();
+    expect(readCurrencyQuote('<html>')).toBeNull();
   });
 });

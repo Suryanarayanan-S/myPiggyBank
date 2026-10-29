@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { FX_CURRENCIES, compareTransfer, fxSeries, type FxCurrency } from '../domain/fx.js';
+import { readCurrencyQuote } from '../domain/onvista.js';
 import { formatDay } from '../lib/dates.js';
 import type { FetchText } from './livePriceService.js';
 import { refreshEcbRates } from './worldPriceService.js';
@@ -44,9 +45,62 @@ async function refreshIfStale(
   return lastError;
 }
 
-/** For tests: forget the last attempt. */
+/** For tests: forget the last attempt and the quotes kept. */
 export function forgetEcbAttempts() {
   lastError = null;
+  live = null;
+}
+
+/** The pairs quoted during the day, as onvista names them. */
+const LIVE_PAIRS = ['EURINR', 'USDINR', 'EURUSD'] as const;
+/**
+ * quotes are asked for again after this long (they come about a quarter of an hour late); a
+ * little under the page's five minutes, so each look of the page gets new ones; a failed ask is
+ * tried again sooner
+ */
+const LIVE_MS = 4.5 * 60_000;
+const LIVE_FAILED_MS = 60_000;
+type LiveQuotes = {
+  quotes: { pair: (typeof LIVE_PAIRS)[number]; rate: number; at: string }[];
+  error: string | null;
+};
+let live: { at: number; result: Promise<LiveQuotes>; failed?: boolean } | null = null;
+
+/**
+ * The three pairs during the day: onvista's quotes (FactSet, delayed by about 15 minutes), asked
+ * for at most every five minutes whoever looks. The ECB's daily rates stay the reference for the
+ * history and the transfers; these only show where the day is going.
+ */
+export function liveQuotes(online: { fetchText: FetchText; onvistaUrl: string } | null) {
+  if (!online) return Promise.resolve<LiveQuotes>({ quotes: [], error: null });
+  if (live && Date.now() - live.at < (live.failed ? LIVE_FAILED_MS : LIVE_MS)) return live.result;
+  const result = (async (): Promise<LiveQuotes> => {
+    // the three at once: a dead connection waits for one timeout, not three
+    const got = await Promise.all(
+      LIVE_PAIRS.map(async (pair) => {
+        try {
+          const res = await online.fetchText(
+            `${online.onvistaUrl}/instruments/CURRENCY/${pair}/snapshot`,
+          );
+          const q = res.ok ? readCurrencyQuote(await res.text()) : null;
+          return q ? { pair, ...q } : pair;
+        } catch {
+          return pair;
+        }
+      }),
+    );
+    const quotes = got.filter((g) => typeof g !== 'string');
+    const failed = got.filter((g) => typeof g === 'string');
+    if (live && failed.length) live.failed = true;
+    return {
+      quotes,
+      error: failed.length
+        ? `onvista did not quote ${failed.join(', ')} just now: the daily ECB rates are shown.`
+        : null,
+    };
+  })();
+  live = { at: Date.now(), result };
+  return result;
 }
 
 /**

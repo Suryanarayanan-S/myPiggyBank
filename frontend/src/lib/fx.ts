@@ -30,6 +30,12 @@ export type CurrencyAnalytics = {
   refreshError: string | null;
 };
 
+/** The pairs during the day (onvista, about 15 minutes late). */
+export type LiveQuotes = {
+  quotes: { pair: Pair['key']; rate: number; at: string }[];
+  error: string | null;
+};
+
 export type Pair = {
   key: 'EURINR' | 'USDINR' | 'EURUSD';
   from: FxCurrency;
@@ -152,4 +158,12 @@ export function indexed(points: FxPoint[]) {
       ]),
     ) as Record<Pair['key'], number>),
   }));
+}
+
+/** Today's quote of a pair against the last ECB rate: the move in %, and that rate's day. */
+export function sinceEcb(series: FxPoint[], pair: Pair, rate: number) {
+  const last = series.at(-1);
+  if (!last) return null;
+  const ecb = pairRate(last, pair);
+  return { ecb, date: last.date, pct: (rate / ecb - 1) * 100 };
 }

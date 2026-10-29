@@ -1,0 +1,11 @@
+{
+  "instrument": { "entityType": "CURRENCY", "entityValue": "EURINR", "name": "Euro/Indische Rupie" },
+  "quote": {
+    "market": { "name": "FactSet Synthetic Forex Rates" },
+    "isoCurrency": "INR",
+    "last": 106.0514,
+    "datetimeLast": "2026-10-29T10:00:03.818+00:00",
+    "previousLast": 106.1829,
+    "datetimePreviousLast": "2026-10-28T21:00:00.000+00:00"
+  }
+}

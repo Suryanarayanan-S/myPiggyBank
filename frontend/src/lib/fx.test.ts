@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAIRS, bandTicks, inRange, indexed, pairRate, since, type FxPoint } from './fx';
+import { PAIRS, bandTicks, inRange, indexed, pairRate, since, sinceEcb, type FxPoint } from './fx';
 
 const p = (date: string, usdPerEur: number, inrPerEur: number): FxPoint => ({
   date,
@@ -38,6 +38,16 @@ describe('fx (page)', () => {
     expect(since(series, eurInr!, 'month')!.pct).toBeCloseTo(2.2727, 3); // 99 → 101.25
     expect(since(series, eurInr!, 'year')!.pct).toBeCloseTo(12.5, 3); // 90 → 101.25
     expect(since(series.slice(0, 1), eurInr!, 'day')).toBeNull();
+  });
+
+  it('a quote during the day against the last ECB rate', () => {
+    const [eurInr] = PAIRS;
+    expect(sinceEcb(series, eurInr!, 102.2625)).toEqual({
+      ecb: 101.25,
+      date: '2026-10-27',
+      pct: expect.closeTo(1, 6),
+    });
+    expect(sinceEcb([], eurInr!, 100)).toBeNull();
   });
 
   it("a rate's axis fits its own band, not from zero", () => {

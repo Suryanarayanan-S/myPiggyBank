@@ -1,4 +1,4 @@
-import type { Deposit, PrismaClient } from '@prisma/client';
+import type { Deposit, Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { CurrencySchema, convert } from '../domain/currency.js';
 import {
@@ -6,6 +6,7 @@ import {
   addMonths,
   depositValue,
   instalmentsDue,
+  matchScore,
   maturityAmount,
   payoutPerPeriod,
   recurringMaturity,
@@ -57,6 +58,7 @@ const fields = {
   /** book each instalment from the account (a monthly recurring expense), in this category */
   book: z.object({ categoryId: z.uuid().nullable() }).nullable(),
 };
+const ids = z.array(z.uuid()).max(200);
 const after = (d: { startDate?: string; maturityDate?: string }) =>
   !d.startDate || !d.maturityDate || d.maturityDate > d.startDate;
 const MATURES_AFTER = {
@@ -64,8 +66,13 @@ const MATURES_AFTER = {
   path: ['maturityDate'],
 };
 export const DepositCreate = z
-  .object({ ...fields, kind: z.enum(KINDS).default('fd') })
-  .partial({ maturityDate: true, interest: true, months: true, book: true })
+  .object({
+    ...fields,
+    kind: z.enum(KINDS).default('fd'),
+    /** payments (or income) to link once it is saved, e.g. the one that opened it */
+    transactionIds: ids,
+  })
+  .partial({ maturityDate: true, interest: true, months: true, book: true, transactionIds: true })
   .refine(after, MATURES_AFTER)
   .superRefine((d, ctx) => {
     const need = (key: string, message: string) =>
@@ -416,9 +423,10 @@ export async function createDeposit(
   input: z.output<typeof DepositCreate>,
 ) {
   await check(prisma, familyId, input);
+  await checkLinks(prisma, familyId, input.currency, input.transactionIds ?? []);
   const rd = input.kind === 'rd';
   const sv = input.kind === 'savings';
-  const { book, months, ...rest } = input;
+  const { book, months, transactionIds, ...rest } = input;
   const maturityDate = sv
     ? null
     : rd
@@ -456,6 +464,17 @@ export async function createDeposit(
     } catch (err) {
       await prisma.deposit.delete({ where: { id: d.id } }); // nothing half-made
       throw err;
+    }
+  }
+  if (transactionIds?.length) {
+    // only ones still free (checked above; another tab may have linked one since)
+    const { count } = await prisma.transaction.updateMany({
+      where: { familyId, id: { in: transactionIds }, depositId: null },
+      data: { depositId: d.id },
+    });
+    if (count !== new Set(transactionIds).size) {
+      await deleteDeposit(prisma, familyId, d.id); // nothing half-made
+      throw new AppError(400, 'VALIDATION_ERROR', 'A transaction is linked to another deposit');
     }
   }
   return withMoves(prisma, familyId, d.id);
@@ -635,4 +654,148 @@ export async function deleteDeposit(prisma: PrismaClient, familyId: string, id: 
   await prisma.deposit.delete({ where: { id } });
   // its booking stops; the instalments already booked stay
   if (d.recurringRuleId) await deleteRecurring(prisma, familyId, d.recurringRuleId);
+}
+
+/** Income and payments that can go with a deposit in `currency`: the family's, in that currency. */
+async function checkLinks(
+  prisma: PrismaClient,
+  familyId: string,
+  currency: string,
+  transactionIds: string[],
+  /** the deposit they go with (none yet while it is being added) */
+  depositId: string | null = null,
+) {
+  if (transactionIds.length === 0) return;
+  const rows = await prisma.transaction.findMany({
+    where: { familyId, id: { in: transactionIds } },
+    select: { type: true, currency: true, depositId: true },
+  });
+  if (rows.length !== new Set(transactionIds).size) throw notFound('Transaction');
+  // never taken away from another deposit without a word (unlink it there first)
+  if (rows.some((t) => t.depositId !== null && t.depositId !== depositId)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'A transaction is linked to another deposit');
+  }
+  if (rows.some((t) => t.type === 'transfer')) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Transfers cannot be linked to a deposit');
+  }
+  if (rows.some((t) => t.currency !== currency)) {
+    throw new AppError(400, 'VALIDATION_ERROR', `Link only transactions in ${currency}`);
+  }
+}
+
+export const LinkInput = z.object({ add: ids.default([]), remove: ids.default([]) });
+
+/** Links and unlinks transactions from the deposit's own page, in one go. */
+export async function linkTransactions(
+  prisma: PrismaClient,
+  familyId: string,
+  id: string,
+  input: z.output<typeof LinkInput>,
+) {
+  const d = await owned(prisma, familyId, id);
+  if (d.closedAt && input.add.length > 0) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'It is closed: reopen it to link transactions');
+  }
+  await checkLinks(prisma, familyId, d.currency, input.add, id);
+  await prisma.$transaction([
+    prisma.transaction.updateMany({
+      where: { familyId, depositId: id, id: { in: input.remove } },
+      data: { depositId: null },
+    }),
+    prisma.transaction.updateMany({
+      where: { familyId, id: { in: input.add }, OR: [{ depositId: null }, { depositId: id }] },
+      data: { depositId: id },
+    }),
+  ]);
+  return withMoves(prisma, familyId, id);
+}
+
+export const CandidateQuery = z.object({
+  /** for a deposit that exists: matched against its account, amount, name and start */
+  depositId: z.uuid().optional(),
+  /** for one being added: its currency and account */
+  currency: CurrencySchema.optional(),
+  accountId: z.uuid().optional(),
+  q: z.string().trim().max(100).optional(),
+});
+
+/**
+ * Income and payments not linked to any deposit that may belong to one, the likely ones first:
+ * in its currency, from a month before it started on (a new one: the last 400 days).
+ */
+export async function candidates(
+  prisma: PrismaClient,
+  familyId: string,
+  q: z.output<typeof CandidateQuery>,
+) {
+  const d = q.depositId ? await owned(prisma, familyId, q.depositId) : null;
+  const currency = d?.currency ?? q.currency;
+  if (!currency) throw new AppError(400, 'VALIDATION_ERROR', 'Say which currency');
+  const accountId = d ? d.accountId : (q.accountId ?? null);
+  const from = d ? addDays(formatDay(d.startDate), -31) : addDays(todayLocal(), -400);
+  const rules = await prisma.deposit.findMany({
+    where: { familyId, recurringRuleId: { not: null } },
+    select: { recurringRuleId: true },
+  });
+  const where: Prisma.TransactionWhereInput = {
+    familyId,
+    currency,
+    depositId: null,
+    // a new deposit is opened with a payment
+    type: d ? { in: ['income', 'expense'] } : 'expense',
+    date: { gte: parseDay(from)! },
+    // instalments a recurring deposit books are its own already
+    OR: [
+      { recurringRuleId: null },
+      { recurringRuleId: { notIn: rules.map((r) => r.recurringRuleId!) } },
+    ],
+    // a new deposit: only what its account paid, when it has one
+    ...(!d && accountId && { accountId }),
+    ...(q.q && {
+      AND: [{ OR: [{ merchant: { contains: q.q } }, { notes: { contains: q.q } }] }],
+    }),
+  };
+  const query = (extra: Prisma.TransactionWhereInput, take: number) =>
+    prisma.transaction.findMany({
+      where: { AND: [where, extra] },
+      include: { account: { select: { name: true } } },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take,
+    });
+  // the latest ones, and those around its start (where its opening payment is), however old
+  const [recent, nearStart] = await Promise.all([
+    query({}, 400),
+    d ? query({ date: { lte: parseDay(addDays(formatDay(d.startDate), 31))! } }, 200) : [],
+  ]);
+  const rows = [...new Map([...recent, ...nearStart].map((t) => [t.id, t])).values()];
+  const target = {
+    name: d?.name ?? '',
+    accountId,
+    amount: d ? Number(d.principal) : null,
+    start: d ? formatDay(d.startDate) : '',
+  };
+  const items = rows
+    .map((t) => {
+      const text = [t.merchant, t.notes].filter(Boolean).join(' · ');
+      const score = matchScore(target, {
+        accountId: t.accountId,
+        amount: Number(t.amount),
+        date: formatDay(t.date),
+        text,
+      });
+      return {
+        id: t.id,
+        date: formatDay(t.date),
+        type: t.type as 'income' | 'expense',
+        amount: Number(t.amount),
+        accountId: t.accountId,
+        accountName: t.account?.name ?? null,
+        text: text || null,
+        suggested: score >= 3,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score || (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, 100);
+  return { items };
 }

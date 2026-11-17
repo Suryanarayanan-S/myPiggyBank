@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Pencil, Plus } from 'lucide-react';
+import { Link2, Pencil, Plus, X } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { DepositForm, useDepositRefresh } from '../components/deposits/DepositForm';
+import { LinkTransactions } from '../components/deposits/LinkTransactions';
 import { Tile } from '../components/investments/Tiles';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -78,11 +79,15 @@ const COUNTS = {
 /** "1 Feb 2026 · To savings · +₹2,000" rows of a deposit's linked transactions. */
 function Movements({ d }: { d: Deposit }) {
   const sv = d.kind === 'savings';
+  const refresh = useDepositRefresh();
+  const unlink = useMutation({
+    mutationFn: (id: string) => api.put(`/deposits/${d.id}/transactions`, { remove: [id] }),
+    onSuccess: refresh,
+  });
   if (d.movements.length === 0) {
     return sv ? (
       <p className="mt-2 text-xs text-slate-500">
-        Link transactions to it on the Transactions page: a payment into it adds, income from it
-        takes out.
+        Use “Link transactions” below: a payment into it adds, income from it takes out.
       </p>
     ) : null;
   }
@@ -99,18 +104,28 @@ function Movements({ d }: { d: Deposit }) {
               <span className="text-slate-500 tabular-nums">{dayLabel(m.date)}</span>{' '}
               {m.label ?? (m.amount > 0 ? 'Paid in' : 'Paid back')}
             </span>
-            <span
-              className={clsx(
-                'shrink-0 tabular-nums',
-                m.amount < 0 && 'text-rose-700 dark:text-rose-400',
-              )}
-            >
-              {m.amount > 0 ? '+' : '−'}
-              {formatMoney(Math.abs(m.amount), d.currency)}
+            <span className="flex shrink-0 items-center gap-1">
+              <span
+                className={clsx('tabular-nums', m.amount < 0 && 'text-rose-700 dark:text-rose-400')}
+              >
+                {m.amount > 0 ? '+' : '−'}
+                {formatMoney(Math.abs(m.amount), d.currency)}
+              </span>
+              <button
+                type="button"
+                className="rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label={`Unlink ${m.label ?? 'transaction'} of ${dayLabel(m.date)}`}
+                title="Unlink"
+                disabled={unlink.isPending && unlink.variables === m.transactionId}
+                onClick={() => unlink.mutate(m.transactionId)}
+              >
+                <X size={14} aria-hidden />
+              </button>
             </span>
           </li>
         ))}
       </ul>
+      <FormError error={unlink.error} />
     </details>
   );
 }
@@ -125,6 +140,7 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
   const members = useMembers();
   const refresh = useDepositRefresh();
   const [dialog, setDialog] = useState<{ deposit?: Deposit } | null>(null);
+  const [linking, setLinking] = useState<Deposit | null>(null);
   const paidOut = useMutation({
     mutationFn: (d: Deposit) =>
       api.put(`/deposits/${d.id}`, { closedAt: paidOutOn(d, localDay()) }),
@@ -250,6 +266,15 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
               Close it
             </Button>
           )}
+          {d.status !== 'closed' && (
+            <Button
+              variant="ghost"
+              aria-label={`Link transactions to ${d.name}`}
+              onClick={() => setLinking(d)}
+            >
+              <Link2 size={16} aria-hidden /> Link transactions
+            </Button>
+          )}
           <Button
             variant="ghost"
             aria-label={`Edit ${d.name}`}
@@ -306,6 +331,11 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
           </h2>
           <ul className="space-y-3">{closed.map(row)}</ul>
         </section>
+      )}
+      {linking && (
+        <Modal title={`Link transactions to ${linking.name}`} onClose={() => setLinking(null)}>
+          <LinkTransactions deposit={linking} onDone={() => setLinking(null)} />
+        </Modal>
       )}
       {dialog && (
         <Modal title={dialog.deposit ? text.edit : text.add} onClose={() => setDialog(null)}>

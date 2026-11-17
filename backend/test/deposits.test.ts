@@ -513,4 +513,108 @@ describe('fixed deposits', () => {
     // its value still comes from its terms
     expect(d.principal).toBe(10_000_000);
   });
+
+  describe('linking from the deposit', () => {
+    const pay = async (extra: object) =>
+      (
+        await call('POST', '/api/transactions', {
+          date: '2026-01-15',
+          amount: 10_000_000,
+          type: 'expense',
+          accountId: savings,
+          ...extra,
+        })
+      ).json().data;
+
+    it('suggests the payments that look like it, and links and unlinks them in one go', async () => {
+      const id = (await call('POST', '/api/deposits', fd({ accountId: savings }))).json().data.id;
+      const opening = await pay({ merchant: 'FD booking' });
+      const groceries = await pay({ amount: 5_000, date: '2026-03-01', merchant: 'Shop' });
+      const elsewhere = await pay({ accountId: null, currency: 'EUR', merchant: 'FD' });
+      const res = await call('GET', `/api/deposits/candidates?depositId=${id}`);
+      expect(res.statusCode).toBe(200);
+      const items = res.json().data.items;
+      // its currency only, the likely one first
+      expect(items.map((i: { id: string }) => i.id)).toEqual([opening.id, groceries.id]);
+      expect(items[0]).toMatchObject({ suggested: true, text: 'FD booking', amount: 10_000_000 });
+      expect(items[1]).toMatchObject({ suggested: false });
+      expect(items.find((i: { id: string }) => i.id === elsewhere.id)).toBeUndefined();
+
+      const linked = await call('PUT', `/api/deposits/${id}/transactions`, {
+        add: [opening.id, groceries.id],
+      });
+      expect(linked.statusCode).toBe(200);
+      expect(linked.json().data.movements).toHaveLength(2);
+      // linked ones are no longer offered
+      const again = (await call('GET', `/api/deposits/candidates?depositId=${id}`)).json().data;
+      expect(again.items).toEqual([]);
+      const un = await call('PUT', `/api/deposits/${id}/transactions`, { remove: [groceries.id] });
+      expect(
+        un.json().data.movements.map((m: { transactionId: string }) => m.transactionId),
+      ).toEqual([opening.id]);
+    });
+
+    it('never takes a transaction from another deposit, nor links to a closed one', async () => {
+      const a = (await call('POST', '/api/deposits', fd())).json().data.id;
+      const b = (await call('POST', '/api/deposits', fd({ name: 'Other FD' }))).json().data.id;
+      const t = await pay({});
+      await call('PUT', `/api/deposits/${a}/transactions`, { add: [t.id] });
+      const put = (id: string) => call('PUT', `/api/deposits/${id}/transactions`, { add: [t.id] });
+      expect((await put(b)).statusCode).toBe(400);
+      expect(
+        (await call('POST', '/api/deposits', fd({ name: 'New', transactionIds: [t.id] })))
+          .statusCode,
+      ).toBe(400);
+      await call('PUT', `/api/deposits/${b}`, { closedAt: today });
+      const free = await pay({ amount: 7 });
+      expect(
+        (await call('PUT', `/api/deposits/${b}/transactions`, { add: [free.id] })).statusCode,
+      ).toBe(400);
+      const list = (await call('GET', '/api/deposits')).json().data.deposits;
+      expect(list.find((x: { id: string }) => x.id === a).movements).toHaveLength(1);
+      expect(list).toHaveLength(2);
+    });
+
+    it('links only its family’s income and payments in its currency', async () => {
+      const id = (await call('POST', '/api/deposits', fd())).json().data.id;
+      const eur = await pay({ accountId: null, currency: 'EUR' });
+      const put = (add: string[]) => call('PUT', `/api/deposits/${id}/transactions`, { add });
+      expect((await put([eur.id])).statusCode).toBe(400);
+      const other = client(app, (await signUp(app)).cookie);
+      const theirs = (
+        await other('POST', '/api/transactions', {
+          date: today,
+          amount: 100,
+          type: 'expense',
+          accountId: null,
+          currency: 'INR',
+        })
+      ).json().data;
+      expect((await put([theirs.id])).statusCode).toBe(404);
+      expect((await call('GET', '/api/deposits')).json().data.deposits[0].movements).toEqual([]);
+    });
+
+    it('is opened with a payment: chosen in the form, linked when saved', async () => {
+      const p = await pay({ merchant: 'Festgeld' });
+      // before it exists: the account's recent payments in its currency, deposit words first
+      const res = await call('GET', `/api/deposits/candidates?currency=INR&accountId=${savings}`);
+      expect(res.json().data.items[0]).toMatchObject({ id: p.id, suggested: true });
+      const made = await call(
+        'POST',
+        '/api/deposits',
+        fd({ accountId: savings, transactionIds: [p.id] }),
+      );
+      expect(made.statusCode).toBe(201);
+      expect(made.json().data.movements).toEqual([
+        expect.objectContaining({ transactionId: p.id, amount: 10_000_000 }),
+      ]);
+      // a payment that cannot be linked: nothing is saved
+      const bad = await pay({ accountId: null, currency: 'EUR' });
+      expect(
+        (await call('POST', '/api/deposits', fd({ name: 'X', transactionIds: [bad.id] })))
+          .statusCode,
+      ).toBe(400);
+      expect((await call('GET', '/api/deposits')).json().data.deposits).toHaveLength(1);
+    });
+  });
 });

@@ -6,7 +6,14 @@ import { Field, FormError } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { api } from '../../lib/api';
-import { COMPOUNDING, parseRatePercent, type Compounding, type Deposit } from '../../lib/deposits';
+import {
+  COMPOUNDING,
+  dayLabel,
+  parseRatePercent,
+  useCandidates,
+  type Compounding,
+  type Deposit,
+} from '../../lib/deposits';
 import { formatMoney, parseMoneyInput } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import { useAccountLabel, useAccounts, useCategories, useMembers } from '../../lib/queries';
@@ -17,8 +24,8 @@ export const useDepositRefresh = () => {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['deposits', 'net-worth', 'goals'].map((k) =>
-        queryClient.invalidateQueries({ queryKey: [k] }),
+      ['deposits', 'net-worth', 'goals', 'transactions', 'deposit-candidates', 'dashboard'].map(
+        (k) => queryClient.invalidateQueries({ queryKey: [k] }),
       ),
     );
 };
@@ -82,6 +89,25 @@ export function DepositForm({
     note: deposit?.note ?? '',
   });
   const [problem, setProblem] = useState<string | null>(null);
+  // a new deposit: the payment that opened it (linked when saved)
+  const [paymentId, setPaymentId] = useState('');
+  const payments = useCandidates(
+    { currency: f.currency, accountId: f.accountId || undefined },
+    !deposit,
+  );
+  const pickPayment = (id: string) => {
+    setPaymentId(id);
+    const p = payments.data?.items.find((x) => x.id === id);
+    if (!p) return;
+    const amount = formatMoney(p.amount, f.currency).replace(/[^\d.,]/g, '');
+    // savings: the payment is money paid in (the opening amount stays 0)
+    setF((x) => ({
+      ...x,
+      startDate: p.date,
+      principal: sv ? '0' : amount,
+      name: x.name || (p.text ?? '').slice(0, 60),
+    }));
+  };
   const done = async () => {
     await refresh();
     onDone();
@@ -126,6 +152,7 @@ export function DepositForm({
             : sv
               ? rateChanged && { rateFrom: f.rateFrom }
               : { maturityDate: f.maturityDate, interest: f.interest }),
+          ...(!deposit && paymentId && { transactionIds: [paymentId] }),
           name: f.name,
           currency: f.currency,
           accountId: f.accountId || null,
@@ -167,6 +194,7 @@ export function DepositForm({
             const a = open.find((x) => x.id === e.target.value);
             // the deposit is in the account's currency
             setF({ ...f, accountId: e.target.value, currency: a?.currency ?? f.currency });
+            setPaymentId(''); // the payment came from the other account
           }}
         >
           <option value="">—</option>
@@ -177,6 +205,23 @@ export function DepositForm({
           ))}
         </Select>
       </Field>
+      {!deposit && (payments.data?.items.length ?? 0) > 0 && (
+        <Field
+          label="Opened with a payment (optional)"
+          htmlFor="d-payment"
+          hint="Fills in the amount and date, and links the payment to it."
+        >
+          <Select id="d-payment" value={paymentId} onChange={(e) => pickPayment(e.target.value)}>
+            <option value="">—</option>
+            {payments.data!.items.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.suggested ? '★ ' : ''}
+                {dayLabel(p.date)} · {p.text ?? 'Payment'} · {formatMoney(p.amount, f.currency)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
       {rd && (
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm">
@@ -217,6 +262,8 @@ export function DepositForm({
           <Input
             id="d-principal"
             required
+            // savings opened with a payment: that payment is the money in (not counted twice)
+            readOnly={sv && !!paymentId}
             inputMode="decimal"
             placeholder={rd ? '5,000' : '1,00,000'}
             value={f.principal}
@@ -232,7 +279,10 @@ export function DepositForm({
             id="d-currency"
             disabled={!!f.accountId}
             value={f.currency}
-            onChange={(e) => setF({ ...f, currency: e.target.value })}
+            onChange={(e) => {
+              setF({ ...f, currency: e.target.value });
+              setPaymentId('');
+            }}
           >
             {CURRENCIES.map((c) => (
               <option key={c}>{c}</option>

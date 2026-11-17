@@ -147,55 +147,64 @@ test('instant-access savings: money linked from transactions, interest every day
   await expect(acc).toBeHidden();
 
   // Deposits has three tabs; instant access starts empty, with nothing put in.
-  await page.getByRole('link', { name: 'Investments' }).first().click();
-  await page
-    .getByRole('navigation', { name: 'Investments pages' })
-    .getByRole('link', { name: 'Deposits' })
-    .click();
-  await page
-    .getByRole('navigation', { name: 'Deposits pages' })
-    .getByRole('link', { name: 'Instant access' })
-    .click();
+  // Two payments from the current account, before the savings exist in the app.
+  const addPayment = async (amount: string, date: string, merchant: string) => {
+    await page.getByRole('button', { name: 'Add transaction' }).click();
+    const txn = page.getByRole('dialog');
+    await txn.getByLabel(/^Amount/).fill(amount);
+    await txn.getByLabel('Date').fill(date);
+    await txn.getByLabel('Merchant').fill(merchant);
+    await txn.getByRole('button', { name: 'Save' }).click();
+    await expect(txn).toBeHidden();
+  };
+  await page.goto('/spending/transactions');
+  await addPayment('5000', day(-40), 'Tagesgeld Einzahlung');
+  await addPayment('1000', day(0), 'Top-up');
+
+  // Added from the deposit page, opened with the first payment: no trip to Transactions.
+  await page.goto('/investments/deposits/savings');
   await page.getByRole('button', { name: 'Add instant-access savings' }).click();
   const form = page.getByRole('dialog', { name: 'Add instant-access savings' });
   await form.getByLabel('Name').fill('Tagesgeld');
   await form.getByLabel(/Bank account/).selectOption({ label: 'Girokonto (EUR)' });
   await expect(form.getByLabel('Amount on the start day')).toHaveValue('0');
   await expect(form.getByLabel('Counts as')).toHaveValue('liquid');
+  const opening = await form
+    .locator('#d-payment option', { hasText: 'Einzahlung' })
+    .getAttribute('value');
+  await form.getByLabel('Opened with a payment (optional)').selectOption(opening!);
+  await expect(form.getByLabel('Earning interest from')).toHaveValue(day(-40));
+  await expect(form.getByLabel('Amount on the start day')).toHaveValue('0');
   await form.getByLabel('Yearly rate (%)').fill('2,25');
-  await form.getByLabel('Earning interest from').fill(day(-60));
   await form.getByRole('button', { name: 'Save' }).click();
   await expect(form).toBeHidden();
   // (the card, not one of its linked transactions)
   const card = page.getByRole('listitem').filter({ hasText: 'Tagesgeld' }).first();
-  await expect(card).toContainText('0,00 € put in');
-  await expect(card).toContainText('Link transactions to it');
-
-  // A payment from the current account into it, 40 days ago.
-  await page.getByRole('link', { name: 'Spending' }).first().click();
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
-  await page.getByRole('button', { name: 'Add transaction' }).click();
-  const txn = page.getByRole('dialog');
-  await txn.getByLabel(/^Amount/).fill('5000');
-  await txn.getByLabel('Date').fill(day(-40));
-  await txn.getByLabel('Merchant').fill('To Tagesgeld');
-  await txn.getByLabel('Paid into a deposit').selectOption({ label: 'Tagesgeld' });
-  await txn.getByRole('button', { name: 'Save' }).click();
-  await expect(txn).toBeHidden();
-
-  await page.goto('/investments/deposits/savings');
   await expect(card).toContainText('5.000,00 € put in');
   // 40 days at 2.25 % on 5,000 € is about 12 €
   await expect(card).toContainText(/Worth today 5\.01\d,\d{2}\s€/);
   await expect(card).toContainText(/Interest so far 1\d,\d{2}\s€/);
-  await card.getByText('1 linked transaction').click();
+
+  // More money linked from the card itself, and unlinked again.
+  await card.getByRole('button', { name: 'Link transactions to Tagesgeld' }).click();
+  const link = page.getByRole('dialog', { name: 'Link transactions to Tagesgeld' });
+  await expect(link.getByText('Einzahlung')).toHaveCount(0); // linked already
+  await link.getByRole('checkbox', { name: /Top-up/ }).check();
+  await shot(page, '39-link-transactions');
+  await link.getByRole('button', { name: 'Link 1 transaction' }).click();
+  await expect(link).toBeHidden();
+  await expect(card).toContainText('6.000,00 € put in');
+  await card.getByText('2 linked transactions').click();
   await expect(card).toContainText('+5.000,00 €');
   await shot(page, '38-instant-access');
+  await card.getByRole('button', { name: /Unlink Top-up/ }).click();
+  await expect(card).toContainText('5.000,00 € put in');
 
   // Everything taken out, interest too: it can be closed.
   await page.getByRole('link', { name: 'Spending' }).first().click();
   await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('button', { name: 'Add transaction' }).click();
+  const txn = page.getByRole('dialog');
   await txn.getByRole('tab', { name: 'income' }).click();
   await txn.getByLabel(/^Amount/).fill('5012');
   await txn.getByLabel('Came back from a deposit').selectOption({ label: 'Tagesgeld' });

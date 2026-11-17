@@ -197,3 +197,26 @@ export function savingsValue(
 }
 
 const nextDay = (d: string) => new Date(Date.parse(d) + DAY_MS).toISOString().slice(0, 10);
+
+/** Words in a bank line that say money went into (or came out of) a deposit. */
+const DEPOSIT_WORDS =
+  /\b(fd|rd|fixed|recurring|deposits?|festgeld\w*|tagesgeld\w*|sparen|spar\w*|savings?|sweep)\b/i;
+
+/**
+ * How likely a payment belongs to a deposit: the same amount (3), words that say deposit or the
+ * deposit's name (2), from its account (1), within a week of its start (1). 3 or more is a
+ * suggestion.
+ */
+export function matchScore(
+  d: { name: string; accountId: string | null; amount: number | null; start: string },
+  t: { accountId: string | null; amount: number; date: string; text: string },
+): number {
+  const text = t.text.toLowerCase();
+  const named = d.name.trim().length >= 3 && text.includes(d.name.trim().toLowerCase());
+  return (
+    (d.amount !== null && d.amount > 0 && t.amount === d.amount ? 3 : 0) +
+    (named || DEPOSIT_WORDS.test(text) ? 2 : 0) +
+    (d.accountId !== null && t.accountId === d.accountId ? 1 : 0) +
+    (Math.abs(Date.parse(t.date) - Date.parse(d.start)) <= 7 * DAY_MS ? 1 : 0)
+  );
+}

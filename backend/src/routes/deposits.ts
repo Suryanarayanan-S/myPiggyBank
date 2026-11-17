@@ -13,6 +13,12 @@ export const depositRoutes: FastifyPluginAsync = async (app) => {
   app.get('/deposits', async (req) => ({
     data: await d.listDeposits(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
   }));
+  app.get('/deposits/candidates', async (req) => ({
+    data: await d.candidates(app.prisma, fam(req), parse(d.CandidateQuery, req.query)),
+  }));
+  app.put('/deposits/:id/transactions', async (req) => ({
+    data: await d.linkTransactions(app.prisma, fam(req), id(req), parse(d.LinkInput, req.body)),
+  }));
   app.post('/deposits', async (req, reply) =>
     reply.status(201).send({
       data: await d.createDeposit(app.prisma, fam(req), parse(d.DepositCreate, req.body)),

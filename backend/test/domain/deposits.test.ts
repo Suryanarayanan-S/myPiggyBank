@@ -3,6 +3,7 @@ import {
   addMonths,
   depositValue,
   instalmentsDue,
+  matchScore,
   maturityAmount,
   recurringMaturity,
   recurringValue,
@@ -183,5 +184,33 @@ describe('instant-access savings', () => {
     expect(withRate(rates, '2026-01-01', 150)).toEqual([{ from: '2026-01-01', rateBp: 150 }]);
     // the same rate again changes nothing
     expect(withRate(rates, '2026-04-01', 250)).toEqual(rates);
+  });
+});
+
+describe('payments that may belong to a deposit', () => {
+  const dep = { name: 'HDFC FD 2026', accountId: 'acc', amount: 10_000_000, start: '2026-01-15' };
+  const t = (o: Partial<Parameters<typeof matchScore>[1]>) => ({
+    accountId: 'other',
+    amount: 1,
+    date: '2025-06-01',
+    text: 'REWE',
+    ...o,
+  });
+
+  it('scores the same account, the same amount, words that say deposit, and the start day', () => {
+    expect(matchScore(dep, t({}))).toBe(0);
+    expect(matchScore(dep, t({ accountId: 'acc' }))).toBe(1);
+    expect(matchScore(dep, t({ amount: 10_000_000 }))).toBe(3);
+    expect(matchScore(dep, t({ text: 'Festgeldanlage' }))).toBe(2);
+    expect(matchScore(dep, t({ text: 'hdfc fd 2026 opening' }))).toBe(2);
+    expect(matchScore(dep, t({ date: '2026-01-12' }))).toBe(1);
+    expect(
+      matchScore(dep, t({ accountId: 'acc', amount: 10_000_000, date: '2026-01-15', text: 'FD' })),
+    ).toBe(7);
+  });
+
+  it('does not take words inside other words for a deposit', () => {
+    expect(matchScore(dep, t({ text: 'FDP Spende' }))).toBe(0);
+    expect(matchScore(dep, t({ text: 'Recurring deposit instalment' }))).toBe(2);
   });
 });

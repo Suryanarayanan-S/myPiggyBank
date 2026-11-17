@@ -148,3 +148,31 @@ export const whenLeft = (daysLeft: number) =>
       : daysLeft > 0
         ? `in ${daysLeft} days`
         : `${-daysLeft} day${daysLeft === -1 ? '' : 's'} ago`;
+
+/** An unlinked income or payment that may belong to a deposit. */
+export type Candidate = {
+  id: string;
+  date: string;
+  type: 'income' | 'expense';
+  amount: number;
+  accountId: string | null;
+  accountName: string | null;
+  text: string | null;
+  /** likely (same amount, deposit words, its account, near its start) */
+  suggested: boolean;
+};
+
+/** For a deposit (`depositId`), or one being added (`currency`, `accountId`). */
+export function useCandidates(
+  params: { depositId?: string; currency?: string; accountId?: string; q?: string },
+  enabled = true,
+) {
+  const search = new URLSearchParams(
+    Object.entries(params).filter((e): e is [string, string] => !!e[1]),
+  ).toString();
+  return useQuery({
+    queryKey: ['deposit-candidates', search],
+    queryFn: () => api.get<{ items: Candidate[] }>(`/deposits/candidates?${search}`),
+    enabled,
+  });
+}

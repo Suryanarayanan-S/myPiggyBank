@@ -220,3 +220,27 @@ export function matchScore(
     (Math.abs(Date.parse(t.date) - Date.parse(d.start)) <= 7 * DAY_MS ? 1 : 0)
   );
 }
+
+/** The word a deposit's name ends with, so the kind shows wherever the name does. */
+export const KIND_SUFFIX = { fd: 'FD', rd: 'RD', savings: 'Instant' } as const;
+
+/** Whether the name already says its kind as a word anywhere ("HDFC FD 2026"). */
+const saysKind = (name: string, kind: keyof typeof KIND_SUFFIX) =>
+  new RegExp(`(^|\\s)${KIND_SUFFIX[kind]}(\\s|$)`, 'i').test(name);
+
+/** The name without the kind added at its end, for matching it in bank lines. */
+export const withoutKindSuffix = (name: string, kind: keyof typeof KIND_SUFFIX) =>
+  name.trim().replace(new RegExp(`\\s+${KIND_SUFFIX[kind]}$`, 'i'), '');
+
+/** "HDFC" → "HDFC FD" (unless it already says FD), within 60 characters. */
+export function withKindSuffix(name: string, kind: keyof typeof KIND_SUFFIX): string {
+  const base = name.trim();
+  const suffix = KIND_SUFFIX[kind];
+  if (saysKind(base, kind)) return base;
+  if (
+    base.toLowerCase().endsWith(` ${suffix.toLowerCase()}`) ||
+    base.toLowerCase() === suffix.toLowerCase()
+  )
+    return base;
+  return `${base.slice(0, 60 - suffix.length - 1).trimEnd()} ${suffix}`;
+}

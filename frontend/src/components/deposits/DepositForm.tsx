@@ -9,7 +9,9 @@ import { api } from '../../lib/api';
 import {
   COMPOUNDING,
   dayLabel,
+  KIND_SUFFIX,
   parseRatePercent,
+  withKindSuffix,
   useCandidates,
   type Compounding,
   type Deposit,
@@ -33,22 +35,20 @@ export const useDepositRefresh = () => {
 const addYear = (day: string) => `${Number(day.slice(0, 4)) + 1}${day.slice(4)}`;
 
 /**
- * A fixed deposit (amount, rate, dates) or a recurring one (monthly instalment for some months,
- * optionally booked from its account each month). The money comes from, and returns to, an
- * account.
+ * A fixed deposit (amount, rate, dates), a recurring one (monthly instalment for some months,
+ * optionally booked from its account each month) or instant-access savings — the type is chosen
+ * when it is added. The money comes from, and returns to, an account.
  */
 export function DepositForm({
   deposit,
-  kind: newKind = 'fd',
   defaultCurrency,
   onDone,
 }: {
   deposit?: Deposit;
-  /** for a new deposit */
-  kind?: Deposit['kind'];
   defaultCurrency: string;
   onDone: () => void;
 }) {
+  const [newKind, setNewKind] = useState<Deposit['kind']>('fd');
   const kind = deposit?.kind ?? newKind;
   const rd = kind === 'rd';
   const sv = kind === 'savings';
@@ -166,12 +166,54 @@ export function DepositForm({
         });
       }}
     >
-      <Field label="Name" htmlFor="d-name">
+      {!deposit && (
+        <Field label="Type" htmlFor="d-kind">
+          <Select
+            id="d-kind"
+            value={kind}
+            onChange={(e) => {
+              const next = e.target.value as Deposit['kind'];
+              const toSavings = next === 'savings';
+              const usual = (k: Deposit['kind']) => ({
+                compounding: (k === 'savings' ? 'monthly' : 'quarterly') as Compounding,
+                assetClass: (k === 'savings'
+                  ? 'liquid'
+                  : 'investment') as keyof typeof ASSET_CLASSES,
+              });
+              const was = usual(kind);
+              setNewKind(next);
+              setPaymentId('');
+              // each type's usual terms, unless already chosen (instant access: credited
+              // monthly, money at hand); an amount means something else in another type
+              setF((x) => ({
+                ...x,
+                compounding:
+                  x.compounding === was.compounding ? usual(next).compounding : x.compounding,
+                assetClass: x.assetClass === was.assetClass ? usual(next).assetClass : x.assetClass,
+                principal: toSavings ? '0' : '',
+              }));
+            }}
+          >
+            <option value="fd">Fixed deposit (FD)</option>
+            <option value="rd">Recurring deposit (RD)</option>
+            <option value="savings">Instant access (daily interest)</option>
+          </Select>
+        </Field>
+      )}
+      <Field
+        label="Name"
+        htmlFor="d-name"
+        hint={
+          f.name.trim()
+            ? `Saved as “${withKindSuffix(f.name, kind)}”`
+            : `“${KIND_SUFFIX[kind]}” is added to the name.`
+        }
+      >
         <Input
           id="d-name"
           required
           maxLength={60}
-          placeholder={rd ? 'Post office RD' : sv ? 'Tagesgeld' : 'HDFC FD 2026'}
+          placeholder={rd ? 'Post office' : sv ? 'Tagesgeld' : 'HDFC 2026'}
           value={f.name}
           onChange={(e) => setF({ ...f, name: e.target.value })}
         />

@@ -42,11 +42,6 @@ const INVESTMENT_TABS: SectionTab[] = [
   { to: '/investments/deposits', label: 'Deposits' },
   { to: '/investments/gold', label: 'Gold' },
 ];
-const DEPOSIT_TABS: SectionTab[] = [
-  { to: '/investments/deposits', label: 'Fixed', end: true },
-  { to: '/investments/deposits/recurring', label: 'Recurring' },
-  { to: '/investments/deposits/savings', label: 'Instant access' },
-];
 const REPORT_TABS: SectionTab[] = [
   { to: '/reports', label: 'Year report', end: true },
   { to: '/reports/insights', label: 'Insights' },
@@ -93,11 +88,10 @@ export function App() {
           >
             <Route index element={<InvestmentsOverviewPage />} />
             <Route path="market" element={<InvestmentsPage />} />
-            <Route path="deposits" element={<SectionLayout name="Deposits" tabs={DEPOSIT_TABS} />}>
-              <Route index element={<DepositsPage kind="fd" />} />
-              <Route path="recurring" element={<DepositsPage kind="rd" />} />
-              <Route path="savings" element={<DepositsPage kind="savings" />} />
-            </Route>
+            <Route path="deposits" element={<DepositsPage />} />
+            {/* the deposits used to have a tab per kind */}
+            <Route path="deposits/recurring" element={<Moved to="/investments/deposits" />} />
+            <Route path="deposits/savings" element={<Moved to="/investments/deposits" />} />
             <Route path="gold" element={<GoldPage />} />
           </Route>
           <Route path="goals" element={<GoalsPage />} />

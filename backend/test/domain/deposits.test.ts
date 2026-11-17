@@ -11,6 +11,8 @@ import {
   type DepositTerms,
   rateOnDay,
   savingsValue,
+  withKindSuffix,
+  withoutKindSuffix,
   withRate,
   type RecurringTerms,
   type SavingsTerms,
@@ -212,5 +214,23 @@ describe('payments that may belong to a deposit', () => {
   it('does not take words inside other words for a deposit', () => {
     expect(matchScore(dep, t({ text: 'FDP Spende' }))).toBe(0);
     expect(matchScore(dep, t({ text: 'Recurring deposit instalment' }))).toBe(2);
+  });
+});
+
+describe('names say the kind', () => {
+  it('ends a name with FD, RD or Instant, once', () => {
+    expect(withKindSuffix('HDFC', 'fd')).toBe('HDFC FD');
+    expect(withKindSuffix('Post office', 'rd')).toBe('Post office RD');
+    expect(withKindSuffix('Tagesgeld', 'savings')).toBe('Tagesgeld Instant');
+    expect(withKindSuffix('HDFC fd', 'fd')).toBe('HDFC fd');
+    expect(withKindSuffix('  SBI RD  ', 'rd')).toBe('SBI RD');
+    // a word ending in the letters is not the suffix
+    expect(withKindSuffix('Herd', 'rd')).toBe('Herd RD');
+    // saying it anywhere is enough (an older name like "HDFC FD 2026" stays as it is)
+    expect(withKindSuffix('HDFC FD 2026', 'fd')).toBe('HDFC FD 2026');
+    expect(withoutKindSuffix('Trade Republic Instant', 'savings')).toBe('Trade Republic');
+    expect(withoutKindSuffix('HDFC FD 2026', 'fd')).toBe('HDFC FD 2026');
+    // still at most 60 characters
+    expect(withKindSuffix('x'.repeat(60), 'savings')).toBe(`${'x'.repeat(52)} Instant`);
   });
 });

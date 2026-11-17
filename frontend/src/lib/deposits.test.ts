@@ -5,6 +5,7 @@ import {
   linkableDeposits,
   maturingSoon,
   paidOutOn,
+  withKindSuffix,
   parseRatePercent,
   whenLeft,
   type Deposit,
@@ -36,6 +37,13 @@ describe('deposits', () => {
       { name: 'Tagesgeld', status: 'active', daysLeft: null } as Deposit,
     ];
     expect(maturingSoon(list).map((x) => x.name)).toEqual(['Due', 'Soon']);
+  });
+
+  it('names end with the kind, as the server saves them', () => {
+    expect(withKindSuffix('HDFC', 'fd')).toBe('HDFC FD');
+    expect(withKindSuffix('Tagesgeld', 'savings')).toBe('Tagesgeld Instant');
+    expect(withKindSuffix('SBI rd ', 'rd')).toBe('SBI rd');
+    expect(withKindSuffix('HDFC FD 2026', 'fd')).toBe('HDFC FD 2026');
   });
 
   it('says when', () => {

@@ -152,11 +152,7 @@ export function AccountsPage() {
                         </span>
                       </span>
                       <Link
-                        to={
-                          depositsOf(a.id).every((d) => d.kind === 'rd')
-                            ? '/investments/deposits/recurring'
-                            : '/investments/deposits'
-                        }
+                        to="/investments/deposits"
                         className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
                         aria-label={`Deposits of ${accountLabel(a)}`}
                       >

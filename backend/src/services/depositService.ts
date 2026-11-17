@@ -13,6 +13,8 @@ import {
   recurringValue,
   rateOnDay,
   savingsValue,
+  withKindSuffix,
+  withoutKindSuffix,
   withRate,
   type DepositTerms,
   type RateFrom,
@@ -408,7 +410,7 @@ const ruleFor = (d: {
   }
   const start = formatDay(d.startDate);
   return {
-    name: `RD: ${d.name}`.slice(0, 80),
+    name: d.name, // ends with RD
     amount: Number(d.principal),
     accountId: d.accountId,
     memberId: d.ownerMemberId,
@@ -448,6 +450,7 @@ export async function createDeposit(
     // instant access is money at hand, unless said otherwise
     assetClass: input.assetClass ?? (sv ? 'liquid' : 'investment'),
     rateHistory: sv ? JSON.stringify([{ from: input.startDate, rateBp: input.rateBp }]) : null,
+    name: withKindSuffix(input.name, input.kind),
   };
   if (rd && book) await checkBooking(prisma, familyId, data.accountId, book.categoryId);
   const d = await prisma.deposit.create({ data, include: withRule });
@@ -579,6 +582,9 @@ export async function updateDeposit(
     where: { id },
     data: {
       ...rest,
+      ...(input.name !== undefined && {
+        name: withKindSuffix(input.name, d.kind as 'fd' | 'rd' | 'savings'),
+      }),
       ...(input.startDate && { startDate: parseDay(input.startDate)! }),
       maturityDate: maturity === null ? null : parseDay(maturity)!,
       ...(rateHistory !== undefined && { rateHistory }),
@@ -769,7 +775,8 @@ export async function candidates(
   ]);
   const rows = [...new Map([...recent, ...nearStart].map((t) => [t.id, t])).values()];
   const target = {
-    name: d?.name ?? '',
+    // matched without the kind added to it ("Trade Republic", not "Trade Republic Instant")
+    name: d ? withoutKindSuffix(d.name, d.kind as 'fd' | 'rd' | 'savings') : '',
     accountId,
     amount: d ? Number(d.principal) : null,
     start: d ? formatDay(d.startDate) : '',

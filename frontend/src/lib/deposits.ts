@@ -53,6 +53,17 @@ export type Deposit = {
   /** value and principal in the summary currency; null without an exchange rate or when closed */
   inView: { value: number; principal: number } | null;
 };
+/** The word a deposit's name ends with (the server adds it when saving). */
+export const KIND_SUFFIX = { fd: 'FD', rd: 'RD', savings: 'Instant' } as const;
+
+/** "HDFC" → "HDFC FD" (unless it already says FD), within 60 characters — as the server saves it. */
+export function withKindSuffix(name: string, kind: Deposit['kind']): string {
+  const base = name.trim();
+  const suffix = KIND_SUFFIX[kind];
+  if (new RegExp(`(^|\\s)${suffix}(\\s|$)`, 'i').test(base)) return base;
+  return `${base.slice(0, 60 - suffix.length - 1).trimEnd()} ${suffix}`;
+}
+
 export type Movement = {
   transactionId: string;
   date: string;

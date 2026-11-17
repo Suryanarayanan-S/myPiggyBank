@@ -42,9 +42,12 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   );
   await expect(page.getByText('Nothing invested yet')).toBeVisible();
   await tabs.getByRole('link', { name: 'Deposits' }).click();
-  await page.getByRole('button', { name: 'Add fixed deposit' }).click();
-  const form = page.getByRole('dialog', { name: 'Add fixed deposit' });
-  await form.getByLabel('Name').fill('Bank FD');
+  await page.getByRole('button', { name: 'Add deposit' }).click();
+  const form = page.getByRole('dialog', { name: 'Add deposit' });
+  await expect(form.getByLabel('Type')).toHaveValue('fd');
+  // the kind is added to the name
+  await form.getByLabel('Name').fill('Bank');
+  await expect(form.getByText('Saved as “Bank FD”')).toBeVisible();
   await form.getByLabel(/Bank account/).selectOption({ label: 'Savings (EUR)' });
   await form.getByLabel('Amount deposited').fill('10.000,00');
   await form.getByLabel('Yearly rate (%)').fill('7');
@@ -85,17 +88,13 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await tabs.getByRole('link', { name: 'Deposits' }).click();
   await page.getByRole('button', { name: 'Mark Bank FD as paid out' }).click();
   await expect(card).toContainText('Paid out');
-  await expect(page.getByRole('heading', { name: 'Paid out' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Paid out and closed' })).toBeVisible();
 
   // A recurring deposit: 100 € a month for a year, booked from the account each month.
-  await tabs.getByRole('link', { name: 'Deposits' }).click();
-  await page
-    .getByRole('navigation', { name: 'Deposits pages' })
-    .getByRole('link', { name: 'Recurring' })
-    .click();
-  await expect(page.getByText('No recurring deposits yet')).toBeVisible();
-  await page.getByRole('button', { name: 'Add recurring deposit' }).click();
-  const rd = page.getByRole('dialog', { name: 'Add recurring deposit' });
+  // (the same page: one button, the type chosen in the form)
+  await page.getByRole('button', { name: 'Add deposit' }).click();
+  const rd = page.getByRole('dialog', { name: 'Add deposit' });
+  await rd.getByLabel('Type').selectOption('rd');
   await rd.getByLabel('Name').fill('Post RD');
   await rd.getByLabel(/Bank account/).selectOption({ label: 'Savings (EUR)' });
   const book = rd.getByLabel('Book the instalment from this account each month');
@@ -107,6 +106,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await rd.getByLabel('Months').fill('12');
   await rd.getByRole('button', { name: 'Save' }).click();
   await expect(rd).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Recurring deposits' })).toBeVisible();
   const rdCard = page.getByRole('listitem').filter({ hasText: 'Post RD' });
   await expect(rdCard).toContainText('100,00 € a month × 12');
   await expect(rdCard).toContainText('1.246,21 €'); // Σ 100 × 1.0175^(i/3) at maturity
@@ -119,9 +119,9 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Transactions' })
     .click();
-  await expect(page.getByText('RD: Post RD').first()).toBeVisible();
+  await expect(page.getByText('Post RD').first()).toBeVisible();
   await page.getByRole('link', { name: 'Recurring' }).first().click();
-  await expect(page.getByText('RD: Post RD').first()).toBeVisible();
+  await expect(page.getByText('Post RD').first()).toBeVisible();
 
   // Old addresses of the holdings list still work.
   await page.goto('/investments?tab=holdings');
@@ -146,7 +146,7 @@ test('instant-access savings: money linked from transactions, interest every day
   await acc.getByRole('button', { name: 'Save' }).click();
   await expect(acc).toBeHidden();
 
-  // Deposits has three tabs; instant access starts empty, with nothing put in.
+  // Instant access is a type on the one deposits page.
   // Two payments from the current account, before the savings exist in the app.
   const addPayment = async (amount: string, date: string, merchant: string) => {
     await page.getByRole('button', { name: 'Add transaction' }).click();
@@ -162,9 +162,12 @@ test('instant-access savings: money linked from transactions, interest every day
   await addPayment('1000', day(0), 'Top-up');
 
   // Added from the deposit page, opened with the first payment: no trip to Transactions.
+  // (the old address of the instant-access tab lands on the deposits page)
   await page.goto('/investments/deposits/savings');
-  await page.getByRole('button', { name: 'Add instant-access savings' }).click();
-  const form = page.getByRole('dialog', { name: 'Add instant-access savings' });
+  await expect(page).toHaveURL(/\/investments\/deposits$/);
+  await page.getByRole('button', { name: 'Add deposit' }).click();
+  const form = page.getByRole('dialog', { name: 'Add deposit' });
+  await form.getByLabel('Type').selectOption('savings');
   await form.getByLabel('Name').fill('Tagesgeld');
   await form.getByLabel(/Bank account/).selectOption({ label: 'Girokonto (EUR)' });
   await expect(form.getByLabel('Amount on the start day')).toHaveValue('0');
@@ -186,8 +189,8 @@ test('instant-access savings: money linked from transactions, interest every day
   await expect(card).toContainText(/Interest so far 1\d,\d{2}\s€/);
 
   // More money linked from the card itself, and unlinked again.
-  await card.getByRole('button', { name: 'Link transactions to Tagesgeld' }).click();
-  const link = page.getByRole('dialog', { name: 'Link transactions to Tagesgeld' });
+  await card.getByRole('button', { name: 'Link transactions to Tagesgeld Instant' }).click();
+  const link = page.getByRole('dialog', { name: 'Link transactions to Tagesgeld Instant' });
   await expect(link.getByText('Einzahlung')).toHaveCount(0); // linked already
   await link.getByRole('checkbox', { name: /Top-up/ }).check();
   await shot(page, '39-link-transactions');
@@ -207,13 +210,13 @@ test('instant-access savings: money linked from transactions, interest every day
   const txn = page.getByRole('dialog');
   await txn.getByRole('tab', { name: 'income' }).click();
   await txn.getByLabel(/^Amount/).fill('5012');
-  await txn.getByLabel('Came back from a deposit').selectOption({ label: 'Tagesgeld' });
+  await txn.getByLabel('Came back from a deposit').selectOption({ label: 'Tagesgeld Instant' });
   await txn.getByRole('button', { name: 'Save' }).click();
   await expect(txn).toBeHidden();
   // the transaction says where its money came from
   await expect(page.getByText('from Tagesgeld')).toBeVisible();
-  await page.goto('/investments/deposits/savings');
-  await card.getByRole('button', { name: 'Close Tagesgeld' }).click();
+  await page.goto('/investments/deposits');
+  await card.getByRole('button', { name: 'Close Tagesgeld Instant' }).click();
   await expect(card).toContainText('Closed');
 });
 

@@ -193,7 +193,7 @@ describe('fixed deposits', () => {
       (await call('GET', `/api/transactions?accountId=${savings}`))
         .json()
         .data.items.filter((t: { merchant: string | null; notes: string | null }) =>
-          JSON.stringify(t).includes('RD: Post office RD'),
+          JSON.stringify(t).includes('Post office RD'),
         );
     beforeEach(async () => {
       rdCategory = (
@@ -220,7 +220,7 @@ describe('fixed deposits', () => {
       // the monthly rule, until the last instalment; today's is booked
       expect(await rules()).toMatchObject([
         {
-          name: 'RD: Post office RD',
+          name: 'Post office RD',
           type: 'expense',
           amount: 100_000,
           frequency: 'monthly',
@@ -358,6 +358,7 @@ describe('fixed deposits', () => {
         today,
       )!;
       expect(d).toMatchObject({
+        name: 'Tagesgeld Instant',
         kind: 'savings',
         maturityDate: null,
         maturityAmount: null,
@@ -379,7 +380,7 @@ describe('fixed deposits', () => {
     it('follows the transactions linked to it: expenses in, income out', async () => {
       const id = (await call('POST', '/api/deposits', sav({ principal: 0 }))).json().data.id;
       const t1 = (await txn({ depositId: id, merchant: 'To savings' })).json().data;
-      expect(t1).toMatchObject({ depositId: id, depositName: 'Tagesgeld' });
+      expect(t1).toMatchObject({ depositId: id, depositName: 'Tagesgeld Instant' });
       await txn({ depositId: id, type: 'income', amount: 50_000, date: today });
       const [d] = await list();
       expect(d.principal).toBe(150_000);
@@ -573,6 +574,15 @@ describe('fixed deposits', () => {
       const list = (await call('GET', '/api/deposits')).json().data.deposits;
       expect(list.find((x: { id: string }) => x.id === a).movements).toHaveLength(1);
       expect(list).toHaveLength(2);
+    });
+
+    it('names end with the kind, also after an edit', async () => {
+      const id = (await call('POST', '/api/deposits', fd({ name: 'SBI' }))).json().data.id;
+      const renamed = await call('PUT', `/api/deposits/${id}`, { name: 'SBI tax saver' });
+      expect(renamed.json().data.name).toBe('SBI tax saver FD');
+      expect(
+        (await call('POST', '/api/deposits', fd({ name: 'Canara FD' }))).json().data.name,
+      ).toBe('Canara FD');
     });
 
     it('links only its family’s income and payments in its currency', async () => {

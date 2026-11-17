@@ -43,38 +43,31 @@ const STATUS: Record<Deposit['status'], { label: string; tone: string }> = {
   },
 };
 
-const TEXT = {
-  fd: {
+/** Each kind gets its own section on the one page, in this order. */
+const SECTIONS = [
+  {
+    kind: 'fd',
     title: 'Fixed deposits',
-    intro: 'valued each day from their rate',
-    add: 'Add fixed deposit',
+    note: 'a sum for a fixed time, valued each day from its rate; counted as investments',
     edit: 'Edit fixed deposit',
-    empty:
-      'No fixed deposits yet. Add one with its amount, rate and dates: its value today and at maturity are worked out for you.',
   },
-  rd: {
+  {
+    kind: 'rd',
     title: 'Recurring deposits',
-    intro: 'a monthly instalment, each one earning from its month',
-    add: 'Add recurring deposit',
+    note: 'a monthly instalment, each one earning from its month; counted as investments',
     edit: 'Edit recurring deposit',
-    empty:
-      'No recurring deposits yet. Add one with its monthly instalment, rate and months; the instalment can be booked from its account each month.',
   },
-  savings: {
-    title: 'Instant-access savings',
-    intro: 'money in and out at any time, interest earned every day',
-    add: 'Add instant-access savings',
+  {
+    kind: 'savings',
+    title: 'Instant access',
+    note: 'money in and out at any time, interest every day; counted as money at hand',
     edit: 'Edit instant-access savings',
-    empty:
-      'No instant-access savings yet (Tagesgeld, a sweep or savings pot). Add one with its rate; then link the transactions that pay into it or take money out.',
   },
-} as const;
-
-const COUNTS = {
-  fd: 'They count in net worth as investments until paid out.',
-  rd: 'They count in net worth as investments until paid out.',
-  savings: 'They count in net worth as money at hand.',
-} as const;
+] as const;
+const EDIT_TITLE = Object.fromEntries(SECTIONS.map((x) => [x.kind, x.edit])) as Record<
+  Deposit['kind'],
+  string
+>;
 
 /** "1 Feb 2026 · To savings · +₹2,000" rows of a deposit's linked transactions. */
 function Movements({ d }: { d: Deposit }) {
@@ -130,10 +123,11 @@ function Movements({ d }: { d: Deposit }) {
   );
 }
 
-/** Fixed or recurring deposits: what each is worth today, what it pays at maturity, and when. */
-export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
-  const sv = kind === 'savings';
-  const text = TEXT[kind];
+/**
+ * All deposits on one page — fixed, recurring and instant access, each in its own section: what
+ * each is worth today, what it pays at maturity and when, and the money linked to it.
+ */
+export function DepositsPage() {
   const me = useMe();
   const q = useDeposits();
   const accounts = useAccounts();
@@ -147,157 +141,153 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
     onSuccess: refresh,
   });
   const data = q.data;
-  const mine = data?.deposits.filter((d) => d.kind === kind) ?? [];
-  const open = mine.filter((d) => d.status !== 'closed');
-  const closed = mine.filter((d) => d.status === 'closed');
-  // This kind's totals in the summary currency (and what has no exchange rate to it).
-  const s = data && {
-    currency: data.summary.currency,
-    value: mine.reduce((t, d) => t + (d.inView?.value ?? 0), 0),
-    principal: mine.reduce((t, d) => t + (d.inView?.principal ?? 0), 0),
-    unconverted: mine
-      .filter((d) => d.value !== null && d.inView === null)
-      .map((d) => ({ currency: d.currency, amount: d.value! })),
-  };
+  const all = data?.deposits ?? [];
+  const open = all.filter((d) => d.status !== 'closed');
+  const closed = all.filter((d) => d.status === 'closed');
+  // the totals in the summary currency (and what has no exchange rate to it)
+  const s = data?.summary;
   const accountName = (id: string | null) => accounts.data?.find((a) => a.id === id)?.name;
   const owner = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? 'Shared') : 'Shared';
 
-  const row = (d: Deposit) => (
-    <li key={d.id}>
-      <Card className="!p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 font-medium">
-              {d.name}
-              <span className={clsx('rounded px-1.5 py-0.5 text-xs', STATUS[d.status].tone)}>
-                {sv && d.status === 'closed' ? 'Closed' : STATUS[d.status].label}
-              </span>
-            </p>
-            <p className="text-xs text-slate-500">
-              {[accountName(d.accountId), owner(d.ownerMemberId)].filter(Boolean).join(' · ')}
-            </p>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              {d.kind === 'savings' ? (
-                <>
-                  {formatMoney(d.principal, d.currency)} put in, at {formatRateBp(d.rateBp)} ·
-                  interest daily, credited {COMPOUNDING[d.compounding].toLowerCase()} · since{' '}
-                  {dayLabel(d.startDate)}
-                </>
-              ) : (
-                <>
-                  {d.kind === 'rd'
-                    ? `${formatMoney(d.instalment!, d.currency)} a month × ${d.months}`
-                    : formatMoney(d.principal, d.currency)}{' '}
-                  at {formatRateBp(d.rateBp)} · {COMPOUNDING[d.compounding].toLowerCase()} ·{' '}
-                  {dayLabel(d.startDate)} → {dayLabel(d.maturityDate!)}
-                </>
+  const row = (d: Deposit) => {
+    const sv = d.kind === 'savings';
+    return (
+      <li key={d.id}>
+        <Card className="!p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex flex-wrap items-center gap-2 font-medium">
+                {d.name}
+                <span className={clsx('rounded px-1.5 py-0.5 text-xs', STATUS[d.status].tone)}>
+                  {sv && d.status === 'closed' ? 'Closed' : STATUS[d.status].label}
+                </span>
+              </p>
+              <p className="text-xs text-slate-500">
+                {[accountName(d.accountId), owner(d.ownerMemberId)].filter(Boolean).join(' · ')}
+              </p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                {d.kind === 'savings' ? (
+                  <>
+                    {formatMoney(d.principal, d.currency)} put in, at {formatRateBp(d.rateBp)} ·
+                    interest daily, credited {COMPOUNDING[d.compounding].toLowerCase()} · since{' '}
+                    {dayLabel(d.startDate)}
+                  </>
+                ) : (
+                  <>
+                    {d.kind === 'rd'
+                      ? `${formatMoney(d.instalment!, d.currency)} a month × ${d.months}`
+                      : formatMoney(d.principal, d.currency)}{' '}
+                    at {formatRateBp(d.rateBp)} · {COMPOUNDING[d.compounding].toLowerCase()} ·{' '}
+                    {dayLabel(d.startDate)} → {dayLabel(d.maturityDate!)}
+                  </>
+                )}
+              </p>
+              {d.rates && d.rates.length > 1 && (
+                <p className="text-xs text-slate-500">
+                  Rate:{' '}
+                  {d.rates
+                    .map((r) => `${formatRateBp(r.rateBp)} from ${dayLabel(r.from)}`)
+                    .join(', ')}
+                </p>
               )}
-            </p>
-            {d.rates && d.rates.length > 1 && (
-              <p className="text-xs text-slate-500">
-                Rate:{' '}
-                {d.rates
-                  .map((r) => `${formatRateBp(r.rateBp)} from ${dayLabel(r.from)}`)
-                  .join(', ')}
-              </p>
-            )}
-            {d.kind === 'rd' && d.status !== 'closed' && (
-              <p className="text-xs text-slate-500">
-                {d.instalmentsDue} of {d.months} instalments paid ·{' '}
-                {formatMoney(d.principal, d.currency)} put in
-                {d.book ? ' · booked from the account each month' : ''}
-              </p>
-            )}
-            {d.payoutPerPeriod !== null && (
-              <p className="text-xs text-slate-500">
-                Pays out {formatMoney(d.payoutPerPeriod, d.currency)} interest{' '}
-                {COMPOUNDING[d.compounding].toLowerCase()}
-              </p>
-            )}
+              {d.kind === 'rd' && d.status !== 'closed' && (
+                <p className="text-xs text-slate-500">
+                  {d.instalmentsDue} of {d.months} instalments paid ·{' '}
+                  {formatMoney(d.principal, d.currency)} put in
+                  {d.book ? ' · booked from the account each month' : ''}
+                </p>
+              )}
+              {d.payoutPerPeriod !== null && (
+                <p className="text-xs text-slate-500">
+                  Pays out {formatMoney(d.payoutPerPeriod, d.currency)} interest{' '}
+                  {COMPOUNDING[d.compounding].toLowerCase()}
+                </p>
+              )}
+            </div>
+            <div className="text-right text-sm tabular-nums">
+              {d.value !== null && (
+                <p>
+                  <span className="text-xs text-slate-500">Worth today </span>
+                  <span className="font-semibold">{formatMoney(d.value, d.currency)}</span>
+                </p>
+              )}
+              {d.maturityAmount !== null && (
+                <p>
+                  <span className="text-xs text-slate-500">At maturity </span>
+                  {formatMoney(d.maturityAmount, d.currency)}
+                </p>
+              )}
+              {d.kind === 'savings' && d.interestEarned !== null && (
+                <p>
+                  <span className="text-xs text-slate-500">Interest so far </span>
+                  {formatMoney(d.interestEarned, d.currency)}
+                </p>
+              )}
+              {d.status !== 'closed' && d.daysLeft !== null && (
+                <p className="text-xs text-slate-500">
+                  {d.daysLeft > 0 ? 'matures' : 'matured'} {whenLeft(d.daysLeft)}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="text-right text-sm tabular-nums">
-            {d.value !== null && (
-              <p>
-                <span className="text-xs text-slate-500">Worth today </span>
-                <span className="font-semibold">{formatMoney(d.value, d.currency)}</span>
-              </p>
+          <Movements d={d} />
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
+            {d.status === 'matured' && (
+              <Button
+                variant="secondary"
+                aria-label={`Mark ${d.name} as paid out`}
+                onClick={() => paidOut.mutate(d)}
+                disabled={paidOut.isPending}
+              >
+                Mark as paid out
+              </Button>
             )}
-            {d.maturityAmount !== null && (
-              <p>
-                <span className="text-xs text-slate-500">At maturity </span>
-                {formatMoney(d.maturityAmount, d.currency)}
-              </p>
-            )}
-            {d.kind === 'savings' && d.interestEarned !== null && (
-              <p>
-                <span className="text-xs text-slate-500">Interest so far </span>
-                {formatMoney(d.interestEarned, d.currency)}
-              </p>
-            )}
-            {d.status !== 'closed' && d.daysLeft !== null && (
-              <p className="text-xs text-slate-500">
-                {d.daysLeft > 0 ? 'matures' : 'matured'} {whenLeft(d.daysLeft)}
-              </p>
-            )}
-          </div>
-        </div>
-        <Movements d={d} />
-        <div className="mt-2 flex flex-wrap justify-end gap-2">
-          {d.status === 'matured' && (
-            <Button
-              variant="secondary"
-              aria-label={`Mark ${d.name} as paid out`}
-              onClick={() => paidOut.mutate(d)}
-              disabled={paidOut.isPending}
-            >
-              Mark as paid out
-            </Button>
-          )}
-          {/* savings: once all the money is taken out, interest too (under one unit left), it
+            {/* savings: once all the money is taken out, interest too (under one unit left), it
               can be closed */}
-          {sv && d.status === 'active' && d.movements.length > 0 && (d.value ?? 0) < 100 && (
-            <Button
-              variant="secondary"
-              aria-label={`Close ${d.name}`}
-              onClick={() => paidOut.mutate(d)}
-              disabled={paidOut.isPending}
-            >
-              Close it
-            </Button>
-          )}
-          {d.status !== 'closed' && (
+            {sv && d.status === 'active' && d.movements.length > 0 && (d.value ?? 0) < 100 && (
+              <Button
+                variant="secondary"
+                aria-label={`Close ${d.name}`}
+                onClick={() => paidOut.mutate(d)}
+                disabled={paidOut.isPending}
+              >
+                Close it
+              </Button>
+            )}
+            {d.status !== 'closed' && (
+              <Button
+                variant="ghost"
+                aria-label={`Link transactions to ${d.name}`}
+                onClick={() => setLinking(d)}
+              >
+                <Link2 size={16} aria-hidden /> Link transactions
+              </Button>
+            )}
             <Button
               variant="ghost"
-              aria-label={`Link transactions to ${d.name}`}
-              onClick={() => setLinking(d)}
+              aria-label={`Edit ${d.name}`}
+              onClick={() => setDialog({ deposit: d })}
             >
-              <Link2 size={16} aria-hidden /> Link transactions
+              <Pencil size={16} aria-hidden />
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            aria-label={`Edit ${d.name}`}
-            onClick={() => setDialog({ deposit: d })}
-          >
-            <Pencil size={16} aria-hidden />
-          </Button>
-        </div>
-      </Card>
-    </li>
-  );
+          </div>
+        </Card>
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{text.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Deposits</h1>
           <p className="text-sm text-slate-500">
-            {text.title}, {text.intro}. {COUNTS[kind]}
+            Fixed and recurring deposits and instant-access savings, valued every day.
           </p>
         </div>
         <Button onClick={() => setDialog({})}>
-          <Plus size={16} aria-hidden /> {text.add}
+          <Plus size={16} aria-hidden /> Add deposit
         </Button>
       </div>
       <FormError error={q.error ?? paidOut.error} />
@@ -318,16 +308,34 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
           />
         </div>
       )}
-      {data && mine.length === 0 && (
+      {data && all.length === 0 && (
         <Card>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{text.empty}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            No deposits yet. Add a fixed deposit (FD), a recurring one (RD) or instant-access
+            savings (Tagesgeld, a sweep or savings pot): it is valued from its rate every day, and
+            the payment that opened it can be linked right away.
+          </p>
         </Card>
       )}
-      {open.length > 0 && <ul className="space-y-3">{open.map(row)}</ul>}
+      {SECTIONS.map((sec) => {
+        const list = open.filter((d) => d.kind === sec.kind);
+        if (list.length === 0) return null;
+        return (
+          <section key={sec.kind} className="space-y-2" aria-labelledby={`dep-${sec.kind}`}>
+            <div>
+              <h2 id={`dep-${sec.kind}`} className="text-lg font-semibold">
+                {sec.title}
+              </h2>
+              <p className="text-xs text-slate-500">{sec.note}</p>
+            </div>
+            <ul className="space-y-3">{list.map(row)}</ul>
+          </section>
+        );
+      })}
       {closed.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
-            {sv ? 'Closed' : 'Paid out'}
+            Paid out and closed
           </h2>
           <ul className="space-y-3">{closed.map(row)}</ul>
         </section>
@@ -338,10 +346,12 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
         </Modal>
       )}
       {dialog && (
-        <Modal title={dialog.deposit ? text.edit : text.add} onClose={() => setDialog(null)}>
+        <Modal
+          title={dialog.deposit ? EDIT_TITLE[dialog.deposit.kind] : 'Add deposit'}
+          onClose={() => setDialog(null)}
+        >
           <DepositForm
             deposit={dialog.deposit}
-            kind={kind}
             defaultCurrency={me.data?.family.wealthCurrency ?? 'INR'}
             onDone={() => setDialog(null)}
           />

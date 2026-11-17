@@ -8,7 +8,11 @@ import {
   recurringValue,
   payoutPerPeriod,
   type DepositTerms,
+  rateOnDay,
+  savingsValue,
+  withRate,
   type RecurringTerms,
+  type SavingsTerms,
 } from '../../src/domain/deposits.js';
 
 // ₹1,00,000 at 7 % for a year, compounded quarterly (as most Indian banks do)
@@ -106,5 +110,78 @@ describe('fixed deposits', () => {
       // 1,000 × (1.0175^(3/3) + 1.0175^(2/3) + 1.0175^(1/3))
       expect(recurringValue(end, '2026-04-30')).toBe(303_493);
     });
+  });
+});
+
+describe('instant-access savings', () => {
+  // €10,000 at 2 %, interest every day, credited on the 1st of each month
+  const base: SavingsTerms = {
+    opening: 1_000_000,
+    start: '2026-01-01',
+    rates: [{ from: '2026-01-01', rateBp: 200 }],
+    compounding: 'monthly',
+    movements: [],
+  };
+
+  it('is nothing before it starts, the opening amount on its first day', () => {
+    expect(savingsValue(base, '2025-12-31')).toBeNull();
+    expect(savingsValue(base, '2026-01-01')).toEqual({ value: 1_000_000, paidIn: 1_000_000 });
+  });
+
+  it('earns every day and credits the month’s interest on the 1st, which then earns too', () => {
+    // 10 days × 1,000,000 × 2 % / 365 = 547.9
+    expect(savingsValue(base, '2026-01-11')!.value).toBe(1_000_548);
+    // January: 31 days = 1,698.6 → 1,699 credited on 1 Feb
+    expect(savingsValue(base, '2026-02-01')).toEqual({ value: 1_001_699, paidIn: 1_000_000 });
+    // February on 1,001,699: 28 × 54.89 = 1,536.9 → 1,537
+    expect(savingsValue(base, '2026-03-01')!.value).toBe(1_003_236);
+  });
+
+  it('credits quarterly when so chosen, without compounding inside the quarter', () => {
+    const q = { ...base, compounding: 'quarterly' as const };
+    expect(savingsValue(q, '2026-02-01')!.value).toBe(1_001_699);
+    // 90 days on 1,000,000 = 4,931.5 → 4,932 on 1 Apr
+    expect(savingsValue(q, '2026-04-01')!.value).toBe(1_004_932);
+  });
+
+  it('follows money in and out from its day on', () => {
+    const t = { ...base, movements: [{ date: '2026-01-11', amount: -500_000 }] };
+    // 10 days on 1,000,000 (547.9) + 21 days on 500,000 (575.3) = 1,123
+    expect(savingsValue(t, '2026-02-01')).toEqual({ value: 501_123, paidIn: 500_000 });
+    // money before the start counts from its day, earning from the start
+    const early = { ...base, opening: 0, movements: [{ date: '2025-12-20', amount: 1_000_000 }] };
+    expect(savingsValue(early, '2025-12-25')).toBeNull();
+    expect(savingsValue(early, '2026-02-01')).toEqual({ value: 1_001_699, paidIn: 1_000_000 });
+    // later money is not counted yet
+    const later = { ...base, movements: [{ date: '2026-03-01', amount: 1_000_000 }] };
+    expect(savingsValue(later, '2026-02-01')!.paidIn).toBe(1_000_000);
+  });
+
+  it('uses each day’s rate when the rate changes', () => {
+    const t = {
+      ...base,
+      rates: [
+        { from: '2026-01-01', rateBp: 200 },
+        { from: '2026-01-16', rateBp: 300 },
+      ],
+    };
+    // 15 days at 2 % (821.9) + 16 days at 3 % (1,315.1) = 2,137
+    expect(savingsValue(t, '2026-02-01')!.value).toBe(1_002_137);
+    expect(rateOnDay(t.rates, '2026-01-15')).toBe(200);
+    expect(rateOnDay(t.rates, '2026-02-15')).toBe(300);
+  });
+
+  it('keeps one rate per day, the new one replacing those from its day on', () => {
+    const rates = [
+      { from: '2026-01-01', rateBp: 200 },
+      { from: '2026-03-01', rateBp: 250 },
+    ];
+    expect(withRate(rates, '2026-02-01', 300)).toEqual([
+      { from: '2026-01-01', rateBp: 200 },
+      { from: '2026-02-01', rateBp: 300 },
+    ]);
+    expect(withRate(rates, '2026-01-01', 150)).toEqual([{ from: '2026-01-01', rateBp: 150 }]);
+    // the same rate again changes nothing
+    expect(withRate(rates, '2026-04-01', 250)).toEqual(rates);
   });
 });

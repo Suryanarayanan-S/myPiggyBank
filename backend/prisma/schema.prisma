@@ -208,6 +208,9 @@ model Transaction {
   importBatch       String?
   recurringRuleId   String?
   recurringRule     RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  /// the deposit this money went into (an expense) or came back from (income)
+  depositId         String?
+  deposit           Deposit?       @relation(fields: [depositId], references: [id], onDelete: SetNull)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -217,6 +220,7 @@ model Transaction {
   @@index([familyId, categoryId])
   @@index([familyId, isMonthlyTotal, date])
   @@index([familyId, importBatch])
+  @@index([depositId])
 }
 
 model CategoryLimit {
@@ -571,12 +575,14 @@ model FetchMark {
   day  DateTime
 }
 
-/// A fixed deposit at a bank (recurring deposits later): valued each day from its terms.
+/// A deposit at a bank: fixed or recurring (valued each day from its terms), or instant-access
+/// savings (its linked transactions plus interest earned each day).
 model Deposit {
   id              String         @id @default(uuid())
   familyId        String
   family          Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
   /// fd | rd (recurring: `principal` is the monthly instalment; matures `months` after the start)
+  /// | savings (instant access: `principal` is the opening amount; no maturity)
   kind            String         @default("fd")
   name            String
   currency        String
@@ -592,8 +598,11 @@ model Deposit {
   /// yearly rate in basis points (7.25 % = 725)
   rateBp          Int
   startDate       DateTime
-  maturityDate    DateTime
-  /// monthly | quarterly | half-yearly | yearly
+  /// null for instant-access savings
+  maturityDate    DateTime?
+  /// instant-access savings: JSON [{from: "YYYY-MM-DD", rateBp}], the rate from each day on
+  rateHistory     String?
+  /// monthly | quarterly | half-yearly | yearly (savings: when the interest is credited)
   compounding     String         @default("quarterly")
   /// reinvest (added, paid at maturity) | payout (paid out each period)
   interest        String         @default("reinvest")
@@ -605,6 +614,8 @@ model Deposit {
   note            String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  /// money paid into it (expenses) and back from it (income)
+  transactions    Transaction[]
 
   @@index([familyId])
 }

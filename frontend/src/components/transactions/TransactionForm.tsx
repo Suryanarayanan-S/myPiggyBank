@@ -12,6 +12,7 @@ import { localDay } from '../../lib/months';
 import { parseMoneyInput } from '../../lib/money';
 import { useAccountLabel, useAccounts, useCategories, useMembers } from '../../lib/queries';
 import { useBucketNames } from '../../lib/buckets';
+import { linkableDeposits, useDeposits } from '../../lib/deposits';
 import { BUCKET_KEYS, CURRENCIES, type Transaction, type TransactionType } from '../../lib/types';
 
 const asInput = (cents: number | null | undefined) =>
@@ -24,6 +25,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
   const accountLabel = useAccountLabel();
   const categories = useCategories();
   const members = useMembers();
+  const deposits = useDeposits();
   const spendingCurrency = useMe().data?.family.spendingCurrency ?? 'EUR';
   const active = selectableAccounts(accounts.data ?? [], txn);
 
@@ -41,6 +43,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
     tags: txn?.tags.join(', ') ?? '',
     transferAccountId: txn?.transferAccountId ?? '',
     transferAmount: asInput(txn?.transferAmount),
+    depositId: txn?.depositId ?? '',
   });
   // A new transaction's account is chosen once the accounts have loaded (the dialog may open
   // before they arrive), unless the user has already picked one.
@@ -64,7 +67,7 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
 
   const done = async () => {
     await Promise.all(
-      ['transactions', 'accounts', 'goals'].map((k) =>
+      ['transactions', 'accounts', 'goals', 'deposits', 'net-worth'].map((k) =>
         queryClient.invalidateQueries({ queryKey: [k] }),
       ),
     );
@@ -111,9 +114,20 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
         .map((t) => t.trim())
         .filter(Boolean),
       ...(type === 'transfer' ? { transferAccountId: form.transferAccountId, transferAmount } : {}),
+      // a deposit in another currency is let go when the account changes; before the deposits
+      // have loaded, the link is left as it is
+      depositId:
+        type === 'transfer'
+          ? null
+          : !deposits.isSuccess
+            ? undefined
+            : linkable.some((d) => d.id === form.depositId)
+              ? form.depositId
+              : null,
     });
   };
 
+  const linkable = linkableDeposits(deposits.data?.deposits ?? [], currency, txn?.depositId);
   const cats = (categories.data ?? []).filter((c) => c.kind === type);
   const groups =
     type === 'expense'
@@ -296,6 +310,30 @@ export function TransactionForm({ txn, onDone }: { txn?: Transaction; onDone: ()
           </Select>
         </Field>
       </div>
+      {type !== 'transfer' && linkable.length > 0 && (
+        <Field
+          label={type === 'income' ? 'Came back from a deposit' : 'Paid into a deposit'}
+          htmlFor="txn-deposit"
+          hint={
+            type === 'income'
+              ? 'Money taken out of savings or a deposit paid out.'
+              : 'An FD or RD opened with it, or money put into savings.'
+          }
+        >
+          <Select
+            id="txn-deposit"
+            value={form.depositId}
+            onChange={(e) => set('depositId')(e.target.value)}
+          >
+            <option value="">—</option>
+            {linkable.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
       <Field label="Notes" htmlFor="txn-notes">
         <Input id="txn-notes" value={form.notes} onChange={(e) => set('notes')(e.target.value)} />
       </Field>

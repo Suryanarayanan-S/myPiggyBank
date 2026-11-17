@@ -45,6 +45,7 @@ const INVESTMENT_TABS: SectionTab[] = [
 const DEPOSIT_TABS: SectionTab[] = [
   { to: '/investments/deposits', label: 'Fixed', end: true },
   { to: '/investments/deposits/recurring', label: 'Recurring' },
+  { to: '/investments/deposits/savings', label: 'Instant access' },
 ];
 const REPORT_TABS: SectionTab[] = [
   { to: '/reports', label: 'Year report', end: true },
@@ -95,6 +96,7 @@ export function App() {
             <Route path="deposits" element={<SectionLayout name="Deposits" tabs={DEPOSIT_TABS} />}>
               <Route index element={<DepositsPage kind="fd" />} />
               <Route path="recurring" element={<DepositsPage kind="rd" />} />
+              <Route path="savings" element={<DepositsPage kind="savings" />} />
             </Route>
             <Route path="gold" element={<GoldPage />} />
           </Route>

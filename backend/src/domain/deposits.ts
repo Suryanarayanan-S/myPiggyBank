@@ -123,3 +123,77 @@ export function recurringValue(t: RecurringTerms, day: string): number | null {
   }
   return Math.round(value);
 }
+
+/** A rate from a day on (instant-access savings change theirs now and then). */
+export type RateFrom = { from: string; rateBp: number };
+
+/** The rate on `day`: the last one from that day or before (the first one before them all). */
+export function rateOnDay(rates: RateFrom[], day: string): number {
+  let rate = rates[0]?.rateBp ?? 0;
+  for (const r of rates) if (r.from <= day) rate = r.rateBp;
+  return rate;
+}
+
+/** The rates with `rateBp` from `day` on: it replaces the rates from that day, kept in order. */
+export function withRate(rates: RateFrom[], day: string, rateBp: number): RateFrom[] {
+  const kept = rates.filter((r) => r.from < day);
+  return kept.length > 0 && rateOnDay(kept, day) === rateBp
+    ? kept
+    : [...kept, { from: day, rateBp }];
+}
+
+/** Instant-access savings: money in and out at any time, interest earned every day. */
+export type SavingsTerms = {
+  /** minor units, on the start day */
+  opening: number;
+  /** YYYY-MM-DD: interest is earned from here */
+  start: string;
+  /** in order of `from` */
+  rates: RateFrom[];
+  /** when the earned interest is credited (and from then on earns too) */
+  compounding: Compounding;
+  /** money in (> 0) and out (< 0), each on its day */
+  movements: { date: string; amount: number }[];
+};
+
+const CREDIT_MONTHS: Record<Compounding, number> = {
+  monthly: 1,
+  quarterly: 3,
+  'half-yearly': 6,
+  yearly: 12,
+};
+/** Interest is credited on the 1st of a month that starts a period (1 Jan, 1 Apr, … quarterly). */
+const creditDay = (day: string, c: Compounding) =>
+  day.endsWith('-01') && (Number(day.slice(5, 7)) - 1) % CREDIT_MONTHS[c] === 0;
+
+/**
+ * Worth on `day` and what has been put in by then (null before it starts): each day earns
+ * rate/365 on that day's closing balance; what is earned is credited (rounded to the cent) on the
+ * first day of each period, and the interest of the running period is included as it stands.
+ */
+export function savingsValue(
+  t: SavingsTerms,
+  day: string,
+): { value: number; paidIn: number } | null {
+  if (day < t.start) return null;
+  const moves = t.movements.filter((m) => m.date <= day);
+  const paidIn = t.opening + moves.reduce((s, m) => s + m.amount, 0);
+  let balance = t.opening + moves.filter((m) => m.date < t.start).reduce((s, m) => s + m.amount, 0);
+  const byDay = new Map<string, number>();
+  for (const m of moves) {
+    if (m.date >= t.start) byDay.set(m.date, (byDay.get(m.date) ?? 0) + m.amount);
+  }
+  let earned = 0;
+  for (let d = t.start; ; d = nextDay(d)) {
+    if (d > t.start && creditDay(d, t.compounding)) {
+      balance += Math.round(earned);
+      earned = 0;
+    }
+    balance += byDay.get(d) ?? 0;
+    if (d >= day) break;
+    earned += (balance * rateOnDay(t.rates, d)) / 10_000 / 365;
+  }
+  return { value: Math.round(balance + earned), paidIn };
+}
+
+const nextDay = (d: string) => new Date(Date.parse(d) + DAY_MS).toISOString().slice(0, 10);

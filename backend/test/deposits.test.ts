@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { addDays, todayLocal } from '../src/lib/dates.js';
-import { addMonths } from '../src/domain/deposits.js';
+import { addMonths, savingsValue } from '../src/domain/deposits.js';
 import { client, makeApp, resetDb, signUp } from './helpers.js';
 
 describe('fixed deposits', () => {
@@ -318,5 +318,199 @@ describe('fixed deposits', () => {
       await call('PUT', '/api/family', { investmentsAt: 'invested' });
       expect(await worth()).toBe(400_000);
     });
+  });
+
+  describe('instant-access savings', () => {
+    const start = addMonths(today, -2);
+    const sav = (extra: object = {}) => ({
+      kind: 'savings',
+      name: 'Tagesgeld',
+      currency: 'INR',
+      principal: 1_000_000,
+      rateBp: 300,
+      startDate: start,
+      compounding: 'monthly',
+      accountId: savings,
+      ...extra,
+    });
+    const txn = (extra: object) =>
+      call('POST', '/api/transactions', {
+        date: addMonths(today, -1),
+        amount: 200_000,
+        type: 'expense',
+        accountId: savings,
+        ...extra,
+      });
+    const list = async () => (await call('GET', '/api/deposits')).json().data.deposits;
+
+    it('has no maturity, earns every day and counts as money at hand', async () => {
+      const res = await call('POST', '/api/deposits', sav({ maturityDate: '2030-01-01' }));
+      expect(res.statusCode).toBe(201);
+      const [d] = await list();
+      const expected = savingsValue(
+        {
+          opening: 1_000_000,
+          start,
+          rates: [{ from: start, rateBp: 300 }],
+          compounding: 'monthly',
+          movements: [],
+        },
+        today,
+      )!;
+      expect(d).toMatchObject({
+        kind: 'savings',
+        maturityDate: null,
+        maturityAmount: null,
+        daysLeft: null,
+        status: 'active',
+        assetClass: 'liquid',
+        principal: 1_000_000,
+        value: expected.value,
+        rates: [{ from: start, rateBp: 300 }],
+        movements: [],
+      });
+      expect(d.value).toBeGreaterThan(1_000_000);
+      const nw = (await call('GET', '/api/net-worth')).json().data.current;
+      expect(nw.assets).toBe(d.value);
+      // an opening amount of zero is fine: the money can come with its transactions
+      expect((await call('POST', '/api/deposits', sav({ principal: 0 }))).statusCode).toBe(201);
+    });
+
+    it('follows the transactions linked to it: expenses in, income out', async () => {
+      const id = (await call('POST', '/api/deposits', sav({ principal: 0 }))).json().data.id;
+      const t1 = (await txn({ depositId: id, merchant: 'To savings' })).json().data;
+      expect(t1).toMatchObject({ depositId: id, depositName: 'Tagesgeld' });
+      await txn({ depositId: id, type: 'income', amount: 50_000, date: today });
+      const [d] = await list();
+      expect(d.principal).toBe(150_000);
+      expect(d.value).toBeGreaterThan(150_000);
+      expect(d.movements).toEqual([
+        expect.objectContaining({
+          date: today,
+          amount: -50_000,
+          transactionId: expect.any(String),
+        }),
+        expect.objectContaining({
+          date: addMonths(today, -1),
+          amount: 200_000,
+          label: 'To savings',
+        }),
+      ]);
+      // unlinked again: no longer counted
+      await call('PUT', `/api/transactions/${t1.id}`, {
+        date: addMonths(today, -1),
+        amount: 200_000,
+        type: 'expense',
+        accountId: savings,
+        depositId: null,
+      });
+      expect((await list())[0].principal).toBe(-50_000);
+      // an edit that leaves the deposit out keeps it
+      const t3 = (await txn({ depositId: id })).json().data;
+      const kept = await call('PUT', `/api/transactions/${t3.id}`, {
+        date: today,
+        amount: 300_000,
+        type: 'expense',
+        accountId: savings,
+      });
+      expect(kept.json().data.depositId).toBe(id);
+    });
+
+    it('links only income and expenses, in the deposit’s currency, of the same family', async () => {
+      const id = (await call('POST', '/api/deposits', sav())).json().data.id;
+      const eur = (
+        await call('POST', '/api/accounts', {
+          name: 'N26',
+          type: 'current',
+          currency: 'EUR',
+          openingBalance: 0,
+        })
+      ).json().data.id;
+      expect((await txn({ depositId: id, accountId: eur })).statusCode).toBe(400);
+      expect(
+        (await txn({ depositId: id, type: 'transfer', transferAccountId: eur, transferAmount: 1 }))
+          .statusCode,
+      ).toBe(400);
+      const other = client(app, (await signUp(app)).cookie);
+      const theirs = (await other('POST', '/api/deposits', sav({ accountId: null }))).json().data
+        .id;
+      expect((await txn({ depositId: theirs })).statusCode).toBe(404);
+    });
+
+    it('changes its rate from a day on, keeping the earlier interest', async () => {
+      const id = (await call('POST', '/api/deposits', sav())).json().data.id;
+      const before = (await list())[0].value;
+      const from = addMonths(today, -1);
+      const res = await call('PUT', `/api/deposits/${id}`, { rateBp: 200, rateFrom: from });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toMatchObject({
+        rateBp: 200,
+        rates: [
+          { from: start, rateBp: 300 },
+          { from, rateBp: 200 },
+        ],
+      });
+      const after = (await list())[0].value;
+      expect(after).toBeLessThan(before);
+      expect(after).toBeGreaterThan(1_000_000);
+      // without a day, the new rate is from today
+      await call('PUT', `/api/deposits/${id}`, { rateBp: 250 });
+      expect((await list())[0].rates.at(-1)).toEqual({ from: today, rateBp: 250 });
+      // a change planned for later survives an edit that sends today's rate unchanged
+      const later = addDays(today, 10);
+      await call('PUT', `/api/deposits/${id}`, { rateBp: 350, rateFrom: later });
+      await call('PUT', `/api/deposits/${id}`, { name: 'Renamed', rateBp: 250 });
+      expect((await list())[0].rates.at(-1)).toEqual({ from: later, rateBp: 350 });
+    });
+
+    it('keeps its currency while transactions are linked; a transfer lets go of the link', async () => {
+      const id = (await call('POST', '/api/deposits', sav())).json().data.id;
+      const t = (await txn({ depositId: id })).json().data;
+      const eur = { currency: 'EUR', accountId: null };
+      expect((await call('PUT', `/api/deposits/${id}`, eur)).statusCode).toBe(400);
+      const other = (
+        await call('POST', '/api/accounts', {
+          name: 'ICICI',
+          type: 'savings',
+          currency: 'INR',
+          openingBalance: 0,
+        })
+      ).json().data.id;
+      const moved = await call('PUT', `/api/transactions/${t.id}`, {
+        date: today,
+        amount: 200_000,
+        type: 'transfer',
+        accountId: savings,
+        transferAccountId: other,
+      });
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json().data.depositId).toBeNull();
+      expect((await call('PUT', `/api/deposits/${id}`, eur)).statusCode).toBe(200);
+    });
+
+    it('lets go of its transactions when deleted', async () => {
+      const id = (await call('POST', '/api/deposits', sav())).json().data.id;
+      const t = (await txn({ depositId: id })).json().data;
+      await call('DELETE', `/api/deposits/${id}`);
+      const again = (await call('GET', '/api/transactions')).json().data.items;
+      expect(again.find((x: { id: string }) => x.id === t.id)).toMatchObject({ depositId: null });
+    });
+  });
+
+  it('lists the transactions linked to a fixed deposit', async () => {
+    const id = (await call('POST', '/api/deposits', fd({ accountId: savings }))).json().data.id;
+    await call('POST', '/api/transactions', {
+      date: '2026-01-15',
+      amount: 10_000_000,
+      type: 'expense',
+      accountId: savings,
+      depositId: id,
+    });
+    const [d] = (await call('GET', '/api/deposits')).json().data.deposits;
+    expect(d.movements).toEqual([
+      expect.objectContaining({ date: '2026-01-15', amount: 10_000_000 }),
+    ]);
+    // its value still comes from its terms
+    expect(d.principal).toBe(10_000_000);
   });
 });

@@ -84,6 +84,9 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
     .getByRole('link', { name: 'Transactions' })
     .click();
   await expect(page.getByText('Recurring').first()).toBeVisible();
+  // the statement's month (the page opens on the current one)
+  await page.goto('/spending/transactions?month=2026-10');
+  await expect(page.getByText('REWE').first()).toBeVisible();
   const download = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Export CSV' }).click();
   const file = await (await download).path();

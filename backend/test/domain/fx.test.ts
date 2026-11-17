@@ -64,10 +64,7 @@ describe('fx', () => {
     expect(back.diff).toBe(98_000 - 98_765);
     // no rate yet that day or before: nothing to compare
     expect(
-      compareTransfer(
-        { date: '2026-10-01', from: 'EUR', to: 'INR', sent: 1, received: 1 },
-        series,
-      ),
+      compareTransfer({ date: '2026-10-01', from: 'EUR', to: 'INR', sent: 1, received: 1 }, series),
     ).toBeNull();
   });
 });

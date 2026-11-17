@@ -128,6 +128,86 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(page).toHaveURL(/\/investments\/market\?tab=holdings$/);
 });
 
+test('instant-access savings: money linked from transactions, interest every day, closed when empty', async ({
+  page,
+}) => {
+  await page.goto('/register');
+  await page.getByLabel('Your name').fill('Surya');
+  await page.getByLabel('Email').fill(`savings-${Date.now()}@example.com`);
+  await page.getByLabel('Password').fill('e2e-test-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Accounts' }).first().click();
+  await page.getByRole('button', { name: 'Add account' }).click();
+  const acc = page.getByRole('dialog');
+  await acc.getByLabel('Name').fill('Girokonto');
+  await acc.getByRole('button', { name: 'Save' }).click();
+  await expect(acc).toBeHidden();
+
+  // Deposits has three tabs; instant access starts empty, with nothing put in.
+  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await page
+    .getByRole('navigation', { name: 'Investments pages' })
+    .getByRole('link', { name: 'Deposits' })
+    .click();
+  await page
+    .getByRole('navigation', { name: 'Deposits pages' })
+    .getByRole('link', { name: 'Instant access' })
+    .click();
+  await page.getByRole('button', { name: 'Add instant-access savings' }).click();
+  const form = page.getByRole('dialog', { name: 'Add instant-access savings' });
+  await form.getByLabel('Name').fill('Tagesgeld');
+  await form.getByLabel(/Bank account/).selectOption({ label: 'Girokonto (EUR)' });
+  await expect(form.getByLabel('Amount on the start day')).toHaveValue('0');
+  await expect(form.getByLabel('Counts as')).toHaveValue('liquid');
+  await form.getByLabel('Yearly rate (%)').fill('2,25');
+  await form.getByLabel('Earning interest from').fill(day(-60));
+  await form.getByRole('button', { name: 'Save' }).click();
+  await expect(form).toBeHidden();
+  // (the card, not one of its linked transactions)
+  const card = page.getByRole('listitem').filter({ hasText: 'Tagesgeld' }).first();
+  await expect(card).toContainText('0,00 € put in');
+  await expect(card).toContainText('Link transactions to it');
+
+  // A payment from the current account into it, 40 days ago.
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  const txn = page.getByRole('dialog');
+  await txn.getByLabel(/^Amount/).fill('5000');
+  await txn.getByLabel('Date').fill(day(-40));
+  await txn.getByLabel('Merchant').fill('To Tagesgeld');
+  await txn.getByLabel('Paid into a deposit').selectOption({ label: 'Tagesgeld' });
+  await txn.getByRole('button', { name: 'Save' }).click();
+  await expect(txn).toBeHidden();
+
+  await page.goto('/investments/deposits/savings');
+  await expect(card).toContainText('5.000,00 € put in');
+  // 40 days at 2.25 % on 5,000 € is about 12 €
+  await expect(card).toContainText(/Worth today 5\.01\d,\d{2}\s€/);
+  await expect(card).toContainText(/Interest so far 1\d,\d{2}\s€/);
+  await card.getByText('1 linked transaction').click();
+  await expect(card).toContainText('+5.000,00 €');
+  await shot(page, '38-instant-access');
+
+  // Everything taken out, interest too: it can be closed.
+  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await txn.getByRole('tab', { name: 'income' }).click();
+  await txn.getByLabel(/^Amount/).fill('5012');
+  await txn.getByLabel('Came back from a deposit').selectOption({ label: 'Tagesgeld' });
+  await txn.getByRole('button', { name: 'Save' }).click();
+  await expect(txn).toBeHidden();
+  // the transaction says where its money came from
+  await expect(page.getByText('from Tagesgeld')).toBeVisible();
+  await page.goto('/investments/deposits/savings');
+  await card.getByRole('button', { name: 'Close Tagesgeld' }).click();
+  await expect(card).toContainText('Closed');
+});
+
 test('physical gold by weight: added, waits for a rate, and stops counting once gone', async ({
   page,
 }) => {

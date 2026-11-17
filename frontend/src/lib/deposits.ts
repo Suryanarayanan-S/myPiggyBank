@@ -12,18 +12,23 @@ export type Compounding = keyof typeof COMPOUNDING;
 
 export type Deposit = {
   id: string;
-  kind: 'fd' | 'rd';
+  kind: 'fd' | 'rd' | 'savings';
   name: string;
   currency: string;
   ownerMemberId: string | null;
   accountId: string | null;
   /** how net worth counts it */
   assetClass: 'liquid' | 'property' | 'investment' | 'other';
-  /** put in: a fixed deposit's amount; a recurring one's instalments due so far */
+  /** put in: a fixed deposit's amount; a recurring one's instalments due so far; savings: the
+   * opening amount plus money in less money out */
   principal: number;
+  /** savings: the amount on the start day */
+  opening: number | null;
+  /** today's rate */
   rateBp: number;
   startDate: string;
-  maturityDate: string;
+  /** null for instant-access savings */
+  maturityDate: string | null;
   compounding: Compounding;
   interest: 'reinvest' | 'payout';
   closedAt: string | null;
@@ -31,7 +36,7 @@ export type Deposit = {
   /** worth today; null once paid out or before it starts */
   value: number | null;
   interestEarned: number | null;
-  maturityAmount: number;
+  maturityAmount: number | null;
   payoutPerPeriod: number | null;
   /** recurring deposits: the monthly instalment, for how many months, how many due so far */
   instalment: number | null;
@@ -39,16 +44,30 @@ export type Deposit = {
   instalmentsDue: number | null;
   /** booked from the account each month, in this category */
   book: { categoryId: string | null } | null;
-  daysLeft: number;
+  /** savings: the rate from each day on */
+  rates: { from: string; rateBp: number }[] | null;
+  /** linked transactions, newest first: money in (> 0) and back out (< 0) */
+  movements: Movement[];
+  daysLeft: number | null;
   status: 'upcoming' | 'active' | 'matured' | 'closed';
   /** value and principal in the summary currency; null without an exchange rate or when closed */
   inView: { value: number; principal: number } | null;
 };
-export const KIND_LABEL = { fd: 'fixed deposit', rd: 'recurring deposit' } as const;
+export type Movement = {
+  transactionId: string;
+  date: string;
+  amount: number;
+  label: string | null;
+};
+export const KIND_LABEL = {
+  fd: 'fixed deposit',
+  rd: 'recurring deposit',
+  savings: 'instant-access account',
+} as const;
 
 /** "2 fixed deposits, 1 recurring deposit" */
 export function depositCount(list: { kind: Deposit['kind'] }[]): string {
-  return (['fd', 'rd'] as const)
+  return (['fd', 'rd', 'savings'] as const)
     .map((k) => [k, list.filter((d) => d.kind === k).length] as const)
     .filter(([, n]) => n > 0)
     .map(([k, n]) => `${n} ${KIND_LABEL[k]}${n === 1 ? '' : 's'}`)
@@ -86,11 +105,31 @@ export function parseRatePercent(input: string): number | null {
   return bp > 0 && bp <= 5_000 ? bp : null;
 }
 
+type Maturing = Deposit & { daysLeft: number; maturityDate: string; maturityAmount: number };
+
 /** Open deposits maturing within `days` (or already matured, not yet paid out), soonest first. */
 export const maturingSoon = (deposits: Deposit[], days = 60) =>
   deposits
-    .filter((d) => (d.status === 'active' || d.status === 'matured') && d.daysLeft <= days)
+    .filter(
+      (d): d is Maturing =>
+        (d.status === 'active' || d.status === 'matured') &&
+        d.daysLeft !== null &&
+        d.daysLeft <= days,
+    )
     .sort((a, b) => a.daysLeft - b.daysLeft);
+
+/** When a matured deposit was paid out: the day its money came back (a linked income), else
+ * its maturity, or today if that is still to come. */
+export function paidOutOn(d: Deposit, today: string): string {
+  const back = d.movements.find((m) => m.amount < 0);
+  if (back) return back.date;
+  return d.maturityDate && d.maturityDate < today ? d.maturityDate : today;
+}
+
+/** Deposits a transaction can be linked to: open ones in its currency (and the one it has, if
+ * still in its currency). */
+export const linkableDeposits = (deposits: Deposit[], currency: string, current?: string | null) =>
+  deposits.filter((d) => d.currency === currency && (d.id === current || d.status !== 'closed'));
 
 export const dayLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {

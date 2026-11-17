@@ -29,6 +29,11 @@ export const TransactionInput = z
     tags: z.array(z.string().trim().max(30)).max(10).optional(),
     transferAccountId: z.uuid().nullable().optional(),
     transferAmount: cents.nullable().optional(),
+    /**
+     * The deposit this money went into (an expense) or came back from (income). Left out on an
+     * edit: unchanged.
+     */
+    depositId: z.uuid().nullable().optional(),
   })
   .superRefine((t, ctx) => {
     const issue = (path: string, message: string) =>
@@ -40,6 +45,7 @@ export const TransactionInput = z
       else if (t.transferAccountId === t.accountId)
         issue('transferAccountId', 'Choose a different account to transfer to');
       if (t.categoryId) issue('categoryId', 'Transfers have no category');
+      if (t.depositId) issue('depositId', 'Link the payment into the deposit, not a transfer');
     } else if (t.transferAccountId || t.transferAmount) {
       issue('transferAccountId', 'Only transfers have a receiving account');
     }
@@ -69,6 +75,7 @@ const include = {
   category: { select: { name: true, bucket: true } },
   member: { select: { name: true } },
   transferAccount: { select: { name: true, currency: true } },
+  deposit: { select: { name: true } },
 } as const;
 type Row = Prisma.TransactionGetPayload<{ include: typeof include }>;
 
@@ -95,6 +102,8 @@ function toDto(t: Row) {
     transferAmount: t.transferAmount === null ? null : Number(t.transferAmount),
     transferCurrency: t.transferAccount?.currency ?? null,
     isMonthlyTotal: t.isMonthlyTotal,
+    depositId: t.depositId,
+    depositName: t.deposit?.name ?? null,
   };
 }
 
@@ -106,7 +115,13 @@ const normalizeTags = (tags: string[] = []) => {
 };
 
 /** Validates references against the family and builds the row data. */
-async function toData(prisma: PrismaClient, familyId: string, input: Input) {
+async function toData(
+  prisma: PrismaClient,
+  familyId: string,
+  input: Input,
+  /** the deposit it is linked to now (an edit that leaves `depositId` out keeps it) */
+  currentDeposit: string | null = null,
+) {
   const account = input.accountId ? await assertAccount(prisma, familyId, input.accountId) : null;
   if (account && input.currency && input.currency !== account.currency) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Invalid request', [
@@ -126,6 +141,29 @@ async function toData(prisma: PrismaClient, familyId: string, input: Input) {
     }
   }
   if (input.memberId) await assertMember(prisma, familyId, input.memberId);
+
+  // a transfer never belongs to a deposit: an edit into one lets go of the link it had
+  const depositId =
+    input.depositId === undefined
+      ? input.type === 'transfer'
+        ? null
+        : currentDeposit
+      : input.depositId;
+  if (depositId) {
+    const deposit = await prisma.deposit.findFirst({ where: { id: depositId, familyId } });
+    if (!deposit) throw notFound('Deposit');
+    const problem =
+      input.type === 'transfer'
+        ? 'Link the payment into the deposit, not a transfer'
+        : deposit.currency !== currency
+          ? `${deposit.name} is in ${deposit.currency}: link a transaction in ${deposit.currency}`
+          : null;
+    if (problem) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid request', [
+        { path: 'depositId', message: problem },
+      ]);
+    }
+  }
 
   let transferAmount: number | null = null;
   if (input.type === 'transfer' && account && input.transferAccountId) {
@@ -155,6 +193,7 @@ async function toData(prisma: PrismaClient, familyId: string, input: Input) {
     tags: normalizeTags(input.tags),
     transferAccountId: input.type === 'transfer' ? input.transferAccountId! : null,
     transferAmount,
+    depositId,
   };
 }
 
@@ -176,7 +215,7 @@ export async function updateTransaction(
   input: Input,
 ) {
   const existing = await assertTransaction(prisma, familyId, id);
-  const data = await toData(prisma, familyId, input);
+  const data = await toData(prisma, familyId, input, existing.depositId);
   // A monthly total moved to another account, category, type or month is no longer that
   // grid cell's total: it becomes an ordinary transaction, so the grid never hides a duplicate.
   const stillSameCell =
@@ -216,8 +255,7 @@ export function filterWhere(
   if (q.accountId === 'none') and.push({ accountId: null });
   else if (q.accountId)
     and.push({ OR: [{ accountId: q.accountId }, { transferAccountId: q.accountId }] });
-  if (q.categoryId === 'none')
-    and.push({ categoryId: null, type: { in: ['income', 'expense'] } });
+  if (q.categoryId === 'none') and.push({ categoryId: null, type: { in: ['income', 'expense'] } });
   else if (q.categoryId) and.push({ categoryId: q.categoryId });
   if (q.memberId) and.push({ memberId: q.memberId === 'shared' ? null : q.memberId });
   if (q.q) {

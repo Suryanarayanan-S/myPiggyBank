@@ -32,7 +32,11 @@ async function serve(reply: { status?: number; text: string; stop_reason?: strin
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   servers.push(server);
   const { port } = server.address() as AddressInfo;
-  return anthropicClient({ apiKey: 'k', model: 'claude-test', baseURL: `http://127.0.0.1:${port}` });
+  return anthropicClient({
+    apiKey: 'k',
+    model: 'claude-test',
+    baseURL: `http://127.0.0.1:${port}`,
+  });
 }
 const servers: http.Server[] = [];
 afterEach(() => servers.splice(0).forEach((s) => s.close()));

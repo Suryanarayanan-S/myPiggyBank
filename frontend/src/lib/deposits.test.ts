@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   depositCount,
   formatRateBp,
+  linkableDeposits,
   maturingSoon,
+  paidOutOn,
   parseRatePercent,
   whenLeft,
   type Deposit,
@@ -31,6 +33,7 @@ describe('deposits', () => {
       d('Due', 'matured', -3),
       d('Paid', 'closed', -40),
       d('Not started', 'upcoming', 30),
+      { name: 'Tagesgeld', status: 'active', daysLeft: null } as Deposit,
     ];
     expect(maturingSoon(list).map((x) => x.name)).toEqual(['Due', 'Soon']);
   });
@@ -50,5 +53,37 @@ describe('deposits', () => {
     expect(depositCount([k('fd')])).toBe('1 fixed deposit');
     expect(depositCount([k('fd'), k('rd'), k('fd')])).toBe('2 fixed deposits, 1 recurring deposit');
     expect(depositCount([])).toBe('');
+    expect(depositCount([k('savings'), k('savings')])).toBe('2 instant-access accounts');
+  });
+
+  it('is paid out on the day its money came back, else at maturity or today', () => {
+    const fd = (movements: Deposit['movements'], maturityDate = '2026-10-01') =>
+      ({ movements, maturityDate }) as Deposit;
+    const m = (date: string, amount: number) => ({
+      transactionId: date,
+      date,
+      amount,
+      label: null,
+    });
+    expect(paidOutOn(fd([m('2026-10-03', -500), m('2025-10-01', 500)]), '2026-11-17')).toBe(
+      '2026-10-03',
+    );
+    expect(paidOutOn(fd([m('2025-10-01', 500)]), '2026-11-17')).toBe('2026-10-01');
+    expect(paidOutOn(fd([], '2026-12-01'), '2026-11-17')).toBe('2026-11-17');
+  });
+
+  it('offers the open deposits in the transaction’s currency, and the one it has', () => {
+    const dep = (id: string, currency: string, status: Deposit['status']) =>
+      ({ id, currency, status }) as Deposit;
+    const list = [
+      dep('a', 'EUR', 'active'),
+      dep('b', 'INR', 'active'),
+      dep('c', 'EUR', 'closed'),
+      dep('d', 'EUR', 'matured'),
+    ];
+    expect(linkableDeposits(list, 'EUR').map((x) => x.id)).toEqual(['a', 'd']);
+    expect(linkableDeposits(list, 'EUR', 'c').map((x) => x.id)).toEqual(['a', 'c', 'd']);
+    // moved to an account in another currency: its deposit is no longer offered
+    expect(linkableDeposits(list, 'EUR', 'b').map((x) => x.id)).toEqual(['a', 'd']);
   });
 });

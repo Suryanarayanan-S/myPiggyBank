@@ -1,5 +1,9 @@
 {
-  "instrument": { "entityType": "CURRENCY", "entityValue": "EURINR", "name": "Euro/Indische Rupie" },
+  "instrument": {
+    "entityType": "CURRENCY",
+    "entityValue": "EURINR",
+    "name": "Euro/Indische Rupie"
+  },
   "quote": {
     "market": { "name": "FactSet Synthetic Forex Rates" },
     "isoCurrency": "INR",

@@ -14,6 +14,7 @@ import {
   COMPOUNDING,
   dayLabel,
   formatRateBp,
+  paidOutOn,
   useDeposits,
   whenLeft,
   type Deposit,
@@ -58,10 +59,65 @@ const TEXT = {
     empty:
       'No recurring deposits yet. Add one with its monthly instalment, rate and months; the instalment can be booked from its account each month.',
   },
+  savings: {
+    title: 'Instant-access savings',
+    intro: 'money in and out at any time, interest earned every day',
+    add: 'Add instant-access savings',
+    edit: 'Edit instant-access savings',
+    empty:
+      'No instant-access savings yet (Tagesgeld, a sweep or savings pot). Add one with its rate; then link the transactions that pay into it or take money out.',
+  },
 } as const;
+
+const COUNTS = {
+  fd: 'They count in net worth as investments until paid out.',
+  rd: 'They count in net worth as investments until paid out.',
+  savings: 'They count in net worth as money at hand.',
+} as const;
+
+/** "1 Feb 2026 · To savings · +₹2,000" rows of a deposit's linked transactions. */
+function Movements({ d }: { d: Deposit }) {
+  const sv = d.kind === 'savings';
+  if (d.movements.length === 0) {
+    return sv ? (
+      <p className="mt-2 text-xs text-slate-500">
+        Link transactions to it on the Transactions page: a payment into it adds, income from it
+        takes out.
+      </p>
+    ) : null;
+  }
+  const n = d.movements.length;
+  return (
+    <details className="mt-2 text-sm">
+      <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+        {n} linked transaction{n === 1 ? '' : 's'}
+      </summary>
+      <ul className="mt-1 max-h-60 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
+        {d.movements.map((m) => (
+          <li key={m.transactionId} className="flex items-baseline justify-between gap-3 py-1">
+            <span className="min-w-0 truncate">
+              <span className="text-slate-500 tabular-nums">{dayLabel(m.date)}</span>{' '}
+              {m.label ?? (m.amount > 0 ? 'Paid in' : 'Paid back')}
+            </span>
+            <span
+              className={clsx(
+                'shrink-0 tabular-nums',
+                m.amount < 0 && 'text-rose-700 dark:text-rose-400',
+              )}
+            >
+              {m.amount > 0 ? '+' : '−'}
+              {formatMoney(Math.abs(m.amount), d.currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 /** Fixed or recurring deposits: what each is worth today, what it pays at maturity, and when. */
 export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
+  const sv = kind === 'savings';
   const text = TEXT[kind];
   const me = useMe();
   const q = useDeposits();
@@ -71,9 +127,7 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
   const [dialog, setDialog] = useState<{ deposit?: Deposit } | null>(null);
   const paidOut = useMutation({
     mutationFn: (d: Deposit) =>
-      api.put(`/deposits/${d.id}`, {
-        closedAt: d.maturityDate < localDay() ? d.maturityDate : localDay(),
-      }),
+      api.put(`/deposits/${d.id}`, { closedAt: paidOutOn(d, localDay()) }),
     onSuccess: refresh,
   });
   const data = q.data;
@@ -101,19 +155,37 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
             <p className="flex flex-wrap items-center gap-2 font-medium">
               {d.name}
               <span className={clsx('rounded px-1.5 py-0.5 text-xs', STATUS[d.status].tone)}>
-                {STATUS[d.status].label}
+                {sv && d.status === 'closed' ? 'Closed' : STATUS[d.status].label}
               </span>
             </p>
             <p className="text-xs text-slate-500">
               {[accountName(d.accountId), owner(d.ownerMemberId)].filter(Boolean).join(' · ')}
             </p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              {d.kind === 'rd'
-                ? `${formatMoney(d.instalment!, d.currency)} a month × ${d.months}`
-                : formatMoney(d.principal, d.currency)}{' '}
-              at {formatRateBp(d.rateBp)} · {COMPOUNDING[d.compounding].toLowerCase()} ·{' '}
-              {dayLabel(d.startDate)} → {dayLabel(d.maturityDate)}
+              {d.kind === 'savings' ? (
+                <>
+                  {formatMoney(d.principal, d.currency)} put in, at {formatRateBp(d.rateBp)} ·
+                  interest daily, credited {COMPOUNDING[d.compounding].toLowerCase()} · since{' '}
+                  {dayLabel(d.startDate)}
+                </>
+              ) : (
+                <>
+                  {d.kind === 'rd'
+                    ? `${formatMoney(d.instalment!, d.currency)} a month × ${d.months}`
+                    : formatMoney(d.principal, d.currency)}{' '}
+                  at {formatRateBp(d.rateBp)} · {COMPOUNDING[d.compounding].toLowerCase()} ·{' '}
+                  {dayLabel(d.startDate)} → {dayLabel(d.maturityDate!)}
+                </>
+              )}
             </p>
+            {d.rates && d.rates.length > 1 && (
+              <p className="text-xs text-slate-500">
+                Rate:{' '}
+                {d.rates
+                  .map((r) => `${formatRateBp(r.rateBp)} from ${dayLabel(r.from)}`)
+                  .join(', ')}
+              </p>
+            )}
             {d.kind === 'rd' && d.status !== 'closed' && (
               <p className="text-xs text-slate-500">
                 {d.instalmentsDue} of {d.months} instalments paid ·{' '}
@@ -135,17 +207,26 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
                 <span className="font-semibold">{formatMoney(d.value, d.currency)}</span>
               </p>
             )}
-            <p>
-              <span className="text-xs text-slate-500">At maturity </span>
-              {formatMoney(d.maturityAmount, d.currency)}
-            </p>
-            {d.status !== 'closed' && (
+            {d.maturityAmount !== null && (
+              <p>
+                <span className="text-xs text-slate-500">At maturity </span>
+                {formatMoney(d.maturityAmount, d.currency)}
+              </p>
+            )}
+            {d.kind === 'savings' && d.interestEarned !== null && (
+              <p>
+                <span className="text-xs text-slate-500">Interest so far </span>
+                {formatMoney(d.interestEarned, d.currency)}
+              </p>
+            )}
+            {d.status !== 'closed' && d.daysLeft !== null && (
               <p className="text-xs text-slate-500">
                 {d.daysLeft > 0 ? 'matures' : 'matured'} {whenLeft(d.daysLeft)}
               </p>
             )}
           </div>
         </div>
+        <Movements d={d} />
         <div className="mt-2 flex flex-wrap justify-end gap-2">
           {d.status === 'matured' && (
             <Button
@@ -155,6 +236,18 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
               disabled={paidOut.isPending}
             >
               Mark as paid out
+            </Button>
+          )}
+          {/* savings: once all the money is taken out, interest too (under one unit left), it
+              can be closed */}
+          {sv && d.status === 'active' && d.movements.length > 0 && (d.value ?? 0) < 100 && (
+            <Button
+              variant="secondary"
+              aria-label={`Close ${d.name}`}
+              onClick={() => paidOut.mutate(d)}
+              disabled={paidOut.isPending}
+            >
+              Close it
             </Button>
           )}
           <Button
@@ -175,7 +268,7 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{text.title}</h1>
           <p className="text-sm text-slate-500">
-            {text.title}, {text.intro}. They count in net worth as investments until paid out.
+            {text.title}, {text.intro}. {COUNTS[kind]}
           </p>
         </div>
         <Button onClick={() => setDialog({})}>
@@ -208,7 +301,9 @@ export function DepositsPage({ kind }: { kind: Deposit['kind'] }) {
       {open.length > 0 && <ul className="space-y-3">{open.map(row)}</ul>}
       {closed.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Paid out</h2>
+          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+            {sv ? 'Closed' : 'Paid out'}
+          </h2>
           <ul className="space-y-3">{closed.map(row)}</ul>
         </section>
       )}

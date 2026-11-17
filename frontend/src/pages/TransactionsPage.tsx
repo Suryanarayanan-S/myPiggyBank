@@ -218,6 +218,8 @@ export function TransactionsPage() {
                       {t.type !== 'transfer' &&
                         ` · ${accountName(t.accountId, t.accountName) ?? 'No account'}`}
                       {` · ${t.memberName ?? 'Shared'}`}
+                      {t.depositName &&
+                        ` · ${t.type === 'income' ? 'from' : 'into'} ${t.depositName}`}
                       {t.notes && !t.isMonthlyTotal && ` · ${t.notes}`}
                       {t.isMonthlyTotal && ' · monthly total'}
                     </span>

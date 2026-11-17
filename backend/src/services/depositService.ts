@@ -10,7 +10,11 @@ import {
   payoutPerPeriod,
   recurringMaturity,
   recurringValue,
+  rateOnDay,
+  savingsValue,
+  withRate,
   type DepositTerms,
+  type RateFrom,
   type RecurringTerms,
 } from '../domain/deposits.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
@@ -21,6 +25,7 @@ import { assertAccount, assertCategory, assertMember } from './ownership.js';
 import { loadRates } from './rateService.js';
 import { createRecurring, deleteRecurring, updateRecurring } from './recurringService.js';
 
+const KINDS = ['fd', 'rd', 'savings'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
 const fields = {
   name: z.string().trim().min(1, 'Name is required').max(60),
@@ -29,11 +34,12 @@ const fields = {
   accountId: z.uuid().nullable().optional(),
   /** how net worth counts it (default: investment) */
   assetClass: z.enum(ASSET_CLASSES).optional(),
-  /** a fixed deposit's amount; a recurring deposit's monthly instalment */
+  /** a fixed deposit's amount; a recurring deposit's monthly instalment; savings: the opening
+   * amount (may be zero: the money can come with linked transactions) */
   principal: z
     .number()
     .int('Use whole cents')
-    .positive('Enter an amount above zero')
+    .nonnegative('Enter an amount of zero or more')
     .refine(Number.isSafeInteger, 'Amount is too large'),
   rateBp: z
     .number()
@@ -58,19 +64,25 @@ const MATURES_AFTER = {
   path: ['maturityDate'],
 };
 export const DepositCreate = z
-  .object({ ...fields, kind: z.enum(['fd', 'rd']).default('fd') })
+  .object({ ...fields, kind: z.enum(KINDS).default('fd') })
   .partial({ maturityDate: true, interest: true, months: true, book: true })
   .refine(after, MATURES_AFTER)
   .superRefine((d, ctx) => {
     const need = (key: string, message: string) =>
       ctx.addIssue({ code: 'custom', path: [key], message });
+    if (d.kind !== 'savings' && d.principal === 0) need('principal', 'Enter an amount above zero');
     if (d.kind === 'fd') {
       if (!d.maturityDate) need('maturityDate', 'Enter the maturity date');
       if (!d.interest) need('interest', 'Say whether interest is added or paid out');
-    } else if (!d.months) need('months', 'Enter for how many months');
+    } else if (d.kind === 'rd' && !d.months) need('months', 'Enter for how many months');
   });
 export const DepositUpdate = z
-  .object({ ...fields, closedAt: day.nullable() })
+  .object({
+    ...fields,
+    closedAt: day.nullable(),
+    /** instant-access savings: the day a new rate applies from (default: today) */
+    rateFrom: day,
+  })
   .partial()
   .refine(after, MATURES_AFTER);
 
@@ -84,7 +96,7 @@ const fdTerms = (d: Deposit): DepositTerms => ({
   principal: Number(d.principal),
   rateBp: d.rateBp,
   start: formatDay(d.startDate),
-  maturity: formatDay(d.maturityDate),
+  maturity: formatDay(d.maturityDate!),
   compounding: d.compounding as DepositTerms['compounding'],
   interest: d.interest as DepositTerms['interest'],
 });
@@ -92,16 +104,98 @@ const rdTerms = (d: Deposit): RecurringTerms => ({
   instalment: Number(d.principal),
   rateBp: d.rateBp,
   start: formatDay(d.startDate),
-  months: monthsOf(formatDay(d.startDate), formatDay(d.maturityDate)),
+  months: monthsOf(formatDay(d.startDate), formatDay(d.maturityDate!)),
   compounding: d.compounding as RecurringTerms['compounding'],
 });
+/** Its rates from each day on (one rate from the start, unless it was changed). */
+const ratesOf = (d: Deposit): RateFrom[] =>
+  d.rateHistory
+    ? (JSON.parse(d.rateHistory) as RateFrom[])
+    : [{ from: formatDay(d.startDate), rateBp: d.rateBp }];
+
+/** Money into a deposit (> 0) and back out of it (< 0), from its linked transactions. */
+export type Movement = {
+  transactionId: string;
+  date: string;
+  amount: number;
+  /** the payee or note, if any */
+  label: string | null;
+};
+type MovementRow = {
+  id: string;
+  date: Date;
+  amount: bigint;
+  type: string;
+  merchant: string | null;
+  notes: string | null;
+  depositId: string | null;
+  recurringRuleId: string | null;
+};
+const movementSelect = {
+  id: true,
+  date: true,
+  amount: true,
+  type: true,
+  merchant: true,
+  notes: true,
+  depositId: true,
+  recurringRuleId: true,
+} as const;
+/** Each deposit's movements, newest first (a recurring deposit's booked instalments included). */
+async function movementsOf(prisma: PrismaClient, familyId: string, deposits: Deposit[]) {
+  const ruleOf = new Map(
+    deposits.filter((d) => d.recurringRuleId).map((d) => [d.recurringRuleId!, d.id]),
+  );
+  const rows: MovementRow[] = await prisma.transaction.findMany({
+    where: {
+      familyId,
+      type: { in: ['income', 'expense'] },
+      OR: [
+        { depositId: { in: deposits.map((d) => d.id) } },
+        { recurringRuleId: { in: [...ruleOf.keys()] } },
+      ],
+    },
+    select: movementSelect,
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  });
+  const byDeposit = new Map<string, Movement[]>();
+  for (const t of rows) {
+    const id = t.depositId ?? ruleOf.get(t.recurringRuleId!);
+    if (!id) continue;
+    const list = byDeposit.get(id) ?? [];
+    list.push({
+      transactionId: t.id,
+      date: formatDay(t.date),
+      amount: t.type === 'income' ? -Number(t.amount) : Number(t.amount),
+      label: t.merchant ?? t.notes,
+    });
+    byDeposit.set(id, list);
+  }
+  return byDeposit;
+}
 
 /** Closed (paid out) by `onDay`: no longer counted. */
 const closedBy = (d: Deposit, onDay: string) => !!d.closedAt && formatDay(d.closedAt) <= onDay;
 
 /** Worth on a day and what has been put in by then (null before it starts or once closed). */
-function worth(d: Deposit, onDay: string): { value: number; paidIn: number } | null {
+function worth(
+  d: Deposit,
+  onDay: string,
+  moves: Movement[] = [],
+): { value: number; paidIn: number } | null {
   if (closedBy(d, onDay)) return null;
+  if (d.kind === 'savings') {
+    return savingsValue(
+      {
+        opening: Number(d.principal),
+        start: formatDay(d.startDate),
+        rates: ratesOf(d),
+        compounding: d.compounding as RecurringTerms['compounding'],
+        movements: moves,
+      },
+      onDay,
+    );
+  }
   if (d.kind === 'rd') {
     const t = rdTerms(d);
     const value = recurringValue(t, onDay);
@@ -113,23 +207,29 @@ function worth(d: Deposit, onDay: string): { value: number; paidIn: number } | n
 
 type Row = Deposit & { recurringRule: { categoryId: string | null; active: boolean } | null };
 
-function dto(d: Row, today = todayLocal()) {
+function dto(d: Row, moves: Movement[] = [], today = todayLocal()) {
   const rd = d.kind === 'rd';
-  const now = worth(d, today);
-  const maturity = formatDay(d.maturityDate);
-  const daysLeft = Math.round((Date.parse(maturity) - Date.parse(today)) / 86_400_000);
+  const sv = d.kind === 'savings';
+  const now = worth(d, today, moves);
+  const maturity = d.maturityDate && formatDay(d.maturityDate);
+  const daysLeft = maturity
+    ? Math.round((Date.parse(maturity) - Date.parse(today)) / 86_400_000)
+    : null;
   const r = rd ? rdTerms(d) : null;
   return {
     id: d.id,
-    kind: d.kind as 'fd' | 'rd',
+    kind: d.kind as (typeof KINDS)[number],
     name: d.name,
     currency: d.currency,
     ownerMemberId: d.ownerMemberId,
     accountId: d.accountId,
     assetClass: d.assetClass as (typeof ASSET_CLASSES)[number],
-    /** put in: a fixed deposit's amount; for a recurring one, the instalments due so far */
-    principal: rd ? (now?.paidIn ?? 0) : Number(d.principal),
-    rateBp: d.rateBp,
+    /** put in: a fixed deposit's amount; for a recurring one, the instalments due so far; for
+     * savings, the opening amount plus money in less money out */
+    principal: rd || sv ? (now?.paidIn ?? 0) : Number(d.principal),
+    /** savings: the amount on the start day */
+    opening: sv ? Number(d.principal) : null,
+    rateBp: sv ? rateOnDay(ratesOf(d), today) : d.rateBp,
     startDate: formatDay(d.startDate),
     maturityDate: maturity,
     compounding: d.compounding as DepositTerms['compounding'],
@@ -139,9 +239,19 @@ function dto(d: Row, today = todayLocal()) {
     /** worth today (put in plus interest so far); null once closed or before it starts */
     value: now?.value ?? null,
     interestEarned: now ? now.value - now.paidIn : null,
-    maturityAmount: r ? recurringValue(r, recurringMaturity(r))! : maturityAmount(fdTerms(d)),
+    /** null for savings, which never mature */
+    maturityAmount: sv
+      ? null
+      : r
+        ? recurringValue(r, recurringMaturity(r))!
+        : maturityAmount(fdTerms(d)),
     /** for deposits that pay interest out: each period's payment */
-    payoutPerPeriod: !rd && d.interest === 'payout' ? payoutPerPeriod(fdTerms(d)) : null,
+    payoutPerPeriod:
+      d.kind === 'fd' && d.interest === 'payout' ? payoutPerPeriod(fdTerms(d)) : null,
+    /** savings: the rate from each day on (`rateBp` is today's) */
+    rates: sv ? ratesOf(d) : null,
+    /** the linked transactions, newest first */
+    movements: moves,
     /** recurring deposits: the monthly instalment, how many, how many due so far */
     instalment: r ? r.instalment : null,
     months: r ? r.months : null,
@@ -158,7 +268,7 @@ function dto(d: Row, today = todayLocal()) {
       ? ('closed' as const)
       : today < formatDay(d.startDate)
         ? ('upcoming' as const)
-        : daysLeft <= 0
+        : daysLeft !== null && daysLeft <= 0
           ? ('matured' as const)
           : ('active' as const),
   };
@@ -172,14 +282,19 @@ export async function listDeposits(prisma: PrismaClient, familyId: string, view?
     prisma.deposit.findMany({
       where: { familyId },
       include: withRule,
-      orderBy: [{ closedAt: { sort: 'asc', nulls: 'first' } }, { maturityDate: 'asc' }],
+      orderBy: [
+        { closedAt: { sort: 'asc', nulls: 'first' } },
+        { maturityDate: { sort: 'asc', nulls: 'first' } },
+        { startDate: 'asc' },
+      ],
     }),
     getFamily(prisma, familyId),
     loadRates(prisma, familyId),
   ]);
   const currency = view ?? family.wealthCurrency;
   const month = todayLocal().slice(0, 7);
-  const deposits = rows.map((d) => dto(d));
+  const moves = await movementsOf(prisma, familyId, rows);
+  const deposits = rows.map((d) => dto(d, moves.get(d.id)));
   const sum = { value: 0, principal: 0 };
   const unconverted = new Map<string, number>();
   const withView = deposits.map((d) => {
@@ -211,8 +326,13 @@ export async function depositValues(prisma: PrismaClient, familyId: string, onDa
     getFamily(prisma, familyId),
   ]);
   const atCost = family.investmentsAt === 'invested';
+  const moves = await movementsOf(
+    prisma,
+    familyId,
+    rows.filter((d) => d.kind === 'savings'),
+  );
   return rows.map((d) => {
-    const w = worth(d, onDay);
+    const w = worth(d, onDay, moves.get(d.id));
     return {
       id: d.id,
       name: d.name,
@@ -274,7 +394,7 @@ const ruleFor = (d: {
   accountId: string | null;
   ownerMemberId: string | null;
   startDate: Date;
-  maturityDate: Date;
+  maturityDate: Date | null;
 }) => {
   if (!d.accountId) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Choose the account the instalment is paid from');
@@ -286,7 +406,7 @@ const ruleFor = (d: {
     accountId: d.accountId,
     memberId: d.ownerMemberId,
     // the last instalment, counted from the start (31 Mar + 5 months is 31 Aug, not 30 Aug)
-    endDate: addMonths(start, monthsOf(start, formatDay(d.maturityDate)) - 1),
+    endDate: addMonths(start, monthsOf(start, formatDay(d.maturityDate!)) - 1),
   };
 };
 
@@ -297,23 +417,29 @@ export async function createDeposit(
 ) {
   await check(prisma, familyId, input);
   const rd = input.kind === 'rd';
+  const sv = input.kind === 'savings';
   const { book, months, ...rest } = input;
-  const maturityDate = rd
-    ? recurringMaturity({
-        instalment: input.principal,
-        rateBp: input.rateBp,
-        start: input.startDate,
-        months: months!,
-        compounding: input.compounding,
-      })
-    : input.maturityDate!;
+  const maturityDate = sv
+    ? null
+    : rd
+      ? recurringMaturity({
+          instalment: input.principal,
+          rateBp: input.rateBp,
+          start: input.startDate,
+          months: months!,
+          compounding: input.compounding,
+        })
+      : input.maturityDate!;
   const data = {
     ...rest,
     familyId,
     principal: BigInt(input.principal),
     startDate: parseDay(input.startDate)!,
-    maturityDate: parseDay(maturityDate)!,
-    interest: rd ? 'reinvest' : input.interest!,
+    maturityDate: maturityDate === null ? null : parseDay(maturityDate)!,
+    interest: rd || sv ? 'reinvest' : input.interest!,
+    // instant access is money at hand, unless said otherwise
+    assetClass: input.assetClass ?? (sv ? 'liquid' : 'investment'),
+    rateHistory: sv ? JSON.stringify([{ from: input.startDate, rateBp: input.rateBp }]) : null,
   };
   if (rd && book) await checkBooking(prisma, familyId, data.accountId, book.categoryId);
   const d = await prisma.deposit.create({ data, include: withRule });
@@ -332,7 +458,13 @@ export async function createDeposit(
       throw err;
     }
   }
-  return dto(await owned(prisma, familyId, d.id));
+  return withMoves(prisma, familyId, d.id);
+}
+
+/** One deposit as listed, with its movements. */
+async function withMoves(prisma: PrismaClient, familyId: string, id: string) {
+  const d = await owned(prisma, familyId, id);
+  return dto(d, (await movementsOf(prisma, familyId, [d])).get(id));
 }
 
 export async function updateDeposit(
@@ -343,6 +475,22 @@ export async function updateDeposit(
 ) {
   const d = await owned(prisma, familyId, id);
   const rd = d.kind === 'rd';
+  const sv = d.kind === 'savings';
+  if (!sv && input.principal === 0) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Enter an amount above zero');
+  }
+  // linked transactions are in its currency
+  if (
+    input.currency &&
+    input.currency !== d.currency &&
+    (await prisma.transaction.count({ where: { depositId: id } })) > 0
+  ) {
+    throw new AppError(
+      400,
+      'VALIDATION_ERROR',
+      'The currency cannot be changed while transactions are linked to it',
+    );
+  }
   const next = {
     currency: input.currency ?? d.currency,
     accountId: input.accountId === undefined ? d.accountId : input.accountId,
@@ -350,10 +498,15 @@ export async function updateDeposit(
   };
   await check(prisma, familyId, next);
   const start = input.startDate ?? formatDay(d.startDate);
-  const maturity = rd
-    ? addMonths(start, input.months ?? monthsOf(formatDay(d.startDate), formatDay(d.maturityDate)))
-    : (input.maturityDate ?? formatDay(d.maturityDate));
-  if (maturity <= start) {
+  const maturity = sv
+    ? null
+    : rd
+      ? addMonths(
+          start,
+          input.months ?? monthsOf(formatDay(d.startDate), formatDay(d.maturityDate!)),
+        )
+      : (input.maturityDate ?? formatDay(d.maturityDate!));
+  if (maturity !== null && maturity <= start) {
     throw new AppError(400, 'VALIDATION_ERROR', 'The maturity date must be after the start');
   }
   const closed =
@@ -376,7 +529,7 @@ export async function updateDeposit(
   if (wanted) await checkBooking(prisma, familyId, next.accountId, wanted.categoryId);
   if (rd) {
     const paid = instalmentsDue(rdTerms(d), todayLocal());
-    if (monthsOf(start, maturity) < paid && formatDay(d.startDate) === start) {
+    if (monthsOf(start, maturity!) < paid && formatDay(d.startDate) === start) {
       throw new AppError(
         400,
         'VALIDATION_ERROR',
@@ -384,23 +537,40 @@ export async function updateDeposit(
       );
     }
   }
-  const { closedAt, principal, months: _months, book, maturityDate: _maturity, ...rest } = input;
+  const {
+    closedAt,
+    principal,
+    months: _months,
+    book,
+    maturityDate: _maturity,
+    rateFrom,
+    ...rest
+  } = input;
   void _months;
   void _maturity;
+  // savings: a new rate applies from its day on; the earlier interest keeps the old one
+  // (an edit that sends today's rate unchanged keeps a change planned for a later day)
+  const rateHistory =
+    sv &&
+    input.rateBp !== undefined &&
+    (rateFrom !== undefined || input.rateBp !== rateOnDay(ratesOf(d), todayLocal()))
+      ? JSON.stringify(withRate(ratesOf(d), rateFrom ?? todayLocal(), input.rateBp))
+      : undefined;
   const updated = await prisma.deposit.update({
     where: { id },
     data: {
       ...rest,
       ...(input.startDate && { startDate: parseDay(input.startDate)! }),
-      maturityDate: parseDay(maturity)!,
-      ...(rd && { interest: 'reinvest' }),
+      maturityDate: maturity === null ? null : parseDay(maturity)!,
+      ...(rateHistory !== undefined && { rateHistory }),
+      ...((rd || sv) && { interest: 'reinvest' }),
       ...(principal !== undefined && { principal: BigInt(principal) }),
       ...(closedAt !== undefined && { closedAt: closedAt === null ? null : parseDay(closedAt)! }),
     },
     include: withRule,
   });
   if (rd) await syncRule(prisma, familyId, d, updated, book === null ? null : wanted);
-  return dto(await owned(prisma, familyId, id));
+  return withMoves(prisma, familyId, id);
 }
 
 /**

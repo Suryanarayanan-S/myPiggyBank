@@ -184,8 +184,9 @@ describe('net worth comparisons', () => {
     await f.call('PUT', '/api/family', { wealthCurrency: 'EUR' });
     await f.call('POST', '/api/net-worth/snapshots', { date: daysAgo(400), netWorth: 50_000 });
     await f.call('PUT', '/api/family', { wealthCurrency: 'INR' });
-    // 60 days ago has no INR→EUR rate (the helper only adds September and this month).
-    await f.call('POST', '/api/net-worth/snapshots', { date: daysAgo(60), netWorth: 9_000_000 });
+    // No INR→EUR rate for August 2026: the helper's first rate is September's (a later month
+    // falls back to it, so a date relative to today stopped working in November 2026).
+    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-08-15', netWorth: 9_000_000 });
     const nw = (await f.call('GET', '/api/net-worth?currency=EUR')).json().data;
     expect(nw.previousMonth).toBeNull();
     expect(nw.previousYear).toMatchObject({ currency: 'EUR', netWorth: 50_000 });

@@ -94,6 +94,9 @@ export type Transaction = {
   transferAmount: number | null;
   transferCurrency: string | null;
   isMonthlyTotal: boolean;
+  /** the deposit it paid into (expense) or came back from (income) */
+  depositId: string | null;
+  depositName: string | null;
 };
 export type CurrencyTotals = { currency: string; income: number; expense: number };
 export type Page<T> = {

@@ -4,7 +4,7 @@ import { Shares, Tile } from '../components/investments/Tiles';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
-import { dayLabel, maturingSoon, useDeposits, whenLeft } from '../lib/deposits';
+import { dayLabel, maturingSoon, useDeposits, whenLeft, type Deposit } from '../lib/deposits';
 import { useGold } from '../lib/gold';
 import type { HoldingsResponse } from '../lib/investments';
 import { formatMoney } from '../lib/money';
@@ -29,13 +29,13 @@ export function InvestmentsOverviewPage() {
     return <Navigate to="/investments/market?tab=holdings" replace />;
   const market = holdings.data?.summary;
   // each kind of deposit on its own (in the summary currency)
-  const inView = (kind: 'fd' | 'rd') =>
+  const inView = (kind: Deposit['kind']) =>
     (deposits.data?.deposits ?? [])
       .filter((d) => d.kind === kind)
       .reduce((t, d) => t + (d.inView?.value ?? 0), 0);
   const dep = deposits.data?.summary;
   const currency = market?.currency ?? dep?.currency ?? 'INR';
-  const open = (kind: 'fd' | 'rd') =>
+  const open = (kind: Deposit['kind']) =>
     (deposits.data?.deposits ?? []).some((d) => d.kind === kind && d.status !== 'closed');
   const parts = [
     {
@@ -45,6 +45,7 @@ export function InvestmentsOverviewPage() {
     },
     { label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
     { label: 'Recurring deposits', value: inView('rd'), has: open('rd') },
+    { label: 'Instant-access savings', value: inView('savings'), has: open('savings') },
     {
       label: 'Gold (jewellery, coins)',
       value: gold.data?.summary.value ?? 0,

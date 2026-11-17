@@ -44,6 +44,7 @@ export function DepositForm({
 }) {
   const kind = deposit?.kind ?? newKind;
   const rd = kind === 'rd';
+  const sv = kind === 'savings';
   const categories = useCategories();
   const refresh = useDepositRefresh();
   const members = useMembers();
@@ -55,22 +56,28 @@ export function DepositForm({
     accountId: deposit?.accountId ?? '',
     currency: deposit?.currency ?? defaultCurrency,
     ownerMemberId: deposit?.ownerMemberId ?? '',
-    assetClass: deposit?.assetClass ?? ('investment' as keyof typeof ASSET_CLASSES),
-    // a recurring deposit's amount is its monthly instalment
+    // instant access is money at hand
+    assetClass:
+      deposit?.assetClass ?? ((sv ? 'liquid' : 'investment') as keyof typeof ASSET_CLASSES),
+    // a recurring deposit's amount is its monthly instalment; savings' the opening amount
     principal: deposit
-      ? formatMoney(rd ? deposit.instalment! : deposit.principal, deposit.currency).replace(
-          /[^\d.,]/g,
-          '',
-        )
-      : '',
+      ? formatMoney(
+          rd ? deposit.instalment! : sv ? deposit.opening! : deposit.principal,
+          deposit.currency,
+        ).replace(/[^\d.,]/g, '')
+      : sv
+        ? '0'
+        : '',
     months: String(deposit?.months ?? 12),
     // booking is opted into, never assumed
     book: deposit ? deposit.book !== null : false,
     categoryId: deposit?.book?.categoryId ?? '',
     rate: deposit ? String(deposit.rateBp / 100) : '',
+    // savings: the day a changed rate applies from
+    rateFrom: today,
     startDate: deposit?.startDate ?? today,
     maturityDate: deposit?.maturityDate ?? addYear(today),
-    compounding: deposit?.compounding ?? ('quarterly' as Compounding),
+    compounding: deposit?.compounding ?? ((sv ? 'monthly' : 'quarterly') as Compounding),
     interest: deposit?.interest ?? ('reinvest' as Deposit['interest']),
     note: deposit?.note ?? '',
   });
@@ -98,18 +105,27 @@ export function DepositForm({
         const principal = parseMoneyInput(f.principal);
         const rateBp = parseRatePercent(f.rate);
         const months = Number(f.months);
-        if (principal === null || principal <= 0)
-          return setProblem(rd ? 'Enter the monthly instalment.' : 'Enter the amount deposited.');
+        if (principal === null || (sv ? principal < 0 : principal <= 0))
+          return setProblem(
+            rd
+              ? 'Enter the monthly instalment.'
+              : sv
+                ? 'Enter the amount on the start day (0 if the money comes with transactions).'
+                : 'Enter the amount deposited.',
+          );
         if (rateBp === null) return setProblem('Enter the yearly rate in %, e.g. 7.25.');
         if (rd && !(Number.isInteger(months) && months >= 1 && months <= 120))
           return setProblem('Enter for how many months, from 1 to 120.');
         const book = rd && f.book && f.accountId;
+        const rateChanged = !!deposit && rateBp !== deposit.rateBp;
         setProblem(null);
         save.mutate({
           ...(!deposit && { kind }),
           ...(rd
             ? { months, book: book ? { categoryId: f.categoryId || null } : null }
-            : { maturityDate: f.maturityDate, interest: f.interest }),
+            : sv
+              ? rateChanged && { rateFrom: f.rateFrom }
+              : { maturityDate: f.maturityDate, interest: f.interest }),
           name: f.name,
           currency: f.currency,
           accountId: f.accountId || null,
@@ -128,7 +144,7 @@ export function DepositForm({
           id="d-name"
           required
           maxLength={60}
-          placeholder={rd ? 'Post office RD' : 'HDFC FD 2026'}
+          placeholder={rd ? 'Post office RD' : sv ? 'Tagesgeld' : 'HDFC FD 2026'}
           value={f.name}
           onChange={(e) => setF({ ...f, name: e.target.value })}
         />
@@ -139,7 +155,9 @@ export function DepositForm({
         hint={
           rd
             ? 'Where the instalments come from and the money is paid back to.'
-            : 'Where the money came from and is paid back to.'
+            : sv
+              ? 'Where the money usually comes from and goes back to.'
+              : 'Where the money came from and is paid back to.'
         }
       >
         <Select
@@ -191,7 +209,11 @@ export function DepositForm({
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={rd ? 'Monthly instalment' : 'Amount deposited'} htmlFor="d-principal">
+        <Field
+          label={rd ? 'Monthly instalment' : sv ? 'Amount on the start day' : 'Amount deposited'}
+          htmlFor="d-principal"
+          hint={sv ? 'Or 0, and link the transactions that pay in.' : undefined}
+        >
           <Input
             id="d-principal"
             required
@@ -227,7 +249,19 @@ export function DepositForm({
             onChange={(e) => setF({ ...f, rate: e.target.value })}
           />
         </Field>
-        <Field label="Compounded" htmlFor="d-compounding">
+        {sv && deposit && parseRatePercent(f.rate) !== deposit.rateBp && (
+          <Field label="New rate from" htmlFor="d-rate-from" hint="Earlier days keep the old rate.">
+            <Input
+              id="d-rate-from"
+              type="date"
+              required
+              min={deposit.startDate}
+              value={f.rateFrom}
+              onChange={(e) => setF({ ...f, rateFrom: e.target.value })}
+            />
+          </Field>
+        )}
+        <Field label={sv ? 'Interest credited' : 'Compounded'} htmlFor="d-compounding">
           <Select
             id="d-compounding"
             value={f.compounding}
@@ -240,7 +274,10 @@ export function DepositForm({
             ))}
           </Select>
         </Field>
-        <Field label={rd ? 'First instalment' : 'Start date'} htmlFor="d-start">
+        <Field
+          label={rd ? 'First instalment' : sv ? 'Earning interest from' : 'Start date'}
+          htmlFor="d-start"
+        >
           <Input
             id="d-start"
             type="date"
@@ -249,7 +286,7 @@ export function DepositForm({
             onChange={(e) => setF({ ...f, startDate: e.target.value })}
           />
         </Field>
-        {rd ? (
+        {sv ? null : rd ? (
           <Field label="Months" htmlFor="d-months" hint="It matures a month after the last.">
             <Input
               id="d-months"

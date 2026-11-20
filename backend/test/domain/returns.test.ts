@@ -68,8 +68,8 @@ describe('deposit flows', () => {
     // quarters end 15 Apr and 15 Jul; 175 000 paise each (7 % / 4 of ₹1 lakh)
     expect(f.flows).toEqual([
       { date: '2025-01-15', amount: -10_000_000 },
-      { date: '2025-04-15', amount: 175_000 },
-      { date: '2025-07-15', amount: 175_000 },
+      { date: '2025-04-15', amount: 175_000, income: true },
+      { date: '2025-07-15', amount: 175_000, income: true },
     ]);
     expect(f.worth).toBe(10_000_000);
   });
@@ -158,6 +158,20 @@ describe('summarise', () => {
       since: '2025-01-01',
     });
     expect(s.xirrBp).toBeGreaterThan(1_000);
+  });
+
+  it('keeps dividends apart from money taken out: earned on top, in the gain', () => {
+    const s = summarise(
+      [
+        { date: '2025-01-01', amount: -1_000 },
+        { date: '2025-03-01', amount: 400 }, // a sale
+        { date: '2025-06-01', amount: 30, income: true }, // a dividend
+      ],
+      700,
+      '2026-01-01',
+    );
+    expect(s).toMatchObject({ putIn: 1_000, takenOut: 400, income: 30, gain: 130 });
+    expect(s.gainBp).toBe(1_300); // on the 1,000 in before the sale
   });
 
   it('gives no yearly rate under three months (it would say little, and wildly)', () => {

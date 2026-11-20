@@ -338,6 +338,7 @@ export async function holdingFlows(prisma: PrismaClient, familyId: string, today
               : t.type === 'sell'
                 ? t.amount - t.fees
                 : t.amount,
+          ...((t.type === 'dividend' || t.type === 'interest') && { income: true }),
         })),
         worth: c.value ?? 0,
         priced: c.value !== null || c.units === 0,

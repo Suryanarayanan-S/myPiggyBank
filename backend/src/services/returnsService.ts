@@ -44,7 +44,7 @@ export async function investmentReturns(
     for (const it of items) {
       const conv = (n: number) => (n === 0 ? 0 : convert(n, it.currency, currency, month, rates));
       const w = conv(it.worth);
-      const fs = it.flows.map((f) => ({ date: f.date, amount: conv(f.amount) }));
+      const fs = it.flows.map((f) => ({ ...f, amount: conv(f.amount) }));
       if (w === null || fs.some((f) => f.amount === null)) {
         // what is held, or (paid out, sold) what went in
         const amount = it.worth || it.flows.reduce((t, f) => t + Math.max(0, -f.amount), 0);

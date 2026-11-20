@@ -53,6 +53,9 @@ export function Returns() {
       <td className="hidden px-3 py-2 text-right tabular-nums md:table-cell">
         {p.takenOut > 0 ? formatMoney(p.takenOut, c) : '—'}
       </td>
+      <td className="hidden px-3 py-2 text-right tabular-nums md:table-cell">
+        {p.income > 0 ? formatMoney(p.income, c) : '—'}
+      </td>
       <td className="px-3 py-2 text-right tabular-nums">{formatMoney(p.worth, c)}</td>
       <td className={clsx('px-3 py-2 text-right tabular-nums', gainClass(p.gain))}>
         {signed(p.gain, c)}
@@ -105,6 +108,9 @@ export function Returns() {
               <th scope="col" className="hidden px-3 py-2 text-right font-medium md:table-cell">
                 Back out
               </th>
+              <th scope="col" className="hidden px-3 py-2 text-right font-medium md:table-cell">
+                Dividends &amp; interest
+              </th>
               <th scope="col" className="px-3 py-2 text-right font-medium">
                 Worth today
               </th>
@@ -145,9 +151,11 @@ export function Returns() {
       </div>
       <ul className="space-y-1 px-5 py-3 text-xs text-slate-500">
         <li>
-          “Back out” is sales, dividends, interest paid out, withdrawals and deposits paid out. The
-          yearly rate shows from three months on. Amounts in other currencies are converted at
-          today’s rates.
+          “Back out” is your money coming back: sales (after fees), withdrawals and deposits paid
+          out. Dividends and interest paid out are earned on top. The gain counts both, and what is
+          held today; splits and bonus issues pay nothing, they show in what it is worth. The yearly
+          rate shows from three months on. Amounts in other currencies are converted at today’s
+          rates.
         </li>
         {notes.length > 0 && <li>Not counted: {notes.join('; ')}.</li>}
         {r.unconverted.length > 0 && (

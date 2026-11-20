@@ -82,13 +82,14 @@ describe('returns of every kind of investment', () => {
     expect(market).toMatchObject({
       count: 1,
       putIn: 10_050_000, // €1,005 at ₹100
-      takenOut: 200_000,
+      takenOut: 0, // nothing sold
+      income: 200_000, // the dividend: earned on top
       worth: 12_000_000,
       gain: 12_000_000 + 200_000 - 10_050_000,
       since: ago(400),
     });
     expect(market.xirrBp).toBeGreaterThan(1_800);
-    expect(fd).toMatchObject({ count: 1, putIn: 10_000_000, takenOut: 0 });
+    expect(fd).toMatchObject({ count: 1, putIn: 10_000_000, takenOut: 0, income: 0 });
     expect(fd.gain).toBeGreaterThan(0);
     // a deposit's yearly rate is about its interest rate (7 %, a little more compounded)
     expect(fd.xirrBp).toBeGreaterThanOrEqual(700);

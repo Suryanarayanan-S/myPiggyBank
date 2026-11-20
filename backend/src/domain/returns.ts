@@ -15,8 +15,11 @@ import {
   type SavingsTerms,
 } from './deposits.js';
 
-/** minor units: − put in, + back out */
-export type Flow = { date: string; amount: number };
+/**
+ * minor units: − put in, + back out. `income`: dividends and interest paid out — earned on top,
+ * not money taken back out of the investment.
+ */
+export type Flow = { date: string; amount: number; income?: boolean };
 /** The flows so far, and what is still held is worth today (0 once paid out or sold). */
 export type Flows = { flows: Flow[]; worth: number };
 
@@ -64,7 +67,11 @@ export function fdFlows(t: DepositTerms, closedAt: string | null, today: string)
     const step = MONTHS_PER_PERIOD[t.compounding];
     const last = end < t.maturity ? end : t.maturity;
     for (let k = 1; addMonths(t.start, k * step) <= last; k++) {
-      flows.push({ date: addMonths(t.start, k * step), amount: payoutPerPeriod(t) });
+      flows.push({
+        date: addMonths(t.start, k * step),
+        amount: payoutPerPeriod(t),
+        income: true,
+      });
     }
   }
   const value = depositValue(t, end)!;
@@ -110,8 +117,10 @@ export function savingsFlows(t: SavingsTerms, closedAt: string | null, today: st
 export type Summary = {
   /** money put in, all told */
   putIn: number;
-  /** money back: sales, dividends, interest paid out, withdrawals, deposits paid out */
+  /** money taken back out: sales (after fees), withdrawals, deposits paid out */
   takenOut: number;
+  /** earned on top and paid out: dividends, interest paid out */
+  income: number;
   /** what is still held, today */
   worth: number;
   gain: number;
@@ -132,12 +141,13 @@ export type Summary = {
 export function summarise(flows: Flow[], worth: number, today: string): Summary {
   const sorted = [...flows].sort((a, b) => a.date.localeCompare(b.date));
   const putIn = sorted.reduce((s, f) => s + Math.max(0, -f.amount), 0);
-  const takenOut = sorted.reduce((s, f) => s + Math.max(0, f.amount), 0);
-  const gain = worth + takenOut - putIn;
+  const takenOut = sorted.reduce((s, f) => s + (f.income ? 0 : Math.max(0, f.amount)), 0);
+  const income = sorted.reduce((s, f) => s + (f.income ? f.amount : 0), 0);
+  const gain = worth + takenOut + income - putIn;
   let net = 0;
   let peak = 0;
   for (const f of sorted) {
-    net -= f.amount;
+    if (!f.income) net -= f.amount;
     peak = Math.max(peak, net);
   }
   const since = sorted[0]?.date ?? null;
@@ -150,6 +160,7 @@ export function summarise(flows: Flow[], worth: number, today: string): Summary 
   return {
     putIn,
     takenOut,
+    income,
     worth,
     gain,
     gainBp: peak > 0 ? Math.round((gain * 10_000) / peak) : null,

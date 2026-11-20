@@ -7,7 +7,10 @@ export type ReturnPart = 'market' | 'fd' | 'rd' | 'savings' | 'gold';
 /** One kind of investment (or all together) on one yardstick; amounts in minor units. */
 export type ReturnSummary = {
   putIn: number;
+  /** money taken back out: sales, withdrawals, deposits paid out */
   takenOut: number;
+  /** earned on top and paid out: dividends, interest paid out */
+  income: number;
   worth: number;
   gain: number;
   /** the gain over the most money in at any one time */

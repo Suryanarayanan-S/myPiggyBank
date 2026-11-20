@@ -142,6 +142,34 @@ export async function goldValues(prisma: PrismaClient, familyId: string, onDay =
   });
 }
 
+/**
+ * For the returns: pieces held with a known price and day of purchase, as what was paid and
+ * worth today. Others are only counted (no price paid, or no longer held: what it fetched is
+ * not recorded, or no gold rate yet).
+ */
+export async function goldFlows(prisma: PrismaClient, familyId: string, today = todayLocal()) {
+  const [rows, rate] = await Promise.all([
+    prisma.goldItem.findMany({ where: { familyId } }),
+    rateOn(prisma, today),
+  ]);
+  const counted = [];
+  let leftOut = 0;
+  for (const g of rows) {
+    if (g.boughtOn && formatDay(g.boughtOn) > today) continue;
+    if (!heldOn(g, today)) continue; // gone: not part of what is held, nothing to say
+    if (!g.boughtOn || g.boughtFor === null || !rate) {
+      leftOut++;
+      continue;
+    }
+    counted.push({
+      currency: CURRENCY,
+      flows: [{ date: formatDay(g.boughtOn), amount: -Number(g.boughtFor) }],
+      worth: goldValue(g.milligrams, g.purity as Purity, rate.micros),
+    });
+  }
+  return { counted, leftOut };
+}
+
 async function owned(prisma: PrismaClient, familyId: string, id: string) {
   const g = await prisma.goldItem.findFirst({ where: { id, familyId } });
   if (!g) throw notFound('Gold');

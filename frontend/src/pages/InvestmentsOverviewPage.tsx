@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { Returns } from '../components/investments/Returns';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -132,6 +133,8 @@ export function InvestmentsOverviewPage() {
           )}
         </>
       )}
+      {/* also once everything is paid out or sold: what it earned stays worth seeing */}
+      {loaded && <Returns />}
       {soon.length > 0 && (
         <Card
           title="Maturing soon"

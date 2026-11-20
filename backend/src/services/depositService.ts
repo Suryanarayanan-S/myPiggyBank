@@ -20,6 +20,7 @@ import {
   type RateFrom,
   type RecurringTerms,
 } from '../domain/deposits.js';
+import { fdFlows, rdFlows, savingsFlows } from '../domain/returns.js';
 import { addDays, formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { getFamily } from './familyService.js';
@@ -350,6 +351,32 @@ export async function depositValues(prisma: PrismaClient, familyId: string, onDa
       assetClass: d.assetClass,
       value: w === null ? null : atCost ? w.paidIn : w.value,
     };
+  });
+}
+
+/** For the returns: each deposit as cash flows and worth today (see domain/returns). */
+export async function depositFlows(prisma: PrismaClient, familyId: string, today = todayLocal()) {
+  const rows = await prisma.deposit.findMany({ where: { familyId } });
+  const moves = await movementsOf(prisma, familyId, rows);
+  return rows.map((d) => {
+    const closedAt = d.closedAt ? formatDay(d.closedAt) : null;
+    const f =
+      d.kind === 'savings'
+        ? savingsFlows(
+            {
+              opening: Number(d.principal),
+              start: formatDay(d.startDate),
+              rates: ratesOf(d),
+              compounding: d.compounding as RecurringTerms['compounding'],
+              movements: moves.get(d.id) ?? [],
+            },
+            closedAt,
+            today,
+          )
+        : d.kind === 'rd'
+          ? rdFlows(rdTerms(d), closedAt, today)
+          : fdFlows(fdTerms(d), closedAt, today);
+    return { kind: d.kind as (typeof KINDS)[number], currency: d.currency, ...f };
   });
 }
 

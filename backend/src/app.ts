@@ -34,6 +34,7 @@ import { holdingRoutes } from './routes/holdings.js';
 import { DEFAULT_HISTORY_URL } from './services/corporateHistoryService.js';
 import { depositRoutes } from './routes/deposits.js';
 import { goldRoutes } from './routes/gold.js';
+import { returnRoutes } from './routes/returns.js';
 import { reportRoutes } from './routes/reports.js';
 import { insightRoutes } from './routes/insights.js';
 import { aiRoutes } from './routes/ai.js';
@@ -177,6 +178,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       await api.register(holdingRoutes);
       await api.register(depositRoutes);
       await api.register(goldRoutes);
+      await api.register(returnRoutes);
       await api.register(reportRoutes);
       await api.register(insightRoutes);
       await api.register(aiRoutes);

@@ -91,6 +91,19 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(card).toContainText('Paid out');
   await expect(page.getByRole('heading', { name: 'Paid out and closed' })).toBeVisible();
 
+  // Returns on the overview: shown in euros (no rate to the rupee default), the deposit
+  // paid out with its interest and about 7 % a year.
+  await tabs.getByRole('link', { name: 'Overview' }).click();
+  const showIn = page.getByRole('combobox', { name: 'Show amounts in' }).filter({ visible: true });
+  await showIn.selectOption('EUR');
+  const returns = page.getByRole('table', { name: /Returns of each kind of investment, in EUR/ });
+  const fdRow = returns.getByRole('row').filter({ hasText: 'Fixed deposits' });
+  await expect(fdRow).toContainText(/\+7\.\d %/);
+  await expect(fdRow).toContainText('0,00 €'); // worth today: paid out
+  await shot(page, '40-returns');
+  await showIn.selectOption('default');
+  await tabs.getByRole('link', { name: 'Deposits' }).click();
+
   // A recurring deposit: 100 € a month for a year, booked from the account each month.
   // (the same page: one button, the type chosen in the form)
   await page.getByRole('button', { name: 'Add deposit' }).click();

@@ -313,6 +313,39 @@ export async function holdingValues(
   });
 }
 
+/**
+ * For the returns: each holding's buys (with fees), sales (after fees), dividends and interest
+ * as cash flows, and what it is worth today (archived ones only once sold); `priced` is false when units are held without any
+ * price to value them.
+ */
+export async function holdingFlows(prisma: PrismaClient, familyId: string, today = todayLocal()) {
+  const rows = await prisma.holding.findMany({ where: { familyId }, include });
+  return rows
+    .filter((h) => h.trades.length > 0)
+    .map((h) => {
+      const trades = asTrades(h.trades).filter((t) => t.date <= today);
+      const c = computeHolding(trades, asPrices(h.prices), today);
+      // Archived with units still held: out of the totals and net worth, so out of here too
+      // (an archived one that was sold keeps its history).
+      if (h.archived && c.units > 0) return null;
+      return {
+        currency: h.currency,
+        flows: trades.map((t) => ({
+          date: t.date,
+          amount:
+            t.type === 'buy'
+              ? -(t.amount + t.fees)
+              : t.type === 'sell'
+                ? t.amount - t.fees
+                : t.amount,
+        })),
+        worth: c.value ?? 0,
+        priced: c.value !== null || c.units === 0,
+      };
+    })
+    .filter((h): h is NonNullable<typeof h> => h !== null && h.flows.length > 0);
+}
+
 export async function createHolding(
   prisma: PrismaClient,
   familyId: string,

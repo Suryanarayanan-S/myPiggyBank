@@ -89,6 +89,16 @@ describe('returns of every kind of investment', () => {
       since: ago(400),
     });
     expect(market.xirrBp).toBeGreaterThan(1_800);
+    // what the dividend column is made of: the payment, in rupees and in euros
+    expect(market.lines).toEqual([
+      {
+        date: ago(30),
+        name: 'World ETF',
+        income: true,
+        amount: 200_000,
+        own: { amount: 2_000, currency: 'EUR' },
+      },
+    ]);
     expect(fd).toMatchObject({ count: 1, putIn: 10_000_000, takenOut: 0, income: 0 });
     expect(fd.gain).toBeGreaterThan(0);
     // a deposit's yearly rate is about its interest rate (7 %, a little more compounded)
@@ -175,6 +185,9 @@ describe('returns of every kind of investment', () => {
     const r = await returns();
     expect(r.parts).toEqual([
       expect.objectContaining({ part: 'market', count: 1, putIn: 100_000, takenOut: 120_000 }),
+    ]);
+    expect(r.parts[0].lines).toEqual([
+      { date: ago(10), name: 'Sold', income: false, amount: 120_000, own: null },
     ]);
   });
 

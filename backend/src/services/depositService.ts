@@ -376,7 +376,7 @@ export async function depositFlows(prisma: PrismaClient, familyId: string, today
         : d.kind === 'rd'
           ? rdFlows(rdTerms(d), closedAt, today)
           : fdFlows(fdTerms(d), closedAt, today);
-    return { kind: d.kind as (typeof KINDS)[number], currency: d.currency, ...f };
+    return { kind: d.kind as (typeof KINDS)[number], name: d.name, currency: d.currency, ...f };
   });
 }
 

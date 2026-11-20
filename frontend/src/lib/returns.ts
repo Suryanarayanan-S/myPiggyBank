@@ -22,9 +22,19 @@ export type ReturnSummary = {
   since: string | null;
 };
 
+/** One payment behind "Back out" or "Dividends & interest" (amount in the view currency). */
+export type ReturnLine = {
+  date: string;
+  name: string;
+  income: boolean;
+  amount: number;
+  /** in its own currency, when that differs */
+  own: { amount: number; currency: string } | null;
+};
+
 export type ReturnsResponse = {
   currency: string;
-  parts: (ReturnSummary & { part: ReturnPart; count: number })[];
+  parts: (ReturnSummary & { part: ReturnPart; count: number; lines: ReturnLine[] })[];
   total: ReturnSummary | null;
   leftOut: { market: number; gold: number };
   unconverted: { currency: string; amount: number }[];
@@ -58,4 +68,16 @@ export function leftOutNotes(r: Pick<ReturnsResponse, 'leftOut'>): string[] {
     r.leftOut.gold > 0 &&
       `${n(r.leftOut.gold, 'piece', 'pieces')} of gold without the price paid or the day bought (or no gold rate yet)`,
   ].filter((s): s is string => !!s);
+}
+
+/** Totals per holding or deposit, largest first (who the money came from). */
+export function byName(lines: ReturnLine[]): { name: string; amount: number; count: number }[] {
+  const m = new Map<string, { amount: number; count: number }>();
+  for (const l of lines) {
+    const t = m.get(l.name) ?? { amount: 0, count: 0 };
+    m.set(l.name, { amount: t.amount + l.amount, count: t.count + 1 });
+  }
+  return [...m]
+    .map(([name, t]) => ({ name, ...t }))
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 }

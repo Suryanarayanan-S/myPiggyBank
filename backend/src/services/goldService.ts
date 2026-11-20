@@ -162,6 +162,7 @@ export async function goldFlows(prisma: PrismaClient, familyId: string, today = 
       continue;
     }
     counted.push({
+      name: g.name,
       currency: CURRENCY,
       flows: [{ date: formatDay(g.boughtOn), amount: -Number(g.boughtFor) }],
       worth: goldValue(g.milligrams, g.purity as Purity, rate.micros),

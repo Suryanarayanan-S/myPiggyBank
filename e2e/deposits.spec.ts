@@ -100,6 +100,13 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   const fdRow = returns.getByRole('row').filter({ hasText: 'Fixed deposits' });
   await expect(fdRow).toContainText(/\+7\.\d %/);
   await expect(fdRow).toContainText('0,00 €'); // worth today: paid out
+  // the paid-out amount opens the payment it is made of
+  await fdRow.getByRole('button', { name: /show the money back out of Fixed deposits/ }).click();
+  const paid = page.getByRole('dialog', { name: 'Back out · Fixed deposits' });
+  await expect(paid.getByRole('row').filter({ hasText: 'Bank FD' })).toContainText('10.718,59 €');
+  await shot(page, '41-returns-payments');
+  await paid.getByRole('button', { name: /close/i }).click();
+  await expect(paid).toBeHidden();
   await shot(page, '40-returns');
   await showIn.selectOption('default');
   await tabs.getByRole('link', { name: 'Deposits' }).click();

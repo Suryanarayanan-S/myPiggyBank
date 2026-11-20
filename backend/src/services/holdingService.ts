@@ -329,6 +329,7 @@ export async function holdingFlows(prisma: PrismaClient, familyId: string, today
       // (an archived one that was sold keeps its history).
       if (h.archived && c.units > 0) return null;
       return {
+        name: h.name,
         currency: h.currency,
         flows: trades.map((t) => ({
           date: t.date,

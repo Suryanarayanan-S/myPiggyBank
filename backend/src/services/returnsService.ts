@@ -11,7 +11,20 @@ import { loadRates } from './rateService.js';
 export const PARTS = ['market', 'fd', 'rd', 'savings', 'gold'] as const;
 export type Part = (typeof PARTS)[number];
 
-type Item = Flows & { currency: string };
+type Item = Flows & { name: string; currency: string };
+
+/**
+ * One payment behind "Back out" or "Dividends & interest": in the view currency, and in its own
+ * when that differs.
+ */
+export type ReturnLine = {
+  date: string;
+  name: string;
+  /** dividends and interest paid out (else money coming back: a sale, a withdrawal, a payout) */
+  income: boolean;
+  amount: number;
+  own: { amount: number; currency: string } | null;
+};
 
 /**
  * Every kind of investment on one yardstick, in one currency (default: the wealth currency):
@@ -39,6 +52,7 @@ export async function investmentReturns(
   /** The items in the view currency (those without an exchange rate are set aside). */
   const inView = (items: Item[]) => {
     const flows: Flow[] = [];
+    const lines: ReturnLine[] = [];
     let worth = 0;
     let count = 0;
     for (const it of items) {
@@ -52,10 +66,21 @@ export async function investmentReturns(
         continue;
       }
       flows.push(...(fs as Flow[]));
+      it.flows.forEach((f, i) => {
+        if (f.amount <= 0) return;
+        lines.push({
+          date: f.date,
+          name: it.name,
+          income: !!f.income,
+          amount: fs[i]!.amount!,
+          own: it.currency === currency ? null : { amount: f.amount, currency: it.currency },
+        });
+      });
       worth += w;
       count++;
     }
-    return { flows, worth, count };
+    lines.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
+    return { flows, worth, count, lines };
   };
 
   const items: Record<Part, Item[]> = {
@@ -67,13 +92,13 @@ export async function investmentReturns(
   };
   const all: Flow[] = [];
   let allWorth = 0;
-  const parts: (Summary & { part: Part; count: number })[] = [];
+  const parts: (Summary & { part: Part; count: number; lines: ReturnLine[] })[] = [];
   for (const part of PARTS) {
     const v = inView(items[part].filter((i) => i.flows.length > 0));
     if (v.count === 0) continue;
     all.push(...v.flows);
     allWorth += v.worth;
-    parts.push({ part, count: v.count, ...summarise(v.flows, v.worth, today) });
+    parts.push({ part, count: v.count, ...summarise(v.flows, v.worth, today), lines: v.lines });
   }
   return {
     currency,

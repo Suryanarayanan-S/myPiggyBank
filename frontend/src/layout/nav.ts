@@ -9,12 +9,13 @@ import {
   TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
+import type { Workspace } from '../lib/workspace';
 
 /**
- * The sections (related pages are tabs inside them: Spending → Overview, Budget; Transactions →
- * Accounts, Recurring, Import; Wealth → Goals; Investments → Market, Deposits, Gold; Reports →
- * Insights). `primary` items fill the mobile bottom bar (the daily ones); the rest open from
- * “More”.
+ * The sections of each workspace (related pages are tabs inside them: Spending → Overview, Budget;
+ * Transactions → Accounts, Recurring, Import; Reports → Insights; Investments → Market, Deposits,
+ * Gold; Wealth → Goals). `primary` items fill the mobile bottom bar; the rest open from “More”.
+ * Settings is in both.
  */
 export type NavItem = {
   to: string;
@@ -24,13 +25,18 @@ export type NavItem = {
   primary?: boolean;
 };
 
-export const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, primary: true },
-  { to: '/spending', label: 'Spending', icon: PieChart, primary: true },
-  { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight, primary: true },
-  { to: '/investments', label: 'Investments', icon: TrendingUp, primary: true },
-  { to: '/wealth', label: 'Wealth', icon: Landmark },
-  { to: '/analytics', label: 'Analytics', icon: ChartLine },
-  { to: '/reports', label: 'Reports', icon: FileText },
-  { to: '/settings', label: 'Settings', icon: Settings },
-];
+export const navByWorkspace: Record<Workspace, NavItem[]> = {
+  pocket: [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, primary: true },
+    { to: '/spending', label: 'Spending', icon: PieChart, primary: true },
+    { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight, primary: true },
+    { to: '/reports', label: 'Reports', icon: FileText, primary: true },
+    { to: '/settings', label: 'Settings', icon: Settings },
+  ],
+  treasure: [
+    { to: '/investments', label: 'Investments', icon: TrendingUp, primary: true },
+    { to: '/wealth', label: 'Wealth', icon: Landmark, primary: true },
+    { to: '/analytics', label: 'Analytics', icon: ChartLine, primary: true },
+    { to: '/settings', label: 'Settings', icon: Settings },
+  ],
+};

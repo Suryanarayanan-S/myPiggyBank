@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openSection } from './sections';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -45,7 +46,7 @@ test('Analytics → Currencies: euro, dollar and rupee rates, their moves, and t
       },
     }),
   );
-  await page.getByRole('link', { name: 'Analytics' }).first().click();
+  await openSection(page, 'Analytics');
   await expect(page).toHaveURL(/\/analytics$/);
   await expect(page.getByRole('heading', { name: 'Currencies' })).toBeVisible();
   // now: the quotes, each against the last ECB rate (100.80 ₹ per €, 1.12 $ per €, 90 ₹ per $)

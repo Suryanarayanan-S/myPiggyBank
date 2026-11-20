@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -20,7 +21,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   // Members, an EUR account and this month's EUR→INR rate.
-  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await openSection(page, 'Settings');
   for (const name of ['Appa', 'Adhira', 'Dayana']) {
     await page.getByLabel('New member name').fill(name);
     await page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -28,7 +29,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   }
   await page.getByLabel('equals').fill('100');
   await page.getByRole('button', { name: 'Save rate' }).click();
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -38,7 +39,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   await acc.getByRole('button', { name: 'Save' }).click();
   await expect(acc).toBeHidden();
 
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await openSection(page, 'Wealth');
   const addAsset = async (name: string, cls: string, owner: string, value: string) => {
     await page.getByRole('button', { name: 'Add asset' }).click();
     const d = page.getByRole('dialog');
@@ -95,12 +96,12 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   await shot(page, '14-wealth');
 
   // the dashboard shows the same net worth, with each person's share and the change
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   const worth = page.locator('section', { has: page.getByRole('heading', { name: 'Net worth' }) });
   await expect(worth).toContainText('since 26 Jan 2024');
   await expect(worth.getByRole('link', { name: 'Family wealth' })).toBeVisible();
   await worth.screenshot({ path: 'e2e/screenshots/dashboard-net-worth.png' });
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await openSection(page, 'Wealth');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await shot(page, '15-mobile-wealth');
@@ -118,14 +119,20 @@ test('mobile bottom bar has four main items and a More menu', async ({ page }) =
     'Dashboard',
     'Spending',
     'Transactions',
-    'Investments',
+    'Reports',
   ]);
   for (const link of await bar.getByRole('link').all()) {
     const fits = await link.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
     expect(fits, 'bottom bar labels must not overflow').toBe(true);
   }
   await bar.getByRole('button', { name: 'More' }).click();
-  await expect(page.getByRole('menuitem', { name: 'Wealth' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // the workspace switch is in the header: The Treasure has its own bar
+  await page
+    .getByRole('navigation', { name: 'Workspaces' })
+    .getByRole('link', { name: /^The Treasure/ })
+    .click();
+  await expect(bar.getByRole('link')).toHaveText(['Investments', 'Wealth', 'Analytics']);
+  await shot(page, '16-mobile-treasure');
 });

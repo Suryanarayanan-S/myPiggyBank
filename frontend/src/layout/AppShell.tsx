@@ -9,11 +9,15 @@ import { api } from '../lib/api';
 import { Brand } from './Brand';
 import { CurrencySwitch } from '../components/CurrencySwitch';
 import { ModeToggle } from '../components/ModeToggle';
-import { navItems } from './nav';
+import { navByWorkspace } from './nav';
+import { TONE, WorkspaceSwitch, useWorkspace } from './WorkspaceSwitch';
+import type { Workspace } from '../lib/workspace';
 import { forgetUserData } from '../lib/session';
 
 export function AppShell() {
   const { data } = useMe();
+  const ws = useWorkspace();
+  const navItems = navByWorkspace[ws];
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const logout = useMutation({
@@ -33,7 +37,10 @@ export function AppShell() {
             <ModeToggle />
           </span>
         </div>
-        <div className="-mt-2 px-3 pb-3">
+        <div className="-mt-1 px-3 pb-3">
+          <WorkspaceSwitch current={ws} />
+        </div>
+        <div className="px-3 pb-3">
           <CurrencySwitch label />
         </div>
         <nav aria-label="Sections" className="flex-1 space-y-1 px-3">
@@ -46,7 +53,7 @@ export function AppShell() {
                 clsx(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
                   isActive
-                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                    ? TONE[ws].active
                     : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
                 )
               }
@@ -70,8 +77,9 @@ export function AppShell() {
       </aside>
 
       <div className="md:pl-60 print:!pl-0">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden print:hidden dark:border-slate-800 dark:bg-slate-900">
-          <Brand />
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2.5 md:hidden print:hidden dark:border-slate-800 dark:bg-slate-900">
+          <Brand compact />
+          <WorkspaceSwitch current={ws} compact />
           {/* Five controls on a phone: tight icon buttons so nothing scrolls sideways. */}
           <span className="flex items-center">
             <CurrencySwitch />
@@ -91,21 +99,22 @@ export function AppShell() {
         </main>
       </div>
 
-      <MobileNav />
+      <MobileNav ws={ws} />
     </div>
   );
 }
 
-function MobileNav() {
+function MobileNav({ ws }: { ws: Workspace }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const navItems = navByWorkspace[ws];
   const primary = navItems.filter((i) => i.primary);
   const more = navItems.filter((i) => !i.primary);
   const moreActive = more.some((i) => location.pathname.startsWith(i.to));
   const itemClass = (active: boolean) =>
     clsx(
       'flex flex-col items-center gap-1 py-2 text-xs',
-      active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500',
+      active ? TONE[ws].icon : 'text-slate-500',
     );
   return (
     <>
@@ -123,9 +132,7 @@ function MobileNav() {
                   className={({ isActive }) =>
                     clsx(
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm',
-                      isActive
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+                      isActive ? TONE[ws].active : 'hover:bg-slate-100 dark:hover:bg-slate-800',
                     )
                   }
                 >
@@ -139,7 +146,8 @@ function MobileNav() {
       )}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 print:hidden border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900"
+        style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}
+        className="fixed inset-x-0 bottom-0 z-40 grid print:hidden border-t border-slate-200 bg-white md:hidden dark:border-slate-800 dark:bg-slate-900"
       >
         {primary.map((item) => (
           <NavLink

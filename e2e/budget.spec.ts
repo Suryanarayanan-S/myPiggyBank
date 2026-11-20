@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -19,14 +20,14 @@ test('quick entry fills a month and the budget shows 50/30/20, unused and saving
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
-  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await openSection(page, 'Spending');
   await page
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Budget' })

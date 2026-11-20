@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -24,7 +25,7 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -33,7 +34,7 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   await acc.getByRole('button', { name: 'Save' }).click();
   await expect(acc).toBeHidden();
 
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await openSection(page, 'Wealth');
   await page.getByRole('link', { name: 'Goals' }).first().click();
   await expect(page.getByText('No goals yet')).toBeVisible();
   await page.getByRole('button', { name: 'Add goal' }).click();
@@ -62,7 +63,7 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   await expect(card).toContainText('2.500,00 €');
   await shot(page, '24-goals');
 
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   const summary = page.locator('section', { has: page.getByRole('heading', { name: 'Goals' }) });
   await expect(summary).toContainText('House deposit');
   await expect(summary).toContainText('2.500,00 € of 10.000,00 €');

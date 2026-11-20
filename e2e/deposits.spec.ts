@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -25,7 +26,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -34,7 +35,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(acc).toBeHidden();
 
   // Investments has tabs: Overview, Market, Deposits.
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   const tabs = page.getByRole('navigation', { name: 'Investments pages' });
   await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute(
     'aria-current',
@@ -69,12 +70,12 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   // the account is in euros, the totals in rupees (no rate here): named, not dropped
   await expect(page.getByText(/Not in the totals .*10\.\d{3},\d{2}\s€/)).toBeVisible();
   await expect(page.getByText('Nothing invested yet')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('1 fixed deposit')).toBeVisible();
 
   // Matured: it is due on the overview, and once paid out it no longer counts.
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   await tabs.getByRole('link', { name: 'Deposits' }).click();
   await page.getByRole('button', { name: 'Edit Bank FD' }).click();
   const edit = page.getByRole('dialog', { name: 'Edit fixed deposit' });
@@ -114,7 +115,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(rdCard).toContainText('booked from the account each month');
   await shot(page, '38-recurring-deposits');
   // today's instalment is booked, and the rule is among the recurring transactions
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await expect(page.getByText('Post RD').first()).toBeVisible();
   await page.getByRole('link', { name: 'Recurring' }).first().click();
   await expect(page.getByText('Post RD').first()).toBeVisible();
@@ -134,7 +135,7 @@ test('instant-access savings: money linked from transactions, interest every day
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -200,8 +201,8 @@ test('instant-access savings: money linked from transactions, interest every day
   await expect(card).toContainText('5.000,00 € put in');
 
   // Everything taken out, interest too: it can be closed.
-  await page.getByRole('link', { name: 'Spending' }).first().click();
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Spending');
+  await openSection(page, 'Transactions');
   await page.getByRole('button', { name: 'Add transaction' }).click();
   const txn = page.getByRole('dialog');
   await txn.getByRole('tab', { name: 'income' }).click();
@@ -226,7 +227,7 @@ test('physical gold by weight: added, waits for a rate, and stops counting once 
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   await page
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Gold' })

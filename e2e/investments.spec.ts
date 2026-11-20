@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -20,7 +21,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   await page
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Market' })
@@ -111,13 +112,13 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('2.1 %');
   await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
   // The Dashboard shows the day's move too (in euros, the summary currency here).
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   const invest = page.locator('section', {
     has: page.getByRole('heading', { name: 'Investments' }),
   });
   await expect(invest).toContainText('1.506,25 €');
   await expect(invest).toContainText('+31,25 €');
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   await page
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Market' })
@@ -218,7 +219,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   // The demat was tracked by hand as one asset so far.
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await openSection(page, 'Wealth');
   await page.getByRole('button', { name: 'Add asset' }).click();
   const a = page.getByRole('dialog');
   await a.getByLabel('Name').fill('Zerodha Surya');
@@ -228,7 +229,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await a.getByRole('button', { name: 'Save' }).click();
   await expect(a).toBeHidden();
 
-  await page.getByRole('link', { name: 'Investments' }).first().click();
+  await openSection(page, 'Investments');
   await page
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Market' })

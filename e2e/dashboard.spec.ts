@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { buildWorkbook } from '../backend/test/fixtures/workbook';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -40,7 +41,7 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
 
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page
@@ -49,7 +50,7 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await page.getByRole('button', { name: 'Import 4 months' }).click();
   await expect(page.getByText(/Imported 15 transactions/)).toBeVisible();
 
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   await page.getByRole('radio', { name: 'Last 3 months' }).click();
   const tile = (label: string) =>
     page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
@@ -99,13 +100,13 @@ test('dashboard shows period totals, insights, charts with table views', async (
     },
   });
   expect(added.status(), await added.text()).toBe(201);
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   const attention = page.locator('section', {
     has: page.getByRole('heading', { name: 'Needs your attention' }),
   });
   await attention.getByRole('link', { name: '1 payment or income without a category' }).click();
   await expect(page.getByLabel('Category')).toHaveValue('none');
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
 
   await page.getByRole('radio', { name: 'All time' }).click();
   await expect(tile('Net income')).toContainText('14.250,00 €');

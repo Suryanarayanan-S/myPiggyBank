@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openSection } from './sections';
 
 test('"Show in" switches every page to one currency and back to each page default', async ({
   page,
@@ -11,13 +12,13 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   // A EUR account with a salary this month, and EUR → INR = 100 for this month.
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await openSection(page, 'Spending');
   await page
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Budget' })
@@ -28,7 +29,7 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await page.getByRole('button', { name: 'Save month' }).click();
   await expect(page.getByText('Saved')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await openSection(page, 'Settings');
   await expect(page.getByRole('radio', { name: 'Only my rates' })).toHaveAttribute(
     'aria-checked',
     'true',
@@ -38,7 +39,7 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await expect(page.getByText(/1 EUR = 100 INR/)).toBeVisible();
 
   const showIn = page.getByRole('combobox', { name: 'Show amounts in' }).filter({ visible: true });
-  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await openSection(page, 'Spending');
   await page
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Budget' })
@@ -66,13 +67,13 @@ test('"Show in" switches every page to one currency and back to each page defaul
   // The choice carries over to other pages and survives a reload.
   await page.reload();
   await expect(showIn).toHaveValue('INR');
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('All open accounts in INR')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/23-show-in-inr.png', fullPage: true });
 
   await showIn.selectOption('default');
-  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await openSection(page, 'Spending');
   await page
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Budget' })

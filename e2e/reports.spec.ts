@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -19,7 +20,7 @@ test('the year report compares with last year, downloads as CSV and prints witho
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
@@ -37,7 +38,7 @@ test('the year report compares with last year, downloads as CSV and prints witho
     await expect(page.getByText('Saved')).toBeVisible();
   }
 
-  await page.getByRole('link', { name: 'Reports' }).first().click();
+  await openSection(page, 'Reports');
   await expect(page.getByRole('heading', { name: `Year ${year}` })).toBeVisible();
   const tile = (label: string) =>
     page.locator('section', { has: page.getByText(label, { exact: true }) }).first();

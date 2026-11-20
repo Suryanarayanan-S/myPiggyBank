@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -17,18 +18,18 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Reports' }).first().click();
+  await openSection(page, 'Reports');
 
   await page.getByRole('link', { name: 'Insights' }).first().click();
   await expect(page.getByText('Nothing stands out right now')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('link', { name: 'Spending' }).first().click();
+  await openSection(page, 'Spending');
   await page
     .getByRole('navigation', { name: 'Spending pages' })
     .getByRole('link', { name: 'Budget' })
@@ -45,13 +46,13 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await expect(page.getByText('50,00 € over')).toBeVisible();
 
   const sentence = /Groceries is 50,00\s€ over its limit this month\./;
-  await page.getByRole('link', { name: 'Reports' }).first().click();
+  await openSection(page, 'Reports');
   await page.getByRole('link', { name: 'Insights' }).first().click();
   await expect(page.getByText(sentence)).toBeVisible();
   await expect(page.getByLabel('Attention')).toBeVisible(); // tone has a name, not only a colour
   await shot(page, '31-insights');
 
-  await page.getByRole('link', { name: 'Dashboard' }).first().click();
+  await openSection(page, 'Dashboard');
   const card = page.locator('section', {
     has: page.getByRole('heading', { name: 'Financial insights' }),
   });

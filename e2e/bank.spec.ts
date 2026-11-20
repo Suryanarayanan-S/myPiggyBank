@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { sparkasseCsv } from '../backend/test/fixtures/bankCsv';
+import { openSection } from './sections';
 
 const shot = async (page: Page, name: string) => {
   for (const scheme of ['light', 'dark'] as const) {
@@ -20,7 +21,7 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await page.getByLabel('Password').fill('e2e-test-password');
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
@@ -29,7 +30,7 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
 
   // Bank statement import
   const csv = { name: 'umsatz.csv', mimeType: 'text/csv', buffer: sparkasseCsv() };
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Import' }).first().click();
   await page.getByRole('tab', { name: 'Bank statement (CSV)' }).click();
   await page.locator('#bank-file').setInputFiles(csv);
@@ -55,7 +56,7 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await expect(page.getByText('3 · Review')).toBeHidden(); // a changed mapping needs a new check
 
   // Recurring rent starting today creates today's transaction
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Recurring' }).first().click();
   await page.getByRole('button', { name: 'Add recurring' }).click();
   const d = page.getByRole('dialog');
@@ -70,7 +71,7 @@ test('bank CSV import, re-import finds duplicates, recurring rent, CSV export', 
   await shot(page, '17-recurring');
 
   // Transactions: bank rows + recurring rent; export
-  await page.getByRole('link', { name: 'Transactions' }).first().click();
+  await openSection(page, 'Transactions');
   await expect(page.getByText('Recurring').first()).toBeVisible();
   // the statement's month (the page opens on the current one)
   await page.goto('/transactions?month=2026-10');

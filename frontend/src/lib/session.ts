@@ -1,10 +1,12 @@
 import { ApiError } from './api';
 import type { QueryClient } from '@tanstack/react-query';
+import { forgetPlaces } from './workspace';
 
 /** Forget everything cached for the previous user (another family must never see it). */
 export function forgetUserData(queryClient: QueryClient) {
   queryClient.removeQueries();
   queryClient.setQueryData(['me'], null);
+  forgetPlaces();
 }
 
 /** The server saying the login is gone — not e.g. a wrong password in "Delete account". */

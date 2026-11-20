@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './sections';
 
 const mode = (page: Page) => page.evaluate(() => document.documentElement.dataset.mode);
 
@@ -22,7 +23,7 @@ test('light or dark: follows the computer, or a choice that is remembered', asyn
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
   // Settings shows the same choice; System follows the computer again.
-  await page.getByRole('link', { name: 'Settings' }).first().click();
+  await openSection(page, 'Settings');
   await expect(page.getByRole('radio', { name: 'Light' })).toBeChecked();
   await page.getByRole('radio', { name: 'System' }).check();
   expect(await mode(page)).toBe('dark');

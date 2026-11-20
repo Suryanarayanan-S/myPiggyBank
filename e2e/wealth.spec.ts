@@ -28,7 +28,7 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   }
   await page.getByLabel('equals').fill('100');
   await page.getByRole('button', { name: 'Save rate' }).click();
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -117,7 +117,7 @@ test('mobile bottom bar has four main items and a More menu', async ({ page }) =
   await expect(bar.getByRole('link')).toHaveText([
     'Dashboard',
     'Spending',
-    'Wealth',
+    'Transactions',
     'Investments',
   ]);
   for (const link of await bar.getByRole('link').all()) {
@@ -125,6 +125,7 @@ test('mobile bottom bar has four main items and a More menu', async ({ page }) =
     expect(fits, 'bottom bar labels must not overflow').toBe(true);
   }
   await bar.getByRole('button', { name: 'More' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Wealth' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });

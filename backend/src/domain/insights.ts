@@ -222,7 +222,7 @@ export function findInsights(input: InsightInput): Insight[] {
       kind: 'subscription',
       tone: 'info',
       data: { merchant: e.label, monthly, yearly: monthly * 12 },
-      link: `/spending/transactions?month=${last}&q=${encodeURIComponent(e.label)}`,
+      link: `/transactions?month=${last}&q=${encodeURIComponent(e.label)}`,
       size: monthly * 12,
     });
   }
@@ -266,7 +266,7 @@ export function findInsights(input: InsightInput): Insight[] {
       kind: 'goalBehind',
       tone: 'warning',
       data: { name: g.name, currency: g.currency, ...g.progress },
-      link: '/goals',
+      link: '/wealth/goals',
       size: g.progress.left,
     });
   }
@@ -318,7 +318,7 @@ export function findInsights(input: InsightInput): Insight[] {
         category: name.get(t.categoryId!),
         times: Math.round(t.amount / usual),
       },
-      link: `/spending/transactions?month=${t.date.slice(0, 7)}${
+      link: `/transactions?month=${t.date.slice(0, 7)}${
         t.merchant?.trim() ? `&q=${encodeURIComponent(t.merchant.trim())}` : ''
       }`,
       size: t.amount,

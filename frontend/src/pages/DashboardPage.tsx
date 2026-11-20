@@ -65,7 +65,7 @@ export function DashboardPage() {
                   Quick entry
                 </Link>
                 , or{' '}
-                <Link to="/spending/import" className="font-medium text-indigo-600 underline">
+                <Link to="/transactions/import" className="font-medium text-indigo-600 underline">
                   import your spreadsheet
                 </Link>
                 .
@@ -153,7 +153,7 @@ export function DashboardPage() {
                 ))}
               </dl>
               <Link
-                to="/wealth/accounts"
+                to="/transactions/accounts"
                 className="mt-2 inline-block text-sm text-indigo-600 hover:underline"
               >
                 See accounts
@@ -175,7 +175,7 @@ function GoalsSummary() {
     <Card
       title="Goals"
       actions={
-        <Link to="/goals" className="text-sm text-indigo-600 hover:underline">
+        <Link to="/wealth/goals" className="text-sm text-indigo-600 hover:underline">
           All goals
         </Link>
       }

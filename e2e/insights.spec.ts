@@ -22,8 +22,7 @@ test('insights name what stands out, on their page and on the dashboard', async 
   await page.getByRole('link', { name: 'Insights' }).first().click();
   await expect(page.getByText('Nothing stands out right now')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
-
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');

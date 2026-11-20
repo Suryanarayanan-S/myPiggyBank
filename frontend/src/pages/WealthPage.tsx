@@ -59,8 +59,11 @@ export function WealthPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Family wealth</h1>
         <p className="text-sm text-slate-500">
-          Accounts, assets and loans of the whole family, in {currency}. Bank accounts come from the
-          Accounts page.
+          Accounts, assets and loans of the whole family, in {currency}. Bank accounts come from{' '}
+          <Link to="/transactions/accounts" className="text-indigo-600 hover:underline">
+            Transactions → Accounts
+          </Link>
+          .
         </p>
       </div>
       <FormError error={nw.error ?? assets.error ?? liabilities.error} />

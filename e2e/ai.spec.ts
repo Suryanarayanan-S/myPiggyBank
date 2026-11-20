@@ -21,7 +21,7 @@ test('AI suggests categories for bank lines nothing else can place, and a kept o
     page.getByText(/This month: 0 tokens used · 2,000,000 a month on this server/),
   ).toBeVisible();
 
-  await page.goto('/wealth/accounts');
+  await page.goto('/transactions/accounts');
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Sparkasse');
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();

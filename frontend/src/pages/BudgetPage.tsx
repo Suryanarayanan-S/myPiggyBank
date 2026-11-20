@@ -40,12 +40,20 @@ export function BudgetPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <MonthNav month={month} onChange={(m) => setParams({ month: m }, { replace: true })} />
-        <Link
-          to={`/spending/entry?month=${month}`}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-        >
-          <PencilLine size={16} aria-hidden /> Quick entry
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            to={`/transactions?month=${month}`}
+            className="text-sm font-medium text-indigo-600 hover:underline"
+          >
+            This month’s transactions
+          </Link>
+          <Link
+            to={`/spending/entry?month=${month}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            <PencilLine size={16} aria-hidden /> Quick entry
+          </Link>
+        </div>
       </div>
 
       <FormError error={summary.error} />

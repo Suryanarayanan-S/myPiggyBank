@@ -25,7 +25,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -69,7 +69,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   // the account is in euros, the totals in rupees (no rate here): named, not dropped
   await expect(page.getByText(/Not in the totals .*10\.\d{3},\d{2}\s€/)).toBeVisible();
   await expect(page.getByText('Nothing invested yet')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('1 fixed deposit')).toBeVisible();
 
@@ -114,11 +114,7 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await expect(rdCard).toContainText('booked from the account each month');
   await shot(page, '38-recurring-deposits');
   // today's instalment is booked, and the rule is among the recurring transactions
-  await page.getByRole('link', { name: 'Spending' }).first().click();
-  await page
-    .getByRole('navigation', { name: 'Spending pages' })
-    .getByRole('link', { name: 'Transactions' })
-    .click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await expect(page.getByText('Post RD').first()).toBeVisible();
   await page.getByRole('link', { name: 'Recurring' }).first().click();
   await expect(page.getByText('Post RD').first()).toBeVisible();
@@ -138,7 +134,7 @@ test('instant-access savings: money linked from transactions, interest every day
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Surya' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   const acc = page.getByRole('dialog');
@@ -157,7 +153,7 @@ test('instant-access savings: money linked from transactions, interest every day
     await txn.getByRole('button', { name: 'Save' }).click();
     await expect(txn).toBeHidden();
   };
-  await page.goto('/spending/transactions');
+  await page.goto('/transactions');
   await addPayment('5000', day(-40), 'Tagesgeld Einzahlung');
   await addPayment('1000', day(0), 'Top-up');
 

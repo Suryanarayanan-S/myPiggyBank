@@ -309,7 +309,7 @@ function Transfers({ transfers, uncompared }: { transfers: FxTransfer[]; uncompa
         <p className="text-sm text-slate-600 dark:text-slate-400">
           No transfers between euro, dollar and rupee accounts yet. Record one as a transfer between
           two of your{' '}
-          <Link to="/wealth/accounts" className="text-indigo-600 underline">
+          <Link to="/transactions/accounts" className="text-indigo-600 underline">
             accounts
           </Link>{' '}
           with both amounts (what left and what arrived), and it is compared with the ECB rate of

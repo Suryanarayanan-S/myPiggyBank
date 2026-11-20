@@ -63,7 +63,7 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('Keep Me Alive · 50%')).toBeVisible();
 
   // Account
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await page.getByRole('button', { name: 'Add account' }).click();
   await page.getByLabel('Name').fill('Sparkasse');
@@ -72,11 +72,7 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('1.000,00 €').first()).toBeVisible();
 
   // Income + expense
-  await page.getByRole('link', { name: 'Spending' }).first().click();
-  await page
-    .getByRole('navigation', { name: 'Spending pages' })
-    .getByRole('link', { name: 'Transactions' })
-    .click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   const add = async (
     type: 'Income' | 'Expense',
     amount: string,
@@ -140,7 +136,7 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page.getByText('REWE')).toBeVisible();
 
   // Balance: 1000 + 5416 − 52.40
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('6.363,60 €').first()).toBeVisible();
   // An account opens its own transactions.
@@ -148,7 +144,7 @@ test('register → account → income → expense → balances → delete accoun
   await expect(page).toHaveURL(/\/transactions\?accountId=/);
   await expect(page.getByText('REWE')).toBeVisible();
   await expect(page.getByText('Chai stall')).toBeHidden(); // cash, no account
-  await page.getByRole('link', { name: 'Wealth' }).first().click();
+  await page.getByRole('link', { name: 'Transactions' }).first().click();
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await shot(page, '05-accounts');
 

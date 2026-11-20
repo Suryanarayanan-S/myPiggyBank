@@ -263,7 +263,7 @@ test('a Zerodha holdings file becomes holdings and replaces the manual asset', a
   await d.getByRole('button', { name: 'Done' }).click();
 
   // The demat is on the Accounts page, at what it holds.
-  await page.goto('/wealth/accounts');
+  await page.goto('/transactions/accounts');
   const demat = page.locator('section', {
     has: page.getByRole('heading', { name: 'Demat accounts' }),
   });

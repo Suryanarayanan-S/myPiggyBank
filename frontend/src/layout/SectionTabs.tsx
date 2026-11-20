@@ -5,7 +5,7 @@ export type SectionTab = { to: string; label: string; end?: boolean };
 
 /**
  * A section with its pages as tabs (links, so each tab has its own address). `carry`: address
- * settings kept when moving between the tabs (e.g. the month, shared by Budget and Transactions).
+ * settings kept when moving between the tabs (e.g. the month on Spending's Overview and Budget).
  */
 export function SectionLayout({
   name,

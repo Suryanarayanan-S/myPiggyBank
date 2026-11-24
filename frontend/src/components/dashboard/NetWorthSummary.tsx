@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Home, Landmark, Package, TrendingUp, type LucideIcon } from 'lucide-react';
 import { Wealth } from '../wealth/WealthOverview';
 import { Headline, IconRow, SummaryCard, Trend } from './SummaryCard';
+import { Sparkline } from './Sparkline';
+import { localDay } from '../../lib/months';
 import { api } from '../../lib/api';
 import { formatCompact } from '../../lib/money';
 import { useViewCurrency, withView } from '../../lib/viewCurrency';
@@ -53,8 +55,22 @@ export function NetWorthSummary() {
       Icon: CLASS_ICON[k],
       color: CLASS_COLOR[k],
     }));
+  // the snapshots of the last year in this currency, and today
+  const yearAgo = `${Number(localDay().slice(0, 4)) - 1}${localDay().slice(4)}`;
+  const line = [
+    ...data.snapshots
+      .filter((s) => s.currency === c.currency && s.date >= yearAgo)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((s) => s.netWorth),
+    c.netWorth,
+  ];
   return (
-    <SummaryCard to="/wealth" title="Net worth" opens="Family wealth">
+    <SummaryCard
+      to="/wealth"
+      title="Net worth"
+      opens="Family wealth"
+      chart={<Sparkline values={line} />}
+    >
       <Headline>
         <Wealth cents={c.netWorth} currency={c.currency} />
       </Headline>

@@ -28,7 +28,8 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.p
 
 /**
  * What needs a look, for the dashboard — only things the user can act on, each with the page
- * where it is done: income and payments without a category, new corporate actions to check,
+ * where it is done: income and payments without a category, deposits maturing soon, new
+ * corporate actions to check,
  * holdings with no price, and daily prices that stopped coming (per currency held). None: [].
  */
 export function attentionItems(i: {
@@ -37,6 +38,8 @@ export function attentionItems(i: {
   holdings: Holding[];
   /** the family has daily prices switched on */
   pricesOn: boolean;
+  /** deposits maturing within a month, or matured and not yet marked paid out */
+  maturing?: { id: string; name: string; daysLeft: number }[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
   const u = i.uncategorised;
@@ -46,6 +49,15 @@ export function attentionItems(i: {
       text: `${plural(u.count, 'payment or income', 'payments or income')} without a category`,
       // the newest of them: the list steps back month by month from there
       link: `/transactions?categoryId=none${u.latestMonth ? `&month=${u.latestMonth}` : ''}`,
+    });
+  for (const d of i.maturing ?? [])
+    items.push({
+      key: `matures-${d.id}`,
+      text:
+        d.daysLeft > 0
+          ? `${d.name} matures in ${plural(d.daysLeft, 'day', 'days')}`
+          : `${d.name} ${d.daysLeft === 0 ? 'matures today' : 'has matured'} — mark it paid out once the money is in`,
+      link: '/investments/deposits',
     });
   const check = recentActions(i.holdings, i.today).filter(
     (r) =>

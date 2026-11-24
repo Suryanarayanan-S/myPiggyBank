@@ -1,11 +1,11 @@
 import type { PrismaClient } from '@prisma/client';
 import { convert } from '../domain/currency.js';
 import { summarise, type Flow, type Flows, type Summary } from '../domain/returns.js';
-import { todayLocal } from '../lib/dates.js';
-import { depositFlows } from './depositService.js';
+import { addDays, todayLocal } from '../lib/dates.js';
+import { depositFlows, depositSeries } from './depositService.js';
 import { getFamily } from './familyService.js';
-import { goldFlows } from './goldService.js';
-import { holdingFlows } from './holdingService.js';
+import { goldFlows, goldSeries } from './goldService.js';
+import { holdingFlows, holdingSeries } from './holdingService.js';
 import { loadRates } from './rateService.js';
 
 export const PARTS = ['market', 'fd', 'rd', 'savings', 'gold'] as const;
@@ -110,5 +110,44 @@ export async function investmentReturns(
       gold: gold.leftOut,
     },
     unconverted: [...unconverted].map(([c, amount]) => ({ currency: c, amount })),
+  };
+}
+
+/**
+ * What everything invested was worth week by week over the last year (market holdings at their
+ * prices then, deposits from their terms, gold at that day's rate), in one currency at today's
+ * rates like the totals — the line on the dashboard. Amounts in a currency without a rate are
+ * left out.
+ */
+export async function investmentHistory(
+  prisma: PrismaClient,
+  familyId: string,
+  view?: string,
+  today = todayLocal(),
+) {
+  const days = Array.from({ length: 53 }, (_, i) => addDays(today, (i - 52) * 7));
+  const [family, rates, holdings, deposits, gold] = await Promise.all([
+    getFamily(prisma, familyId),
+    loadRates(prisma, familyId),
+    holdingSeries(prisma, familyId, days),
+    depositSeries(prisma, familyId, days),
+    goldSeries(prisma, familyId, days),
+  ]);
+  const currency = view ?? family.wealthCurrency;
+  const month = today.slice(0, 7);
+  const totals = days.map(() => 0);
+  for (const s of [...holdings, ...deposits, ...gold]) {
+    // one rate per currency: test it once on a unit amount, then use it for every day
+    if (convert(1_000_000, s.currency, currency, month, rates) === null) continue;
+    s.values.forEach((v, i) => {
+      if (v !== 0) totals[i]! += convert(v, s.currency, currency, month, rates)!;
+    });
+  }
+  // from the first week anything was held
+  const first = totals.findIndex((v) => v !== 0);
+  return {
+    currency,
+    points:
+      first < 0 ? [] : days.slice(first).map((date, i) => ({ date, value: totals[first + i]! })),
   };
 }

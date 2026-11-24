@@ -5,6 +5,7 @@ import { useMe } from '../../auth/auth';
 import { Card } from '../ui/Card';
 import { api } from '../../lib/api';
 import { attentionItems } from '../../lib/attention';
+import { maturingSoon, useDeposits } from '../../lib/deposits';
 import type { HoldingsResponse } from '../../lib/investments';
 import { localDay } from '../../lib/months';
 import { useViewCurrency, withView } from '../../lib/viewCurrency';
@@ -23,11 +24,14 @@ export function Attention({
     queryKey: ['holdings', view],
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
+  const deposits = useDeposits();
   const items = attentionItems({
     today: localDay(),
     uncategorised,
     holdings: holdings.data?.holdings ?? [],
     pricesOn,
+    // a reminder a month ahead, and for matured deposits not yet marked paid out
+    maturing: maturingSoon(deposits.data?.deposits ?? [], 30),
   });
   if (items.length === 0) return null;
   return (

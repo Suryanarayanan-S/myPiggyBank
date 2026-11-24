@@ -115,7 +115,7 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await openSection(page, 'Dashboard');
   const invest = page.getByRole('link', { name: /^Investments — open Investments/ });
   await expect(invest).toContainText('1.506,25 €');
-  await expect(invest).toContainText('+31,25 €');
+  await expect(invest).toContainText('+31,25 € (2.1 %)'); // small moves exact, large ones rounded
   await shot(page, '42-dashboard-cards');
   await openSection(page, 'Investments');
   await page

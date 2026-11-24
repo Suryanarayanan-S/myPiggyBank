@@ -15,7 +15,9 @@ export const useGoldRefresh = () => {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['gold', 'net-worth', 'goals'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+      ['gold', 'net-worth', 'goals', 'investment-history', 'investment-returns'].map((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      ),
     );
 };
 

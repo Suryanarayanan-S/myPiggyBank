@@ -142,6 +142,36 @@ export async function goldValues(prisma: PrismaClient, familyId: string, onDay =
   });
 }
 
+/** For the value over time: the gold held on each of `days` at that day's IBJA rate (rupees). */
+export async function goldSeries(prisma: PrismaClient, familyId: string, days: string[]) {
+  const [rows, points] = await Promise.all([
+    prisma.goldItem.findMany({ where: { familyId } }),
+    prisma.benchmarkPoint.findMany({
+      where: {
+        series: { in: ['gold24k', 'gold24kEst'] },
+        date: { lte: parseDay(days.at(-1)!)! },
+      },
+      orderBy: { date: 'asc' },
+    }),
+  ]);
+  // IBJA's rates; before the first of them, the estimate from GOLDBEES (as the gold chart does)
+  const firstIbja = points.find((p) => p.series === 'gold24k')?.date.getTime() ?? Infinity;
+  const used = points.filter(
+    (p) => p.series === 'gold24k' || (p.series === 'gold24kEst' && p.date.getTime() < firstIbja),
+  );
+  if (rows.length === 0 || used.length === 0) return [];
+  const rates = used.map((p) => ({ date: formatDay(p.date), micros: Number(p.value) }));
+  let k = 0;
+  const values = days.map((day) => {
+    while (k + 1 < rates.length && rates[k + 1]!.date <= day) k++;
+    // before any rate: the earliest one, as today's value falls back to it
+    return rows
+      .filter((g) => heldOn(g, day) && (!g.boughtOn || formatDay(g.boughtOn) <= day))
+      .reduce((t, g) => t + goldValue(g.milligrams, g.purity as Purity, rates[k]!.micros), 0);
+  });
+  return [{ currency: CURRENCY, values }];
+}
+
 /**
  * For the returns: pieces held with a known price and day of purchase, as what was paid and
  * worth today. Others are only counted (no price paid, or no longer held: what it fetched is

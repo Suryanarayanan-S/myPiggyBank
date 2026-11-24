@@ -348,6 +348,29 @@ export async function holdingFlows(prisma: PrismaClient, familyId: string, today
     .filter((h): h is NonNullable<typeof h> => h !== null && h.flows.length > 0);
 }
 
+/**
+ * For the value over time: each holding's worth on each of `days` (minor units of its own
+ * currency; 0 before it was bought or once sold). Archived holdings still held are left out, as
+ * in the totals.
+ */
+export async function holdingSeries(prisma: PrismaClient, familyId: string, days: string[]) {
+  const rows = await prisma.holding.findMany({ where: { familyId }, include });
+  const today = days.at(-1)!;
+  return rows
+    .filter((h) => h.trades.length > 0)
+    .map((h) => {
+      const trades = asTrades(h.trades);
+      const prices = asPrices(h.prices);
+      // archived and sold keeps its history; archived and still held is out of the totals
+      if (h.archived && computeHolding(trades, prices, today).units > 0) return null;
+      return {
+        currency: h.currency,
+        values: days.map((d) => computeHolding(trades, prices, d).value ?? 0),
+      };
+    })
+    .filter((h) => h !== null);
+}
+
 export async function createHolding(
   prisma: PrismaClient,
   familyId: string,

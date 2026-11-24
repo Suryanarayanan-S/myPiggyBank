@@ -2,7 +2,10 @@ import clsx from 'clsx';
 import { Link } from 'react-router';
 import { ArrowDownRight, ArrowUpRight, ChevronRight } from 'lucide-react';
 import type { Dashboard, Totals } from '../../lib/dashboardTypes';
-import { formatMoney } from '../../lib/money';
+import { formatCompact, formatMoney } from '../../lib/money';
+import { localDay } from '../../lib/months';
+import { Wealth } from '../wealth/WealthOverview';
+import { Sparkline } from './Sparkline';
 import { formatPercent } from '../../lib/percent';
 import { useBucketNames, type BucketNames } from '../../lib/buckets';
 
@@ -42,8 +45,17 @@ const TILE =
 export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
   const names = useBucketNames();
   const { totals: t, previous: p, currency } = d;
-  const money = (c: number) => formatMoney(c, currency);
-  const signed = (c: number) => `${c > 0 ? '+' : '−'}${money(Math.abs(c))}`;
+  // rounded like the cards above (the exact amount on hover and for screen readers)
+  // (exact when rounding would hide it: a few cents are not "€0")
+  const signed = (c: number) =>
+    `${c > 0 ? '+' : '−'}${Math.abs(c) < 10_000 ? formatMoney(Math.abs(c), currency) : formatCompact(Math.abs(c), currency)}`;
+  // month by month for the small graphs: whole months only (the running one would always end
+  // low) and none before anything was recorded; a single month draws nothing
+  const thisMonth = localDay().slice(0, 7);
+  const done = d.months.filter(
+    (m) => m.month < thisMonth && (!d.firstMonth || m.month >= d.firstMonth),
+  );
+  const series = (k: keyof Totals) => done.map((m) => (m[k] as number | null) ?? 0);
   const rateDiff =
     p?.savingsRateBp != null && t.savingsRateBp !== null ? t.savingsRateBp - p.savingsRateBp : null;
   return (
@@ -67,20 +79,26 @@ export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
             text={`${rateDiff > 0 ? '+' : '−'}${(Math.abs(rateDiff) / 100).toFixed(1)} pp`}
           />
         )}
+        <div className="mt-2">
+          <Sparkline
+            values={done.filter((m) => m.savingsRateBp !== null).map((m) => m.savingsRateBp!)}
+            height={44}
+          />
+        </div>
       </Link>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {tiles(names).map((tile) => {
           const value = t[tile.key] as number;
           return (
-            <Link key={tile.key} to={to} className={clsx(TILE, 'p-4')}>
+            <Link key={tile.key} to={to} className={clsx(TILE, 'flex flex-col p-4')}>
               <p className="text-xs font-medium text-slate-500">{tile.label}</p>
               <p
                 className={clsx(
-                  'mt-1 text-xl font-semibold',
+                  'mt-1 text-2xl font-semibold tracking-tight',
                   value < 0 && 'text-rose-600 dark:text-rose-400',
                 )}
               >
-                {money(value)}
+                <Wealth cents={value} currency={currency} />
               </p>
               <p className="text-xs text-slate-400">
                 {tile.key === 'spent' && t.uncategorised > 0
@@ -94,6 +112,9 @@ export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
                   text={signed(value - (p[tile.key] as number))}
                 />
               )}
+              <div className="mt-auto pt-2">
+                <Sparkline values={series(tile.key)} upIsGood={tile.upIsGood} height={40} />
+              </div>
             </Link>
           );
         })}

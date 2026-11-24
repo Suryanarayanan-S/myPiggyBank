@@ -24,7 +24,7 @@ const useRefresh = () => {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['holdings', 'net-worth', 'goals'].map((k) =>
+      ['holdings', 'net-worth', 'goals', 'investment-history', 'investment-returns'].map((k) =>
         queryClient.invalidateQueries({ queryKey: [k] }),
       ),
     );

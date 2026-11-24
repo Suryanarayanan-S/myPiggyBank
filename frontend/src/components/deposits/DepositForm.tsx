@@ -26,9 +26,16 @@ export const useDepositRefresh = () => {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['deposits', 'net-worth', 'goals', 'transactions', 'deposit-candidates', 'dashboard'].map(
-        (k) => queryClient.invalidateQueries({ queryKey: [k] }),
-      ),
+      [
+        'deposits',
+        'net-worth',
+        'goals',
+        'transactions',
+        'deposit-candidates',
+        'dashboard',
+        'investment-history',
+        'investment-returns',
+      ].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
     );
 };
 

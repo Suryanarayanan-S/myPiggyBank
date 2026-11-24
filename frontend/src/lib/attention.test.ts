@@ -31,6 +31,25 @@ describe('attentionItems', () => {
     expect(attentionItems({ ...base, uncategorised: { count: 0, latestMonth: null } })).toEqual([]);
   });
 
+  it('reminds of deposits maturing soon, and of matured ones not yet paid out', () => {
+    const items = attentionItems({
+      ...base,
+      maturing: [
+        { id: 'z', name: 'Canara FD', daysLeft: -3 },
+        { id: 'a', name: 'SBI FD', daysLeft: 0 },
+        { id: 'b', name: 'HDFC FD', daysLeft: 1 },
+        { id: 'c', name: 'Post RD', daysLeft: 12 },
+      ],
+    });
+    expect(items.map((i) => i.text)).toEqual([
+      'Canara FD has matured — mark it paid out once the money is in',
+      'SBI FD matures today — mark it paid out once the money is in',
+      'HDFC FD matures in 1 day',
+      'Post RD matures in 12 days',
+    ]);
+    expect(items.every((i) => i.link === '/investments/deposits')).toBe(true);
+  });
+
   it('names what to sort out, each with where to do it', () => {
     const items = attentionItems({
       ...base,

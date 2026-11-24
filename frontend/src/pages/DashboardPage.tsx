@@ -13,6 +13,8 @@ import { useDashboardPeriod } from '../components/dashboard/useDashboardPeriod';
 import { StatusBadge } from '../components/goals/GoalCard';
 import { Card } from '../components/ui/Card';
 import { Headline, SummaryCard } from '../components/dashboard/SummaryCard';
+import { Sparkline } from '../components/dashboard/Sparkline';
+import { useAccountsHistory } from '../lib/history';
 import { Wealth } from '../components/wealth/WealthOverview';
 import type { Dashboard } from '../lib/dashboardTypes';
 import { Progress } from '../components/ui/Progress';
@@ -160,11 +162,18 @@ function GoalsSummary() {
 
 /** Money in the accounts today (all currencies in the dashboard one); the card opens Accounts. */
 function CashSummary({ d }: { d: Dashboard }) {
+  // in the dashboard's currency (spending), as the figure beside it
+  const history = useAccountsHistory('1y', d.currency).data;
   if (d.accounts.length === 0) return null;
   const t = d.accountsTotal;
   const several = d.accounts.length > 1 || d.accounts[0]?.currency !== d.currency;
   return (
-    <SummaryCard to="/transactions/accounts" title="Cash" opens="Accounts">
+    <SummaryCard
+      to="/transactions/accounts"
+      title="Cash"
+      opens="Accounts"
+      chart={history?.currency === d.currency ? <Sparkline values={history.total} /> : undefined}
+    >
       <Headline>
         <Wealth cents={several ? t.total : d.accounts[0]!.balance} currency={d.currency} />
       </Headline>

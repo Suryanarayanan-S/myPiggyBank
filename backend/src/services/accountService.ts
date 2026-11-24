@@ -1,10 +1,11 @@
 import type { Account, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { CurrencySchema, sumConverted } from '../domain/currency.js';
+import { CurrencySchema, convert, sumConverted } from '../domain/currency.js';
+import { dayGrid, rangeStart, type Range } from '../domain/history.js';
 import { getFamily } from './familyService.js';
 import { loadRates } from './rateService.js';
 import { computeBalances, type BalanceTxn } from '../domain/balances.js';
-import { monthRange, todayLocal } from '../lib/dates.js';
+import { formatDay, monthRange, todayLocal } from '../lib/dates.js';
 import { AppError } from '../lib/errors.js';
 import { assertAccount, assertMember } from './ownership.js';
 import type { Db } from '../lib/db.js';
@@ -31,7 +32,9 @@ export const AccountCreate = z.object({
   assetClass: z.enum(ASSET_CLASSES).optional(),
   archived: z.boolean().optional(),
 });
-export const AccountUpdate = AccountCreate.partial();
+// No default on an update: a change that leaves the opening balance out keeps it (archiving
+// alone once reset it to zero).
+export const AccountUpdate = AccountCreate.extend({ openingBalance: money }).partial();
 
 export type AccountDto = {
   id: string;
@@ -259,4 +262,81 @@ export async function accountsTotal(prisma: PrismaClient, familyId: string, view
     .filter((a) => !a.archived && a.type !== 'investment')
     .map((a) => ({ amount: a.balance, currency: a.currency, month }));
   return { currency, ...sumConverted(items, currency, rates) };
+}
+
+/**
+ * The bank and cash accounts' balances over a range (open accounts, demat ones left out, as in
+ * the total): each account in its own currency, and all of them in one currency at today's
+ * rates. A balance on a day is its opening balance plus every transaction up to that day.
+ */
+export async function accountsHistory(
+  prisma: PrismaClient,
+  familyId: string,
+  view?: string,
+  range: Range = '1y',
+  today = todayLocal(),
+) {
+  const [family, rows, rates, txns] = await Promise.all([
+    getFamily(prisma, familyId),
+    // archived ones too: their money was there until it moved (only today's total leaves them
+    // out, where their balance is spent anyway)
+    prisma.account.findMany({ where: { familyId, type: { not: 'investment' } } }),
+    loadRates(prisma, familyId),
+    prisma.transaction.findMany({
+      where: { familyId },
+      select: balanceSelect,
+      orderBy: { date: 'asc' },
+    }),
+  ]);
+  const currency = view ?? family.wealthCurrency;
+  const month = today.slice(0, 7);
+  const first = txns[0] ? formatDay(txns[0].date) : null;
+  const days = dayGrid(rangeStart(range, today, first), today);
+  const balance = new Map(rows.map((a) => [a.id, Number(a.openingBalance)]));
+  const values = new Map(rows.map((a) => [a.id, [] as number[]]));
+  const move = (id: string | null, delta: number) => {
+    if (id !== null && balance.has(id)) balance.set(id, balance.get(id)! + delta);
+  };
+  let k = 0;
+  for (const day of days) {
+    // every transaction up to the end of this day; today takes those dated later too, as the
+    // balances do (a payment entered ahead is already off the account)
+    for (; k < txns.length && (day === today || formatDay(txns[k]!.date) <= day); k++) {
+      const t = txns[k]!;
+      const amount = Number(t.amount);
+      if (t.type === 'income') move(t.accountId, amount);
+      else if (t.type === 'expense') move(t.accountId, -amount);
+      else {
+        move(t.accountId, -amount);
+        move(t.transferAccountId, t.transferAmount === null ? amount : Number(t.transferAmount));
+      }
+    }
+    for (const a of rows) values.get(a.id)!.push(balance.get(a.id)!);
+  }
+  const total = days.map(() => 0);
+  const unconverted = new Set<string>();
+  for (const a of rows) {
+    if (a.archived) {
+      // in the total; today it counts as the balances do (not at all)
+      values.get(a.id)![days.length - 1] = 0;
+    }
+    if (convert(1_000_000, a.currency, currency, month, rates) === null) {
+      if (a.archived) continue;
+      unconverted.add(a.currency);
+      continue;
+    }
+    values.get(a.id)!.forEach((v, i) => {
+      if (v !== 0) total[i]! += convert(v, a.currency, currency, month, rates)!;
+    });
+  }
+  return {
+    currency,
+    days,
+    total,
+    accounts: rows
+      .filter((a) => !a.archived)
+      .map((a) => ({ id: a.id, currency: a.currency, values: values.get(a.id)! })),
+    /** currencies left out of the total (no exchange rate) */
+    unconverted: [...unconverted],
+  };
 }

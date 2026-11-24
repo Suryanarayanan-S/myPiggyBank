@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { addDays, todayLocal } from '../src/lib/dates.js';
 import { client, makeApp, resetDb, signUp } from './helpers.js';
 
 describe('accounts', () => {
@@ -18,6 +19,89 @@ describe('accounts', () => {
     currency: 'EUR',
     openingBalance: 100_000,
   };
+
+  it('gives each balance over a range, and all of them in one currency', async () => {
+    const today = todayLocal();
+    await call('PUT', '/api/family', { wealthCurrency: 'EUR' });
+    const giro = (await call('POST', '/api/accounts', sparkasse)).json().data.id;
+    const cash = (
+      await call('POST', '/api/accounts', {
+        name: 'Wallet',
+        type: 'cash',
+        currency: 'EUR',
+        openingBalance: 0,
+      })
+    ).json().data.id;
+    await call('POST', '/api/transactions', {
+      date: addDays(today, -40),
+      type: 'income',
+      amount: 50_000,
+      accountId: giro,
+    });
+    await call('POST', '/api/transactions', {
+      date: addDays(today, -10),
+      type: 'transfer',
+      amount: 20_000,
+      accountId: giro,
+      transferAccountId: cash,
+    });
+    const h = (await call('GET', '/api/accounts/history?range=6m')).json().data;
+    const at = (series: number[], daysAgo: number) =>
+      series[(h.days as string[]).filter((d) => d <= addDays(today, -daysAgo)).length - 1]!;
+    const giroLine = h.accounts.find((a: { id: string }) => a.id === giro).values;
+    const cashLine = h.accounts.find((a: { id: string }) => a.id === cash).values;
+    expect(at(giroLine, 60)).toBe(100_000); // the opening balance
+    expect(at(giroLine, 20)).toBe(150_000); // with the income
+    expect(giroLine.at(-1)).toBe(130_000); // after the transfer
+    expect(cashLine.at(-1)).toBe(20_000);
+    expect(h.total.at(-1)).toBe(150_000); // a transfer moves money, it does not add any
+    expect(h.currency).toBe('EUR');
+    const total = (await call('GET', '/api/accounts/total')).json().data.total;
+    expect(h.total.at(-1)).toBe(total);
+  });
+
+  it('the history counts a payment entered ahead today, and an archived account until it closed', async () => {
+    const today = todayLocal();
+    await call('PUT', '/api/family', { wealthCurrency: 'EUR' });
+    const giro = (await call('POST', '/api/accounts', sparkasse)).json().data.id;
+    const old = (
+      await call('POST', '/api/accounts', {
+        ...sparkasse,
+        name: 'Old bank',
+        openingBalance: 80_000,
+      })
+    ).json().data.id;
+    // the old account's money moves over 20 days ago, then it is archived
+    await call('POST', '/api/transactions', {
+      date: addDays(today, -20),
+      type: 'transfer',
+      amount: 80_000,
+      accountId: old,
+      transferAccountId: giro,
+    });
+    await call('PUT', `/api/accounts/${old}`, { archived: true });
+    // next month's rent, entered already
+    await call('POST', '/api/transactions', {
+      date: addDays(today, 10),
+      type: 'expense',
+      amount: 30_000,
+      accountId: giro,
+    });
+    const h = (await call('GET', '/api/accounts/history?range=1m')).json().data;
+    // no jump when the money moved: it was there all along
+    expect(h.total[0]).toBe(180_000);
+    expect(h.total.at(-1)).toBe(150_000);
+    expect(h.total.at(-1)).toBe((await call('GET', '/api/accounts/total')).json().data.total);
+    expect(h.accounts.map((a: { id: string }) => a.id)).toEqual([giro]);
+  });
+
+  it('keeps the opening balance when a change leaves it out (archiving, renaming)', async () => {
+    const id = (await call('POST', '/api/accounts', sparkasse)).json().data.id;
+    await call('PUT', `/api/accounts/${id}`, { archived: true });
+    await call('PUT', `/api/accounts/${id}`, { name: 'Sparkasse old' });
+    const a = (await call('GET', '/api/accounts')).json().data[0];
+    expect(a).toMatchObject({ archived: true, openingBalance: 100_000, balance: 100_000 });
+  });
 
   it('creates an account whose balance starts at the opening balance', async () => {
     const res = await call('POST', '/api/accounts', sparkasse);

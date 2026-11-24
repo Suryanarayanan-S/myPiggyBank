@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
 import { convert } from '../domain/currency.js';
 import { summarise, type Flow, type Flows, type Summary } from '../domain/returns.js';
-import { addDays, todayLocal } from '../lib/dates.js';
+import { formatDay, todayLocal } from '../lib/dates.js';
+import { dayGrid, rangeStart, type Range } from '../domain/history.js';
 import { depositFlows, depositSeries } from './depositService.js';
 import { getFamily } from './familyService.js';
 import { goldFlows, goldSeries } from './goldService.js';
@@ -113,19 +114,35 @@ export async function investmentReturns(
   };
 }
 
+/** The first day anything was invested (for the "all" range); null with nothing. */
+async function firstInvested(prisma: PrismaClient, familyId: string) {
+  const [t, d, g] = await Promise.all([
+    prisma.holdingTrade.aggregate({ where: { holding: { familyId } }, _min: { date: true } }),
+    prisma.deposit.aggregate({ where: { familyId }, _min: { startDate: true } }),
+    prisma.goldItem.aggregate({ where: { familyId }, _min: { boughtOn: true } }),
+  ]);
+  const days = [t._min.date, d._min.startDate, g._min.boughtOn]
+    .filter((x): x is Date => !!x)
+    .map(formatDay)
+    .sort();
+  return days[0] ?? null;
+}
+
 /**
- * What everything invested was worth week by week over the last year (market holdings at their
- * prices then, deposits from their terms, gold at that day's rate), in one currency at today's
- * rates like the totals — the line on the dashboard. Amounts in a currency without a rate are
+ * What everything invested was worth over a range (market holdings at their prices then,
+ * deposits from their terms, gold at that day's rate), in one currency at today's rates like the
+ * totals: all together, each kind, and each deposit. Amounts in a currency without a rate are
  * left out.
  */
 export async function investmentHistory(
   prisma: PrismaClient,
   familyId: string,
   view?: string,
+  range: Range = '1y',
   today = todayLocal(),
 ) {
-  const days = Array.from({ length: 53 }, (_, i) => addDays(today, (i - 52) * 7));
+  const first = range === 'all' ? await firstInvested(prisma, familyId) : null;
+  const days = dayGrid(rangeStart(range, today, first), today);
   const [family, rates, holdings, deposits, gold] = await Promise.all([
     getFamily(prisma, familyId),
     loadRates(prisma, familyId),
@@ -135,19 +152,42 @@ export async function investmentHistory(
   ]);
   const currency = view ?? family.wealthCurrency;
   const month = today.slice(0, 7);
-  const totals = days.map(() => 0);
-  for (const s of [...holdings, ...deposits, ...gold]) {
-    // one rate per currency: test it once on a unit amount, then use it for every day
-    if (convert(1_000_000, s.currency, currency, month, rates) === null) continue;
-    s.values.forEach((v, i) => {
-      if (v !== 0) totals[i]! += convert(v, s.currency, currency, month, rates)!;
-    });
+  /** In the view currency; null without a rate (one rate per currency, so test it once). */
+  const inView = (s: { currency: string; values: number[] }) =>
+    convert(1_000_000, s.currency, currency, month, rates) === null
+      ? null
+      : s.values.map((v) => (v === 0 ? 0 : convert(v, s.currency, currency, month, rates)!));
+  const add = (into: number[], values: number[]) => values.forEach((v, i) => (into[i]! += v));
+  const total = days.map(() => 0);
+  const parts: Partial<Record<Part, number[]>> = {};
+  const series: Record<Part, { currency: string; values: number[] }[]> = {
+    market: holdings,
+    fd: deposits.filter((d) => d.kind === 'fd'),
+    rd: deposits.filter((d) => d.kind === 'rd'),
+    savings: deposits.filter((d) => d.kind === 'savings'),
+    gold,
+  };
+  for (const part of PARTS) {
+    const sum = days.map(() => 0);
+    let any = false;
+    for (const s of series[part]) {
+      const v = inView(s);
+      if (!v) continue;
+      add(sum, v);
+      any ||= v.some((x) => x !== 0);
+    }
+    if (any) parts[part] = sum;
+    add(total, sum);
   }
-  // from the first week anything was held
-  const first = totals.findIndex((v) => v !== 0);
   return {
     currency,
-    points:
-      first < 0 ? [] : days.slice(first).map((date, i) => ({ date, value: totals[first + i]! })),
+    days,
+    total,
+    parts,
+    /** each deposit, for its own small graph */
+    deposits: deposits.flatMap((d) => {
+      const v = inView(d);
+      return v && v.some((x) => x !== 0) ? [{ id: d.id, values: v }] : [];
+    }),
   };
 }

@@ -7,7 +7,7 @@ import type {
 } from '@prisma/client';
 import { z } from 'zod';
 import { CurrencySchema, convert, formatRate, parseRate } from '../domain/currency.js';
-import { computeHolding, oversold, type Trade } from '../domain/holdings.js';
+import { computeHolding, oversold, valuesOn, type Trade } from '../domain/holdings.js';
 import { formatDay, parseDay, todayLocal } from '../lib/dates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { getFamily } from './familyService.js';
@@ -365,7 +365,7 @@ export async function holdingSeries(prisma: PrismaClient, familyId: string, days
       if (h.archived && computeHolding(trades, prices, today).units > 0) return null;
       return {
         currency: h.currency,
-        values: days.map((d) => computeHolding(trades, prices, d).value ?? 0),
+        values: valuesOn(trades, prices, days),
       };
     })
     .filter((h) => h !== null);

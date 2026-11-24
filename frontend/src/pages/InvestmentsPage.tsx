@@ -13,6 +13,9 @@ import { TradeRepublicImport } from '../components/investments/TradeRepublicImpo
 import { DividendCheck } from '../components/investments/DividendCheck';
 import { CorporateHistory } from '../components/investments/CorporateHistory';
 import { Tile } from '../components/investments/Tiles';
+import { ValueChart } from '../components/charts/ValueChart';
+import { useInvestmentHistory, useRange } from '../lib/history';
+
 import { LivePrices } from '../components/investments/LivePrices';
 import { HoldingsList } from '../components/investments/HoldingsList';
 import { PortfolioOverview } from '../components/investments/PortfolioOverview';
@@ -119,6 +122,8 @@ export function InvestmentsPage() {
     h.trades.some((t) => t.type === 'dividend' || t.type === 'interest'),
   );
   const [params, setParams] = useSearchParams();
+  const [range, setRange] = useRange();
+  const history = useInvestmentHistory(range).data;
   const tab = TABS.find((t) => t === params.get('tab')) ?? 'overview';
   const split = profitSplit(open);
   // the yearly return over every trade and payout (needs the trades' real dates: a tradebook)
@@ -248,6 +253,20 @@ export function InvestmentsPage() {
               Not in the totals (no exchange rate to {s.currency}):{' '}
               {s.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
             </p>
+          )}
+          {history?.currency === s.currency && history.parts.market && (
+            <ValueChart
+              title="Market value"
+              points={history.days.map((date, i) => ({ date, value: history.parts.market![i]! }))}
+              currency={s.currency}
+              range={range}
+              onRange={setRange}
+              note={
+                hidden.length > 0
+                  ? 'All demat accounts, also those hidden above; at the prices of each day.'
+                  : 'At the prices of each day; what was bought counts from the day it was bought.'
+              }
+            />
           )}
           <div
             role="tablist"

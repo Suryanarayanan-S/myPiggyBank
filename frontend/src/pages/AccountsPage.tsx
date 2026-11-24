@@ -19,6 +19,10 @@ import { gainClass, signed, type HoldingsResponse } from '../lib/investments';
 import { dematWorth } from '../lib/demat';
 import clsx from 'clsx';
 
+import { ValueChart } from '../components/charts/ValueChart';
+import { Sparkline } from '../components/dashboard/Sparkline';
+import { useAccountsHistory, useRange } from '../lib/history';
+
 export function AccountsPage() {
   const me = useMe();
   const accounts = useAccounts();
@@ -33,6 +37,9 @@ export function AccountsPage() {
       .filter((a) => !a.archived && a.type !== 'investment')
       .map((a) => a.currency),
   );
+  const [range, setRange] = useRange();
+  const history = useAccountsHistory(range).data;
+  const lineOf = (id: string) => history?.accounts.find((x) => x.id === id)?.values;
   const members = useMembers();
   // Deposits made from an account show on it (their money is not in its balance).
   const deposits = useDeposits();
@@ -74,20 +81,28 @@ export function AccountsPage() {
         </Card>
       )}
 
-      {total.data && (currencies.size > 1 || !currencies.has(total.data.currency)) && (
-        <Card>
-          <p className="text-sm text-slate-500">All open accounts in {total.data.currency}</p>
-          <p className="text-2xl font-semibold tabular-nums">
-            {formatMoney(total.data.total, total.data.currency)}
-          </p>
-          {total.data.unconverted.length > 0 && (
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-              Plus{' '}
-              {total.data.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(' and ')}{' '}
-              without an exchange rate.
-            </p>
-          )}
-        </Card>
+      {history && currencies.size > 0 && (
+        <ValueChart
+          title={`Cash in your accounts${currencies.size > 1 || !currencies.has(history.currency) ? ` (in ${history.currency})` : ''}`}
+          points={history.days.map((date, i) => ({ date, value: history.total[i]! }))}
+          currency={history.currency}
+          range={range}
+          onRange={setRange}
+          note={
+            <>
+              Open bank and cash accounts: opening balance plus every transaction up to each day
+              {currencies.size > 1 && ', other currencies at today’s rates'}.
+              {total.data && total.data.unconverted.length > 0 && (
+                <span className="block text-amber-700 dark:text-amber-400">
+                  Not in it (no exchange rate):{' '}
+                  {total.data.unconverted
+                    .map((u) => formatMoney(u.amount, u.currency))
+                    .join(' and ')}
+                </span>
+              )}
+            </>
+          }
+        />
       )}
 
       {[...byCurrency].map(([currency, list]) => {
@@ -107,7 +122,7 @@ export function AccountsPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {list.map((a) => (
-                <Card key={a.id} className={a.archived ? 'opacity-60' : undefined}>
+                <Card key={a.id} className={a.archived ? 'min-w-0 opacity-60' : 'min-w-0'}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{a.name}</p>
@@ -127,6 +142,11 @@ export function AccountsPage() {
                   <p className="mt-3 text-2xl font-semibold tabular-nums">
                     <Amount cents={a.balance} currency={a.currency} />
                   </p>
+                  {!a.archived && lineOf(a.id) && (
+                    <div className="mt-2">
+                      <Sparkline values={lineOf(a.id)!} height={36} />
+                    </div>
+                  )}
                   <p className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
                     <span>
                       <Amount cents={a.monthChange} currency={a.currency} signed /> this month

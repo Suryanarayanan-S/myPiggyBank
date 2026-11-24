@@ -5,6 +5,9 @@ import clsx from 'clsx';
 import { Pencil, Plus } from 'lucide-react';
 import { GoldForm, useGoldRefresh } from '../components/gold/GoldForm';
 import { Tile } from '../components/investments/Tiles';
+import { ValueChart } from '../components/charts/ValueChart';
+import { useInvestmentHistory, useRange } from '../lib/history';
+
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -22,6 +25,8 @@ const inr = (paise: number) => formatMoney(paise, 'INR');
 /** Physical gold (jewellery, coins, bars) by weight, valued each day from the IBJA rate. */
 export function GoldPage() {
   const q = useGold();
+  const [range, setRange] = useRange();
+  const history = useInvestmentHistory(range).data;
   const members = useMembers();
   const refresh = useGoldRefresh();
   const [dialog, setDialog] = useState<{ item?: GoldItem } | null>(null);
@@ -130,6 +135,16 @@ export function GoldPage() {
             .
           </p>
         ))}
+      {s && history?.currency === s.currency && history.parts.gold && (
+        <ValueChart
+          title="Gold"
+          points={history.days.map((date, k) => ({ date, value: history.parts.gold![k]! }))}
+          currency={s.currency}
+          range={range}
+          onRange={setRange}
+          note="What is held on each day at that day’s IBJA rate (estimated from GOLDBEES before IBJA’s first day)."
+        />
+      )}
       {s && held.length > 0 && data?.rate && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Tile label="Worth today" value={formatMoney(s.value, s.currency)} />

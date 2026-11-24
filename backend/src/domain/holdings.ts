@@ -91,3 +91,30 @@ export function oversold(trades: Trade[]): boolean {
   }
   return false;
 }
+
+/**
+ * Worth on each of `days` (ascending), the same as `computeHolding(...).value` on each but in
+ * one pass: trades and prices are sorted once and walked forward with the days. 0 where there is
+ * nothing to value (before the first trade, or no price at all).
+ */
+export function valuesOn(trades: Trade[], prices: PricePoint[], days: string[]): number[] {
+  const ts = [...trades].sort((a, b) => a.date.localeCompare(b.date)); // stable: same-day order kept
+  const ps = [...prices].sort((a, b) => a.date.localeCompare(b.date));
+  let units = 0;
+  let last: { date: string; price: number } | null = null;
+  let latest: PricePoint | null = null;
+  let t = 0;
+  let p = 0;
+  return days.map((day) => {
+    for (; t < ts.length && ts[t]!.date <= day; t++) {
+      const tr = ts[t]!;
+      if (tr.type === 'dividend' || tr.type === 'interest') continue;
+      if (tr.units > 0) last = { date: tr.date, price: perUnit(tr.amount, tr.units) };
+      if (tr.type === 'buy') units += tr.units;
+      else units -= Math.min(tr.units, units);
+    }
+    for (; p < ps.length && ps[p]!.date <= day; p++) latest = ps[p]!;
+    const point = latest && (!last || latest.date >= last.date) ? latest : last;
+    return point ? valueOf(units, point.price) : 0;
+  });
+}

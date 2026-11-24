@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { ViewQuery } from '../domain/currency.js';
+import { RangeQuery } from '../domain/history.js';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import {
   AccountCreate,
   AccountUpdate,
+  accountsHistory,
   accountsTotal,
   createAccount,
   deleteAccount,
@@ -24,6 +26,15 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
       app.prisma,
       currentUser(req).familyId,
       parse(ViewQuery, req.query).currency,
+    ),
+  }));
+
+  app.get('/accounts/history', async (req) => ({
+    data: await accountsHistory(
+      app.prisma,
+      currentUser(req).familyId,
+      parse(ViewQuery, req.query).currency,
+      parse(RangeQuery, req.query).range,
     ),
   }));
 

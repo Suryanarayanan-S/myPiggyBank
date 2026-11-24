@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeHolding, oversold, valueOf, type Trade } from '../../src/domain/holdings.js';
+import {
+  computeHolding,
+  oversold,
+  valueOf,
+  valuesOn,
+  type Trade,
+} from '../../src/domain/holdings.js';
 
 const U = 1_000_000; // one unit in micro-units
 const t = (date: string, type: Trade['type'], units: number, amount: number, fees = 0): Trade => ({
@@ -138,5 +144,36 @@ describe('price choice', () => {
       '2026-10-14',
     );
     expect(same).toMatchObject({ priceSource: 'price', value: 101_000 });
+  });
+});
+
+describe('valuesOn', () => {
+  it('gives each day what computeHolding gives, in one pass', () => {
+    const trades: Trade[] = [
+      { date: '2026-01-10', type: 'buy', units: 10_000_000, amount: 100_000, fees: 50 },
+      { date: '2026-02-01', type: 'dividend', units: 0, amount: 500, fees: 0 },
+      { date: '2026-03-05', type: 'sell', units: 4_000_000, amount: 52_000, fees: 20 },
+      { date: '2026-03-05', type: 'buy', units: 1_000_000, amount: 13_500, fees: 0 },
+      { date: '2026-05-01', type: 'sell', units: 99_000_000, amount: 90_000, fees: 0 },
+    ];
+    const prices = [
+      { date: '2026-03-05', price: 12_800_000 },
+      { date: '2026-02-15', price: 11_000_000 },
+      { date: '2026-04-20', price: 14_000_000 },
+    ];
+    const days = [
+      '2026-01-01',
+      '2026-01-10',
+      '2026-02-14',
+      '2026-02-15',
+      '2026-03-05',
+      '2026-04-01',
+      '2026-04-30',
+      '2026-05-01',
+      '2026-06-01',
+    ];
+    expect(valuesOn(trades, prices, days)).toEqual(
+      days.map((d) => computeHolding(trades, prices, d).value ?? 0),
+    );
   });
 });

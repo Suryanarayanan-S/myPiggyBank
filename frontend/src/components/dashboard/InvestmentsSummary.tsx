@@ -9,6 +9,7 @@ import { formatCompact, formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
 import { dayTotal } from '../../lib/portfolio';
 import { useDeposits } from '../../lib/deposits';
+import { useInvestmentHistory } from '../../lib/history';
 import { useGold } from '../../lib/gold';
 import { useViewCurrency, withView } from '../../lib/viewCurrency';
 
@@ -18,8 +19,6 @@ const dayLabel = (d: string) =>
     month: 'short',
     timeZone: 'UTC',
   });
-
-type History = { currency: string; points: { date: string; value: number }[] };
 
 /**
  * Investments at a glance, as one card that opens them: worth today (market, deposits and gold
@@ -33,10 +32,8 @@ export function InvestmentsSummary() {
     queryKey: ['holdings', view],
     queryFn: () => api.get<HoldingsResponse>(withView('/holdings', view)),
   });
-  const history = useQuery({
-    queryKey: ['investment-history', view],
-    queryFn: () => api.get<History>(withView('/investments/history', view)),
-  });
+  // the year, like the other cards (the Investments page has the other ranges)
+  const history = useInvestmentHistory('1y');
   const deposits = useDeposits();
   const gold = useGold().data?.summary;
   const data = q.data;
@@ -78,13 +75,13 @@ export function InvestmentsSummary() {
         color: 'var(--c-cat-4)',
       },
   ].filter((p) => !!p);
-  const points = history.data?.currency === currency ? history.data.points : [];
+  const line = history.data?.currency === currency ? history.data.total : [];
   return (
     <SummaryCard
       to="/investments"
       title="Investments"
       opens="Investments"
-      chart={<Sparkline values={points.map((p) => p.value)} />}
+      chart={<Sparkline values={line} />}
     >
       <Headline>
         <Wealth cents={value} currency={currency} />

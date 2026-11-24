@@ -6,6 +6,10 @@ import { useMe } from '../auth/auth';
 import { DepositForm, useDepositRefresh } from '../components/deposits/DepositForm';
 import { LinkTransactions } from '../components/deposits/LinkTransactions';
 import { Tile } from '../components/investments/Tiles';
+import { Sparkline } from '../components/dashboard/Sparkline';
+import { ValueChart } from '../components/charts/ValueChart';
+import { addSeries, useInvestmentHistory, useRange } from '../lib/history';
+
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -130,6 +134,9 @@ function Movements({ d }: { d: Deposit }) {
 export function DepositsPage() {
   const me = useMe();
   const q = useDeposits();
+  const [range, setRange] = useRange();
+  const history = useInvestmentHistory(range).data;
+  const lineOf = (id: string) => history?.deposits.find((x) => x.id === id)?.values;
   const accounts = useAccounts();
   const members = useMembers();
   const refresh = useDepositRefresh();
@@ -211,6 +218,11 @@ export function DepositsPage() {
                   <span className="text-xs text-slate-500">Worth today </span>
                   <span className="font-semibold">{formatMoney(d.value, d.currency)}</span>
                 </p>
+              )}
+              {d.status !== 'closed' && lineOf(d.id) && (
+                <div className="ml-auto w-32">
+                  <Sparkline values={lineOf(d.id)!} height={32} />
+                </div>
               )}
               {d.maturityAmount !== null && (
                 <p>
@@ -296,6 +308,20 @@ export function DepositsPage() {
           Not in the totals (no exchange rate to {s.currency}):{' '}
           {s.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
         </p>
+      )}
+      {s && history?.currency === s.currency && open.length > 0 && (
+        <ValueChart
+          title="All deposits"
+          points={addSeries(history.days.length, [
+            history.parts.fd,
+            history.parts.rd,
+            history.parts.savings,
+          ]).map((value, i) => ({ date: history.days[i]!, value }))}
+          currency={s.currency}
+          range={range}
+          onRange={setRange}
+          note="Fixed and recurring deposits from their terms, instant access from its linked payments and interest."
+        />
       )}
       {s && open.length > 0 && s.principal > 0 && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">

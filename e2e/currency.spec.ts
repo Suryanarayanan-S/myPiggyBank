@@ -69,7 +69,7 @@ test('"Show in" switches every page to one currency and back to each page defaul
   await expect(showIn).toHaveValue('INR');
   await openSection(page, 'Transactions');
   await page.getByRole('link', { name: 'Accounts' }).first().click();
-  await expect(page.getByText('All open accounts in INR')).toBeVisible();
+  await expect(page.getByText('Cash in your accounts (in INR)')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/23-show-in-inr.png', fullPage: true });
 
   await showIn.selectOption('default');

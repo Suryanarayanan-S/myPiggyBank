@@ -191,23 +191,24 @@ describe('returns of every kind of investment', () => {
     ]);
   });
 
-  it('gives the value week by week over the last year, from the first week anything was held', async () => {
-    expect((await call('GET', '/api/investments/history')).json().data).toEqual({
-      currency: 'INR',
-      points: [],
-    });
+  it('gives the value over a range: all together, each kind and each deposit', async () => {
+    const empty = (await call('GET', '/api/investments/history')).json().data;
+    expect(empty).toMatchObject({ currency: 'INR', parts: {}, deposits: [] });
+    expect(empty.total.every((v: number) => v === 0)).toBe(true);
     const start = ago(100);
-    await call('POST', '/api/deposits', {
-      kind: 'fd',
-      name: 'HDFC',
-      currency: 'INR',
-      principal: 10_000_000,
-      rateBp: 700,
-      startDate: start,
-      maturityDate: addMonths(start, 12),
-      compounding: 'quarterly',
-      interest: 'reinvest',
-    });
+    const fdId = (
+      await call('POST', '/api/deposits', {
+        kind: 'fd',
+        name: 'HDFC',
+        currency: 'INR',
+        principal: 10_000_000,
+        rateBp: 700,
+        startDate: start,
+        maturityDate: addMonths(start, 12),
+        compounding: 'quarterly',
+        interest: 'reinvest',
+      })
+    ).json().data.id;
     // €100 in an ETF 50 days ago, priced at €120 today: ₹12,000 at ₹100 a euro
     const etf = (
       await call('POST', '/api/holdings', { name: 'World ETF', kind: 'etf', currency: 'EUR' })
@@ -221,16 +222,25 @@ describe('returns of every kind of investment', () => {
     await call('POST', `/api/holdings/${etf.id}/prices`, { date: today, price: '120' });
 
     const h = (await call('GET', '/api/investments/history')).json().data;
-    const points = h.points as { date: string; value: number }[];
-    expect(points.at(-1)!.date).toBe(today);
-    expect(points[0]!.date >= start).toBe(true);
-    expect(points[0]!.date < addDays(start, 7)).toBe(true);
-    expect(points[0]!.value).toBeGreaterThanOrEqual(10_000_000);
+    const days = h.days as string[];
+    expect(days.at(-1)).toBe(today);
+    expect(days[0]).toBe(addMonths(today, -12));
+    const at = (series: number[], d: string) => series[days.filter((x) => x <= d).length - 1]!;
+    expect(at(h.total, ago(101))).toBe(0); // before the deposit
     const fdToday = (await call('GET', '/api/deposits')).json().data.deposits[0].value;
-    expect(points.at(-1)!.value).toBe(fdToday + 1_200_000);
-    // weekly, from the deposit's first week
-    expect(points.length).toBeGreaterThanOrEqual(14);
-    expect(points.length).toBeLessThanOrEqual(15);
+    expect(h.total.at(-1)).toBe(fdToday + 1_200_000);
+    expect(h.parts.fd.at(-1)).toBe(fdToday);
+    expect(h.parts.market.at(-1)).toBe(1_200_000);
+    expect(Object.keys(h.parts).sort()).toEqual(['fd', 'market']);
+    expect(h.deposits).toEqual([{ id: fdId, values: h.parts.fd }]);
+
+    // a month: every day; everything: from the deposit's start
+    const month = (await call('GET', '/api/investments/history?range=1m')).json().data;
+    expect(month.days[0]).toBe(addMonths(today, -1));
+    expect(month.days.length).toBeGreaterThanOrEqual(29);
+    const all = (await call('GET', '/api/investments/history?range=all')).json().data;
+    expect(all.days[0]).toBe(start);
+    expect((await call('GET', '/api/investments/history?range=5y')).statusCode).toBe(400);
   });
 
   it('the history keeps an archived holding that was sold, and uses estimated gold rates before IBJA', async () => {
@@ -259,12 +269,11 @@ describe('returns of every kind of investment', () => {
     await point('gold24kEst', ago(400), 5_000);
     await point('gold24k', ago(30), 6_000);
 
-    const points = (await call('GET', '/api/investments/history')).json().data.points as {
-      date: string;
-      value: number;
-    }[];
+    const h = (await call('GET', '/api/investments/history')).json().data;
+    const points = (h.days as string[]).map((date, i) => ({ date, value: h.total[i] as number }));
     const on = (d: string) => points.filter((p) => p.date <= d).at(-1)!.value;
     expect(points[0]!.value).toBe(500_000); // a year ago: the estimate, nothing else held
+    expect(Object.keys(h.parts).sort()).toEqual(['gold', 'market']);
     expect(on(ago(150))).toBe(100_000 + 500_000); // the share (at its trade price) and the coin
     expect(on(ago(50))).toBe(500_000); // sold
     expect(points.at(-1)!.value).toBe(600_000); // IBJA's rate

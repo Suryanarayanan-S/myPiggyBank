@@ -360,6 +360,8 @@ export async function depositSeries(prisma: PrismaClient, familyId: string, days
   const rows = await prisma.deposit.findMany({ where: { familyId } });
   const moves = await movementsOf(prisma, familyId, rows);
   return rows.map((d) => ({
+    id: d.id,
+    kind: d.kind as (typeof KINDS)[number],
     currency: d.currency,
     values: days.map((day) => worth(d, day, moves.get(d.id))?.value ?? 0),
   }));

@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { ValueChart } from '../components/charts/ValueChart';
 import { Returns } from '../components/investments/Returns';
+import { useInvestmentHistory, useRange, type InvestmentPart } from '../lib/history';
 import { Shares, Tile } from '../components/investments/Tiles';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
@@ -25,6 +27,9 @@ export function InvestmentsOverviewPage() {
   });
   const deposits = useDeposits();
   const gold = useGold();
+  const [range, setRange] = useRange();
+  const history = useInvestmentHistory(range);
+  const h = history.data;
   // The holdings list used to live here (…/investments?tab=holdings).
   if (params.get('tab') === 'holdings')
     return <Navigate to="/investments/market?tab=holdings" replace />;
@@ -40,14 +45,26 @@ export function InvestmentsOverviewPage() {
     (deposits.data?.deposits ?? []).some((d) => d.kind === kind && d.status !== 'closed');
   const parts = [
     {
+      key: 'market' as InvestmentPart,
       label: 'Market (shares, funds, ETFs)',
       value: market?.value ?? 0,
       has: (holdings.data?.holdings ?? []).some((h) => !h.archived),
     },
-    { label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
-    { label: 'Recurring deposits', value: inView('rd'), has: open('rd') },
-    { label: 'Instant-access savings', value: inView('savings'), has: open('savings') },
+    { key: 'fd' as InvestmentPart, label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
     {
+      key: 'rd' as InvestmentPart,
+      label: 'Recurring deposits',
+      value: inView('rd'),
+      has: open('rd'),
+    },
+    {
+      key: 'savings' as InvestmentPart,
+      label: 'Instant-access savings',
+      value: inView('savings'),
+      has: open('savings'),
+    },
+    {
+      key: 'gold' as InvestmentPart,
       label: 'Gold (jewellery, coins)',
       value: gold.data?.summary.value ?? 0,
       has: (gold.data?.items ?? []).some((g) => g.status === 'held'),
@@ -105,6 +122,16 @@ export function InvestmentsOverviewPage() {
       )}
       {loaded && anything && (
         <>
+          {h && h.currency === currency && (
+            <ValueChart
+              title="Everything invested"
+              points={h.days.map((date, i) => ({ date, value: h.total[i]! }))}
+              currency={currency}
+              range={range}
+              onRange={setRange}
+              note="Market holdings at their prices then, deposits from their terms, gold at that day’s rate — other currencies at today’s rates."
+            />
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
               label="Total, worth today"
@@ -119,6 +146,7 @@ export function InvestmentsOverviewPage() {
                   label={p.label}
                   value={formatMoney(p.value, currency)}
                   hint={'hint' in p ? p.hint : undefined}
+                  line={h?.currency === currency ? h.parts[p.key] : undefined}
                 />
               ))}
           </div>

@@ -4,6 +4,9 @@ import { Link } from 'react-router';
 import { AlertTriangle, Pencil, Plus, TrendingUp } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { SnapshotHistory } from '../components/wealth/SnapshotHistory';
+import { ValueChart } from '../components/charts/ValueChart';
+import { pointsIn, rangeFrom, useRange } from '../lib/history';
+import { localDay } from '../lib/months';
 import { AssetForm, HistoryForm, LiabilityForm } from '../components/wealth/WealthForms';
 import {
   AllocationBar,
@@ -53,6 +56,7 @@ export function WealthPage() {
   const owner = (id: string | null) =>
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
   const close = () => setDialog(null);
+  const [range, setRange] = useRange();
 
   return (
     <div className="space-y-5">
@@ -88,6 +92,20 @@ export function WealthPage() {
             </Card>
           )}
           <NetWorthHeader data={nw.data} />
+          <ValueChart
+            title="Family net worth"
+            points={pointsIn(
+              nw.data.snapshots
+                .filter((x) => x.currency === nw.data.current.currency)
+                .map((x) => ({ date: x.date, value: x.netWorth })),
+              rangeFrom(range, localDay()),
+              { date: localDay(), value: nw.data.current.netWorth },
+            )}
+            currency={nw.data.current.currency}
+            range={range}
+            onRange={setRange}
+            note="From your snapshots and today’s figure — save a snapshot each month (below) for a fuller line."
+          />
           <MemberTable data={nw.data} />
           <AllocationBar data={nw.data} />
         </>

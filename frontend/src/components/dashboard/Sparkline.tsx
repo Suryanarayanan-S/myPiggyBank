@@ -1,3 +1,4 @@
+import { fromFirstValue } from '../../lib/history';
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, YAxis } from 'recharts';
 
 /**
@@ -6,7 +7,7 @@ import { Line, LineChart, ReferenceLine, ResponsiveContainer, YAxis } from 'rech
  * Decorative: the card says the figures in words.
  */
 export function Sparkline({
-  values,
+  values: all,
   upIsGood = true,
   height = 64,
 }: {
@@ -14,6 +15,7 @@ export function Sparkline({
   upIsGood?: boolean;
   height?: number;
 }) {
+  const values = fromFirstValue(all, (v) => v);
   // one point, or nothing recorded at all: no line to draw
   if (values.length < 2 || values.every((v) => v === 0)) return null;
   const first = values[0]!;
@@ -26,7 +28,9 @@ export function Sparkline({
   // a flat line sits in the middle rather than on the floor
   const pad = hi === lo ? Math.abs(hi) * 0.1 || 1 : (hi - lo) * 0.08;
   return (
-    <div aria-hidden className="w-full" style={{ height }}>
+    // min-w-0 and overflow-hidden: the graph never widens what holds it (in a grid that sets a
+    // resize loop going — the card and the graph keep resizing each other)
+    <div aria-hidden className="w-full min-w-0 overflow-hidden" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 6, right: 6, bottom: 6, left: 2 }}>
           <YAxis hide domain={[lo - pad, hi + pad]} />

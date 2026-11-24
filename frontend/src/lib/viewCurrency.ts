@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { CURRENCIES, type Currency } from './types';
 
 /** "default" = each page's own currency (spending or wealth); otherwise one currency everywhere. */
@@ -30,18 +30,26 @@ export function saveView(view: View, store: Store | undefined = browserStore()) 
 export const withView = (path: string, view: View) =>
   view === 'default' ? path : `${path}${path.includes('?') ? '&' : '?'}currency=${view}`;
 
+/**
+ * The choice for this visit, kept in one place (also when storage is blocked), so a component
+ * that appears just as the choice changes never misses it.
+ */
+let current: View | null = null;
+const listeners = new Set<() => void>();
+const snapshot = () => (current ??= readView());
+const subscribe = (fn: () => void) => {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+};
+function choose(next: View) {
+  saveView(next);
+  current = next;
+  listeners.forEach((fn) => fn());
+}
+export const viewStore = { get: snapshot, set: choose, subscribe };
 /** The chosen view currency, shared by every switch and page on this browser. */
 export function useViewCurrency(): [View, (v: View) => void] {
-  const [view, setView] = useState<View>(() => readView());
-  const choose = useCallback((next: View) => {
-    saveView(next);
-    setView(next);
-    window.dispatchEvent(new CustomEvent('pb-view-currency', { detail: next }));
-  }, []);
-  useEffect(() => {
-    const onChange = (e: Event) => setView((e as CustomEvent<View>).detail);
-    window.addEventListener('pb-view-currency', onChange);
-    return () => window.removeEventListener('pb-view-currency', onChange);
-  }, []);
-  return [view, choose];
+  return [useSyncExternalStore(subscribe, snapshot, () => 'default' as View), choose];
 }

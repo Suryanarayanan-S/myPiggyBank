@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VIEW_KEY, readView, saveView, withView } from './viewCurrency';
+import { VIEW_KEY, readView, saveView, viewStore, withView } from './viewCurrency';
 
 const memory = (init: Record<string, string> = {}) => {
   const data = { ...init };
@@ -42,5 +42,20 @@ describe('view currency', () => {
     expect(withView('/dashboard?from=2026-01&to=2026-09', 'USD')).toBe(
       '/dashboard?from=2026-01&to=2026-09&currency=USD',
     );
+  });
+});
+
+describe('the shared choice', () => {
+  it('is the same for whoever reads it, also after the change', () => {
+    const seen: string[] = [];
+    const stop = viewStore.subscribe(() => seen.push(viewStore.get()));
+    viewStore.set('EUR');
+    // read later (a component that appears after the change) — no event needed
+    expect(viewStore.get()).toBe('EUR');
+    viewStore.set('default');
+    stop();
+    viewStore.set('INR');
+    expect(seen).toEqual(['EUR', 'default']);
+    viewStore.set('default');
   });
 });

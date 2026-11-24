@@ -53,7 +53,10 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await openSection(page, 'Dashboard');
   await page.getByRole('radio', { name: 'Last 3 months' }).click();
   const tile = (label: string) =>
-    page.locator('section', { has: page.getByText(label, { exact: true }) }).first();
+    page
+      .getByRole('link')
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first();
   await expect(tile('Net income')).toContainText('11.250,00 €');
   await expect(tile('Spent')).toContainText('5.308,00 €'); // 3×912 + 172 + 400 + 2000
   await expect(tile('Make Me Rich')).toContainText('680,00 €');
@@ -75,8 +78,8 @@ test('dashboard shows period totals, insights, charts with table views', async (
   await shot(page, '12-dashboard');
 
   // the spending in detail is under Spending → Overview, for the same period
-  await expect(page.getByRole('heading', { name: 'Savings rate' })).toBeHidden();
-  await page.getByRole('link', { name: /Spending → Overview/ }).click();
+  // the figures open it: Spending → Overview for the same period
+  await page.getByRole('link', { name: /^Savings rate — open Spending overview/ }).click();
   await expect(page).toHaveURL(/\/spending\?period=last-3/);
   await expect(page.getByRole('radio', { name: 'Last 3 months' })).toBeChecked();
   for (const title of [

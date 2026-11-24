@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router';
-import clsx from 'clsx';
-import { Card } from '../ui/Card';
+import { Coins, PiggyBank, TrendingUp } from 'lucide-react';
+import { Wealth } from '../wealth/WealthOverview';
+import { Headline, IconRow, SummaryCard, Trend } from './SummaryCard';
 import { api } from '../../lib/api';
 import { gainClass, signed, type HoldingsResponse } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
@@ -21,9 +21,9 @@ const dayLabel = (d: string) =>
   });
 
 /**
- * Investments at a glance: worth now (rupee and euro shares apart when there are both), gain so
- * far, the latest market day's move, the yearly return (XIRR) and this financial year's dividends
- * and interest; deposits and gold.
+ * Investments at a glance, as one card that opens them: worth today (market, deposits and gold
+ * together), the latest market day's move, then the gain so far, the yearly return (XIRR) and
+ * this financial year's dividends and interest in small print; deposits due soon.
  */
 export function InvestmentsSummary() {
   const [view] = useViewCurrency();
@@ -82,118 +82,90 @@ export function InvestmentsSummary() {
     summary && summary.invested > 0
       ? Math.round((summary.unrealised * 10_000) / summary.invested)
       : null;
+  const currency = summary?.currency ?? dep?.currency ?? gold?.currency ?? 'INR';
+  // the three together, in the summary currency (what has no exchange rate is named below)
+  const value = (hasMarket && summary ? summary.value : 0) + (dep?.value ?? 0) + (gold?.value ?? 0);
+  const unconverted = [
+    ...(summary?.unconverted ?? []),
+    ...(dep?.unconverted ?? []),
+    ...(gold?.unconverted ?? []),
+  ];
+  const parts = [
+    hasMarket &&
+      summary && {
+        key: 'market',
+        label: `Market ${formatMoney(summary.value, currency)}`,
+        Icon: TrendingUp,
+        color: 'var(--c-cat-1)',
+      },
+    hasDeposits &&
+      dep && {
+        key: 'deposits',
+        label: `Deposits ${formatMoney(dep.value, currency)}`,
+        Icon: PiggyBank,
+        color: 'var(--c-cat-3)',
+      },
+    hasGold &&
+      gold && {
+        key: 'gold',
+        label: `Gold ${formatMoney(gold.value, currency)}`,
+        Icon: Coins,
+        color: 'var(--c-cat-4)',
+      },
+  ].filter((p) => !!p);
+  const facts = [
+    hasMarket && summary && (
+      <span key="gain" className={gainClass(summary.unrealised)}>
+        {signed(summary.unrealised, summary.currency)}
+        {gainBp !== null && ` (${formatPercent(gainBp)})`} gain
+      </span>
+    ),
+    ...xirrs.map((r) => (
+      <span key={`x-${r.currency}`}>
+        XIRR{' '}
+        <span className={gainClass(r.x!.rate)}>
+          {r.x!.rate >= 0 ? '+' : ''}
+          {formatPercent(Math.round(r.x!.rate * 10_000))}
+        </span>
+        {xirrs.length > 1 && ` ${r.currency}`}
+      </span>
+    )),
+    received.length > 0 && (
+      <span key="div">
+        {received.map((t) => formatMoney(t.amount, t.currency)).join(' + ')} dividends this FY
+      </span>
+    ),
+    currencies.length > 1 && (
+      <span key="cur">{currencies.map((c) => formatMoney(held.get(c)!, c)).join(' · ')}</span>
+    ),
+  ].filter(Boolean);
   return (
-    <Card
-      title="Investments"
-      actions={
-        <Link to="/investments" className="text-sm text-indigo-600 hover:underline">
-          All investments
-        </Link>
-      }
-    >
-      <dl className="flex flex-wrap gap-x-8 gap-y-3">
-        {hasMarket && summary && (
-          <>
-            <div>
-              <dt className="text-xs text-slate-500">Market value</dt>
-              <dd className="text-lg font-semibold tabular-nums">
-                {formatMoney(summary.value, summary.currency)}
-              </dd>
-              {summary.unconverted.length > 0 && (
-                <dd className="text-xs text-amber-700 dark:text-amber-400">
-                  + {summary.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(' + ')}{' '}
-                  without an exchange rate
-                </dd>
-              )}
-            </div>
-            <div>
-              <dt className="text-xs text-slate-500">Gain so far</dt>
-              <dd
-                className={clsx(
-                  'text-lg font-semibold tabular-nums',
-                  gainClass(summary.unrealised),
-                )}
-              >
-                {signed(summary.unrealised, summary.currency)}
-                {gainBp !== null && <span className="ml-1 text-sm">{formatPercent(gainBp)}</span>}
-              </dd>
-            </div>
-            {currencies.length > 1 && (
-              <div>
-                <dt className="text-xs text-slate-500">By currency</dt>
-                <dd className="text-sm font-medium tabular-nums">
-                  {currencies.map((c) => (
-                    <span key={c} className="block">
-                      {formatMoney(held.get(c)!, c)}
-                    </span>
-                  ))}
-                </dd>
-              </div>
-            )}
-            {xirrs.length > 0 && (
-              <div>
-                <dt className="text-xs text-slate-500">XIRR · a year</dt>
-                <dd className="text-lg font-semibold tabular-nums">
-                  {xirrs.map((r) => (
-                    <span key={r.currency} className={clsx('block', gainClass(r.x!.rate))}>
-                      {r.x!.rate >= 0 ? '+' : ''}
-                      {formatPercent(Math.round(r.x!.rate * 10_000))}
-                      {xirrs.length > 1 && (
-                        <span className="ml-1 text-xs font-normal text-slate-500">
-                          {r.currency}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </dd>
-              </div>
-            )}
-            {received.length > 0 && (
-              <div>
-                <dt className="text-xs text-slate-500">Dividends & interest · this FY</dt>
-                <dd className="text-lg font-semibold tabular-nums">
-                  {received.map((t) => formatMoney(t.amount, t.currency)).join(' + ')}
-                </dd>
-              </div>
-            )}
-            {day && (
-              <div>
-                <dt className="text-xs text-slate-500">Day · {dayLabel(day.date)}</dt>
-                <dd className={clsx('text-lg font-semibold tabular-nums', gainClass(day.pnl))}>
-                  {signed(day.pnl, summary.currency)}
-                  <span className="ml-1 text-sm">{formatPercent(day.changeBp)}</span>
-                </dd>
-              </div>
-            )}
-          </>
-        )}
-        {hasDeposits && (
-          <div>
-            <dt className="text-xs text-slate-500">Deposits</dt>
-            <dd className="text-lg font-semibold tabular-nums">
-              {/* without an exchange rate: in their own currency */}
-              {[
-                ...(dep.value !== 0 ? [formatMoney(dep.value, dep.currency)] : []),
-                ...dep.unconverted.map((u) => formatMoney(u.amount, u.currency)),
-              ].join(' + ')}
-            </dd>
-          </div>
-        )}
-        {hasGold && (
-          <div>
-            <dt className="text-xs text-slate-500">Gold</dt>
-            <dd className="text-lg font-semibold tabular-nums">
-              {/* without an exchange rate: in rupees */}
-              {[
-                ...(gold.value !== 0 ? [formatMoney(gold.value, gold.currency)] : []),
-                ...gold.unconverted.map((u) => formatMoney(u.amount, u.currency)),
-              ].join(' + ')}
-            </dd>
-          </div>
-        )}
-      </dl>
+    <SummaryCard to="/investments" title="Investments" opens="Investments">
+      <Headline>
+        <Wealth cents={value} currency={currency} />
+      </Headline>
+      {day && summary && (
+        <Trend diff={day.pnl}>
+          <span className="whitespace-nowrap">
+            {signed(day.pnl, summary.currency)} ({formatPercent(Math.abs(day.changeBp))})
+          </span>
+          <span className="text-slate-500">on {dayLabel(day.date)}</span>
+        </Trend>
+      )}
+      {facts.length > 0 && (
+        <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500 tabular-nums dark:text-slate-400">
+          {facts}
+        </p>
+      )}
+      <IconRow parts={parts} label="Made of" />
+      {unconverted.length > 0 && (
+        <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+          Not in the total (no exchange rate):{' '}
+          {unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
+        </p>
+      )}
       {soon.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+        <ul className="mt-3 space-y-0.5 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
           {soon.map((d) => (
             <li key={d.id}>
               <span className="font-medium">{d.name}</span> {d.daysLeft > 0 ? 'matures' : 'matured'}{' '}
@@ -203,6 +175,6 @@ export function InvestmentsSummary() {
           ))}
         </ul>
       )}
-    </Card>
+    </SummaryCard>
   );
 }

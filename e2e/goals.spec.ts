@@ -64,7 +64,9 @@ test('a goal fills from a linked account and entries, and shows on the dashboard
   await shot(page, '24-goals');
 
   await openSection(page, 'Dashboard');
-  const summary = page.locator('section', { has: page.getByRole('heading', { name: 'Goals' }) });
+  const summary = page.getByRole('link', { name: /^Goals — open all goals/ });
   await expect(summary).toContainText('House deposit');
   await expect(summary).toContainText('2.500,00 € of 10.000,00 €');
+  await summary.click();
+  await expect(page).toHaveURL(/\/wealth\/goals$/);
 });

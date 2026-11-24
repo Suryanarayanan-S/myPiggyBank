@@ -113,11 +113,10 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
   // The Dashboard shows the day's move too (in euros, the summary currency here).
   await openSection(page, 'Dashboard');
-  const invest = page.locator('section', {
-    has: page.getByRole('heading', { name: 'Investments' }),
-  });
+  const invest = page.getByRole('link', { name: /^Investments — open Investments/ });
   await expect(invest).toContainText('1.506,25 €');
   await expect(invest).toContainText('+31,25 €');
+  await shot(page, '42-dashboard-cards');
   await openSection(page, 'Investments');
   await page
     .getByRole('navigation', { name: 'Investments pages' })

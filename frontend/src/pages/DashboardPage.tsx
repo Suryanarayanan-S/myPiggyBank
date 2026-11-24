@@ -12,6 +12,9 @@ import { StatTiles } from '../components/dashboard/StatTiles';
 import { useDashboardPeriod } from '../components/dashboard/useDashboardPeriod';
 import { StatusBadge } from '../components/goals/GoalCard';
 import { Card } from '../components/ui/Card';
+import { Headline, SummaryCard } from '../components/dashboard/SummaryCard';
+import { Wealth } from '../components/wealth/WealthOverview';
+import type { Dashboard } from '../lib/dashboardTypes';
 import { Progress } from '../components/ui/Progress';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
@@ -32,6 +35,11 @@ export function DashboardPage() {
     queryFn: () => api.get<InsightsResponse>(withView('/insights', view)),
   });
 
+  // Spending → Overview for the same period (savings rate, 50/30/20, where the money went)
+  const spendingLink = `/spending?${new URLSearchParams(
+    preset === 'custom' ? { period: preset, from: custom.from, to: custom.to } : { period: preset },
+  )}`;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -44,9 +52,11 @@ export function DashboardPage() {
       </div>
       {/* today's picture first (each loads on its own), then the chosen period's figures */}
       <Attention uncategorised={d?.uncategorised ?? null} />
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+      {/* where things stand today: each card opens its page */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <NetWorthSummary />
         <InvestmentsSummary />
+        {d && <CashSummary d={d} />}
       </div>
       <PeriodFilter preset={preset} custom={custom} onChange={change} />
       <FormError error={dash.error} />
@@ -87,7 +97,7 @@ export function DashboardPage() {
               </p>
             </Card>
           )}
-          <StatTiles d={d} />
+          <StatTiles d={d} to={spendingLink} />
           {(!d.previous && d.previousCoverage.recorded > 0) || range.to === today ? (
             <p className="-mt-2 text-xs text-slate-500">
               {!d.previous && d.previousCoverage.recorded > 0
@@ -112,75 +122,21 @@ export function DashboardPage() {
             ]}
           />
           <CashFlowChart d={d} />
-          <p className="-mt-2 text-sm">
-            <Link
-              to={`/spending?${new URLSearchParams(
-                preset === 'custom'
-                  ? { period: preset, from: custom.from, to: custom.to }
-                  : { period: preset },
-              )}`}
-              className="text-indigo-600 hover:underline"
-            >
-              Savings rate, 50/30/20 and where the money went: Spending → Overview
-            </Link>
-          </p>
           <GoalsSummary />
-          {d.accounts.length > 0 && (
-            <Card title="Account balances today">
-              <dl className="flex flex-wrap gap-x-8 gap-y-2">
-                {(d.accounts.length > 1 || d.accounts[0]?.currency !== d.currency) && (
-                  <div>
-                    <dt className="text-xs text-slate-500">All accounts in {d.currency}</dt>
-                    <dd className="text-lg font-semibold">
-                      {formatMoney(d.accountsTotal.total, d.currency)}
-                      {d.accountsTotal.unconverted.length > 0 && (
-                        <span className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400">
-                          +{' '}
-                          {d.accountsTotal.unconverted
-                            .map((u) => formatMoney(u.amount, u.currency))
-                            .join(' + ')}{' '}
-                          without a rate
-                        </span>
-                      )}
-                    </dd>
-                  </div>
-                )}
-                {d.accounts.map((a) => (
-                  <div key={a.currency}>
-                    <dt className="text-xs text-slate-500">{a.currency} accounts</dt>
-                    <dd className="text-lg font-semibold">{formatMoney(a.balance, a.currency)}</dd>
-                  </div>
-                ))}
-              </dl>
-              <Link
-                to="/transactions/accounts"
-                className="mt-2 inline-block text-sm text-indigo-600 hover:underline"
-              >
-                See accounts
-              </Link>
-            </Card>
-          )}
         </div>
       )}
     </div>
   );
 }
 
-/** Up to three active goals, nearest date first; hidden when there are none. */
+/** Up to three active goals, nearest date first; the card opens all goals. Hidden without any. */
 function GoalsSummary() {
   const goals = useGoals();
   const active = (goals.data ?? []).filter((g) => g.status === 'active').slice(0, 3);
   if (active.length === 0) return null;
   return (
-    <Card
-      title="Goals"
-      actions={
-        <Link to="/wealth/goals" className="text-sm text-indigo-600 hover:underline">
-          All goals
-        </Link>
-      }
-    >
-      <ul className="space-y-4">
+    <SummaryCard to="/wealth/goals" title="Goals" opens="all goals">
+      <ul className="mt-3 space-y-4">
         {active.map((g) => (
           <li key={g.id}>
             <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
@@ -198,6 +154,37 @@ function GoalsSummary() {
           </li>
         ))}
       </ul>
-    </Card>
+    </SummaryCard>
+  );
+}
+
+/** Money in the accounts today (all currencies in the dashboard one); the card opens Accounts. */
+function CashSummary({ d }: { d: Dashboard }) {
+  if (d.accounts.length === 0) return null;
+  const t = d.accountsTotal;
+  const several = d.accounts.length > 1 || d.accounts[0]?.currency !== d.currency;
+  return (
+    <SummaryCard to="/transactions/accounts" title="Cash" opens="Accounts">
+      <Headline>
+        <Wealth cents={several ? t.total : d.accounts[0]!.balance} currency={d.currency} />
+      </Headline>
+      <p className="mt-1 text-sm text-slate-500">in your accounts today</p>
+      {several && (
+        <ul className="mt-4 space-y-1 text-sm" aria-label="By currency">
+          {d.accounts.map((a) => (
+            <li key={a.currency} className="flex justify-between gap-3">
+              <span className="text-slate-500">{a.currency} accounts</span>
+              <span className="font-medium tabular-nums">{formatMoney(a.balance, a.currency)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {t.unconverted.length > 0 && (
+        <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+          Not in the total (no exchange rate):{' '}
+          {t.unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
+        </p>
+      )}
+    </SummaryCard>
   );
 }

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
-import { Card } from '../ui/Card';
+import { Link } from 'react-router';
+import { ArrowDownRight, ArrowUpRight, ChevronRight } from 'lucide-react';
 import type { Dashboard, Totals } from '../../lib/dashboardTypes';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
@@ -34,7 +34,12 @@ const tiles = (
   { key: 'unused', label: 'Unused', hint: 'left over', upIsGood: true },
 ];
 
-export function StatTiles({ d }: { d: Dashboard }) {
+/** The look of a card that is a link (as SummaryCard), at a tile's size. */
+const TILE =
+  'group block rounded-xl border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/60';
+
+/** The period's figures; each opens Spending → Overview for the same period (`to`). */
+export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
   const names = useBucketNames();
   const { totals: t, previous: p, currency } = d;
   const money = (c: number) => formatMoney(c, currency);
@@ -43,8 +48,16 @@ export function StatTiles({ d }: { d: Dashboard }) {
     p?.savingsRateBp != null && t.savingsRateBp !== null ? t.savingsRateBp - p.savingsRateBp : null;
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(14rem,18rem)_1fr]">
-      <Card className="flex flex-col justify-center">
-        <p className="text-sm font-medium text-slate-500">Savings rate</p>
+      <Link to={to} className={clsx(TILE, 'flex flex-col justify-center p-5')}>
+        <h2 className="flex items-center gap-0.5 text-sm font-medium text-slate-500">
+          Savings rate
+          <ChevronRight
+            size={16}
+            className="transition-transform group-hover:translate-x-0.5"
+            aria-hidden
+          />
+          <span className="sr-only">— open Spending overview</span>
+        </h2>
         <p className="text-5xl font-semibold tracking-tight">{formatPercent(t.savingsRateBp)}</p>
         <p className="mt-1 text-xs text-slate-500">({names.future} + unused) ÷ net income</p>
         {rateDiff !== null && (
@@ -54,12 +67,12 @@ export function StatTiles({ d }: { d: Dashboard }) {
             text={`${rateDiff > 0 ? '+' : '−'}${(Math.abs(rateDiff) / 100).toFixed(1)} pp`}
           />
         )}
-      </Card>
+      </Link>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {tiles(names).map((tile) => {
           const value = t[tile.key] as number;
           return (
-            <Card key={tile.key} className="!p-4">
+            <Link key={tile.key} to={to} className={clsx(TILE, 'p-4')}>
               <p className="text-xs font-medium text-slate-500">{tile.label}</p>
               <p
                 className={clsx(
@@ -81,7 +94,7 @@ export function StatTiles({ d }: { d: Dashboard }) {
                   text={signed(value - (p[tile.key] as number))}
                 />
               )}
-            </Card>
+            </Link>
           );
         })}
       </div>

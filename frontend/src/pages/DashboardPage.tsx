@@ -3,18 +3,16 @@ import { Link } from 'react-router';
 import { AlertTriangle } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { Attention } from '../components/dashboard/Attention';
-import { CashFlowChart } from '../components/dashboard/CashFlowChart';
 import { Insights } from '../components/dashboard/Insights';
 import { InvestmentsSummary } from '../components/dashboard/InvestmentsSummary';
 import { NetWorthSummary } from '../components/dashboard/NetWorthSummary';
 import { PeriodFilter } from '../components/dashboard/PeriodFilter';
-import { StatTiles } from '../components/dashboard/StatTiles';
+import { PeriodSummary } from '../components/dashboard/PeriodSummary';
+import { PRESETS } from '../lib/periods';
 import { useDashboardPeriod } from '../components/dashboard/useDashboardPeriod';
 import { StatusBadge } from '../components/goals/GoalCard';
 import { Card } from '../components/ui/Card';
 import { Headline, SummaryCard } from '../components/dashboard/SummaryCard';
-import { Sparkline } from '../components/dashboard/Sparkline';
-import { useAccountsHistory } from '../lib/history';
 import { Wealth } from '../components/wealth/WealthOverview';
 import type { Dashboard } from '../lib/dashboardTypes';
 import { Progress } from '../components/ui/Progress';
@@ -42,34 +40,38 @@ export function DashboardPage() {
     preset === 'custom' ? { period: preset, from: custom.from, to: custom.to } : { period: preset },
   )}`;
 
+  // nothing recorded in the period: say so instead of a card of zeros
+  const empty = !!d && d.totals.netIncome === 0 && d.totals.spent === 0 && d.totals.future === 0;
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {me.data ? `Hello, ${me.data.user.name}` : 'Dashboard'}
-          </h1>
-          <p className="text-sm text-slate-500">{label}</p>
-        </div>
-      </div>
-      {/* today's picture first (each loads on its own), then the chosen period's figures */}
-      <Attention uncategorised={d?.uncategorised ?? null} />
-      {/* where things stand today: each card opens its page */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <NetWorthSummary />
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {me.data ? `Hello, ${me.data.user.name}` : 'Dashboard'}
+      </h1>
+      {/* where things stand today, each card opening its page: net worth big on the left,
+          investments and cash stacked beside it */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <NetWorthSummary className="lg:col-span-2 lg:row-span-2" />
         <InvestmentsSummary />
         {d && <CashSummary d={d} />}
       </div>
-      <PeriodFilter preset={preset} custom={custom} onChange={change} />
-      <FormError error={dash.error} />
 
+      {/* the chosen period */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <h2 className="text-base font-semibold tracking-tight">
+          {PRESETS.find((p) => p.value === preset)?.label ?? 'Period'}{' '}
+          <span className="text-sm font-normal text-slate-500">{label}</span>
+        </h2>
+        <PeriodFilter preset={preset} custom={custom} onChange={change} />
+      </div>
+      <FormError error={dash.error} />
       {d && (
         <div
           className={
-            dash.isPlaceholderData ? 'space-y-5 opacity-60 transition-opacity' : 'space-y-5'
+            dash.isPlaceholderData ? 'space-y-4 opacity-60 transition-opacity' : 'space-y-4'
           }
         >
-          {d.totals.netIncome === 0 && d.totals.spent === 0 && d.totals.future === 0 ? (
+          {empty ? (
             <Card>
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 Nothing recorded for this period yet. Add transactions, use{' '}
@@ -99,7 +101,7 @@ export function DashboardPage() {
               </p>
             </Card>
           )}
-          <StatTiles d={d} to={spendingLink} />
+          {!empty && <PeriodSummary d={d} to={spendingLink} />}
           {(!d.previous && d.previousCoverage.recorded > 0) || range.to === today ? (
             <p className="-mt-2 text-xs text-slate-500">
               {!d.previous && d.previousCoverage.recorded > 0
@@ -110,6 +112,12 @@ export function DashboardPage() {
                 : ''}
             </p>
           ) : null}
+        </div>
+      )}
+      {/* what needs a look, what the numbers say, and the goals — side by side */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Attention uncategorised={d?.uncategorised ?? null} />
+        {d && (
           <Insights
             more
             failed={observations.isError}
@@ -123,10 +131,9 @@ export function DashboardPage() {
               ...insightsFor(d.totals, d.previous, d.targets, d.currency, d.categories, names),
             ]}
           />
-          <CashFlowChart d={d} />
-          <GoalsSummary />
-        </div>
-      )}
+        )}
+        <GoalsSummary />
+      </div>
     </div>
   );
 }
@@ -160,33 +167,38 @@ function GoalsSummary() {
   );
 }
 
-/** Money in the accounts today (all currencies in the dashboard one); the card opens Accounts. */
+/** Money in the accounts today: the total (in the dashboard's currency) and each currency's
+ *  accounts, rounded; the card opens Accounts. */
 function CashSummary({ d }: { d: Dashboard }) {
-  // in the dashboard's currency (spending), as the figure beside it
-  const history = useAccountsHistory('1y', d.currency).data;
   if (d.accounts.length === 0) return null;
   const t = d.accountsTotal;
   const several = d.accounts.length > 1 || d.accounts[0]?.currency !== d.currency;
   return (
     <SummaryCard
       to="/transactions/accounts"
-      title="Cash"
+      title="Cash in accounts"
       opens="Accounts"
-      chart={history?.currency === d.currency ? <Sparkline values={history.total} /> : undefined}
+      className="flex flex-col"
     >
       <Headline>
         <Wealth cents={several ? t.total : d.accounts[0]!.balance} currency={d.currency} />
       </Headline>
-      <p className="mt-1 text-sm text-slate-500">in your accounts today</p>
-      {several && (
-        <ul className="mt-4 space-y-1 text-sm" aria-label="By currency">
+      {several ? (
+        <ul className="mt-auto space-y-1.5 pt-3 text-sm" aria-label="By currency">
           {d.accounts.map((a) => (
-            <li key={a.currency} className="flex justify-between gap-3">
-              <span className="text-slate-500">{a.currency} accounts</span>
-              <span className="font-medium tabular-nums">{formatMoney(a.balance, a.currency)}</span>
+            <li
+              key={a.currency}
+              className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-1.5 dark:bg-slate-800/50"
+            >
+              <span className="text-slate-600 dark:text-slate-300">{a.currency} accounts</span>
+              <span className="font-medium tabular-nums">
+                <Wealth cents={a.balance} currency={a.currency} />
+              </span>
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="mt-1 text-sm text-slate-500">in your accounts today</p>
       )}
       {t.unconverted.length > 0 && (
         <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">

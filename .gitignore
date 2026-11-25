@@ -16,3 +16,4 @@ test-results/
 backend/test/.tmp/
 e2e/.tmp/
 e2e/screenshots/
+.superdesign/

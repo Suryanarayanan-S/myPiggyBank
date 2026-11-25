@@ -22,6 +22,7 @@ export function Spikes({
     <div aria-hidden className="w-full min-w-0 overflow-hidden" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
+          accessibilityLayer={false}
           data={data}
           margin={{ top: 4, right: 4, bottom: 0, left: 4 }}
           barCategoryGap="30%"

@@ -111,11 +111,12 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('+31,25 €');
   await expect(contrib.getByLabel('Top performers of the day')).toContainText('2.1 %');
   await expect(contrib.getByLabel('Top decliners of the day')).toContainText('None');
-  // The Dashboard shows the day's move too (in euros, the summary currency here).
+  // The Dashboard shows the total (in euros, the summary currency here).
   await openSection(page, 'Dashboard');
   const invest = page.getByRole('link', { name: /^Investments — open Investments/ });
   await expect(invest).toContainText('1.506,25 €');
-  await expect(invest).toContainText('+31,25 € (2.1 %)'); // small moves exact, large ones rounded
+  // just the total and its line: the day's move is a click away
+  await expect(invest).not.toContainText('31,25');
   await shot(page, '42-dashboard-cards');
   await openSection(page, 'Investments');
   await expect(page.getByRole('heading', { name: 'By type' })).toBeVisible();

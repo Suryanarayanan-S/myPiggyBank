@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Home, Landmark, Package, TrendingUp, type LucideIcon } from 'lucide-react';
+import clsx from 'clsx';
 import { Wealth } from '../wealth/WealthOverview';
-import { Headline, IconRow, SummaryCard, Trend } from './SummaryCard';
-import { Sparkline } from './Sparkline';
+import { SummaryCard, Trend } from './SummaryCard';
+import { AreaLine, BAD, FLAT, GOOD, dayLabel } from '../charts/AreaLine';
+import { Ring } from '../charts/Ring';
 import { localDay } from '../../lib/months';
 import { api } from '../../lib/api';
 import { formatCompact } from '../../lib/money';
@@ -14,26 +15,19 @@ import {
   type NetWorthResponse,
 } from '../../lib/wealthTypes';
 
-const CLASS_ICON: Record<AssetClass, LucideIcon> = {
-  liquid: Landmark,
-  property: Home,
-  investment: TrendingUp,
-  other: Package,
-};
-
-const sinceLabel = (d: string) =>
+const monthLabel = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',
   });
 
 /**
- * The family's net worth today and its change since the last snapshot a month back, with what
- * it is made of as a row of icons. The whole card opens Family wealth.
+ * The family's net worth today as the dashboard's big card: the figure, how much it moved since
+ * the first snapshot, what it is made of (a ring and a legend, largest first), and every
+ * snapshot since as a line ending today. The whole card opens Family wealth.
  */
-export function NetWorthSummary() {
+export function NetWorthSummary({ className }: { className?: string }) {
   const [view] = useViewCurrency();
   // the same request as the Wealth page, so the two share it
   const q = useQuery({
@@ -43,47 +37,86 @@ export function NetWorthSummary() {
   const data = q.data;
   if (!data || (data.current.assets === 0 && data.current.liabilities === 0)) return null;
   const c = data.current;
-  const then = data.previousMonth;
-  const diff = then ? c.netWorth - then.netWorth : 0;
+  // every snapshot in this currency, oldest first, then today
+  const snaps = data.snapshots
+    .filter((s) => s.currency === c.currency && s.date < localDay())
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const points = [
+    ...snaps.map((s) => ({ t: Date.parse(`${s.date}T00:00:00Z`), v: s.netWorth })),
+    { t: Date.parse(`${localDay()}T00:00:00Z`), v: c.netWorth },
+  ];
+  const first = snaps[0];
+  const diff = first ? c.netWorth - first.netWorth : 0;
+  const pct = first && first.netWorth > 0 ? (diff / first.netWorth) * 100 : null;
+  const color = diff === 0 ? FLAT : diff > 0 ? GOOD : BAD;
   // largest first, like the breakdown on Family wealth
   const parts = (Object.keys(CLASSES) as AssetClass[])
     .filter((k) => c.byClass[k] > 0)
-    .sort((a, b) => c.byClass[b] - c.byClass[a])
-    .map((k) => ({
-      key: k,
-      label: `${CLASSES[k]} ${formatCompact(c.byClass[k], c.currency)}`,
-      Icon: CLASS_ICON[k],
-      color: CLASS_COLOR[k],
-    }));
-  // the snapshots of the last year in this currency, and today
-  const yearAgo = `${Number(localDay().slice(0, 4)) - 1}${localDay().slice(4)}`;
-  const line = [
-    ...data.snapshots
-      .filter((s) => s.currency === c.currency && s.date >= yearAgo)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((s) => s.netWorth),
-    c.netWorth,
-  ];
+    .sort((a, b) => c.byClass[b] - c.byClass[a]);
   return (
     <SummaryCard
       to="/wealth"
       title="Net worth"
       opens="Family wealth"
-      chart={<Sparkline values={line} />}
+      className={clsx('flex flex-col', className)}
     >
-      <Headline>
-        <Wealth cents={c.netWorth} currency={c.currency} />
-      </Headline>
-      {then && (
-        <Trend diff={diff}>
-          <span className="whitespace-nowrap">
-            {diff >= 0 ? '+' : '−'}
-            {formatCompact(Math.abs(diff), c.currency)}
-          </span>
-          <span className="text-slate-500">since {sinceLabel(then.date)}</span>
-        </Trend>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="mt-0.5 text-4xl font-semibold tracking-tight tabular-nums">
+            <Wealth cents={c.netWorth} currency={c.currency} />
+          </p>
+          {first && (
+            <Trend diff={diff}>
+              <span className="whitespace-nowrap tabular-nums">
+                {diff > 0 ? '+' : diff < 0 ? '−' : ''}
+                {formatCompact(Math.abs(diff), c.currency)}
+                {pct !== null && ` (${Math.abs(pct).toFixed(1)} %)`}
+              </span>
+              <span className="text-slate-500">since {monthLabel(first.date)}</span>
+            </Trend>
+          )}
+        </div>
+        {parts.length > 0 && (
+          <div className="flex items-center gap-4">
+            <ul className="space-y-1 text-xs" aria-label="Made of">
+              {parts.map((k) => (
+                <li key={k} className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="size-2.5 shrink-0 rounded-sm"
+                    style={{ background: CLASS_COLOR[k] }}
+                  />
+                  <span className="text-slate-600 dark:text-slate-300">{CLASSES[k]}</span>
+                  <span className="ml-auto pl-3 text-slate-500 tabular-nums">
+                    {formatCompact(c.byClass[k], c.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Ring
+              size={76}
+              slices={parts.map((k) => ({ key: k, value: c.byClass[k], color: CLASS_COLOR[k] }))}
+            />
+          </div>
+        )}
+      </div>
+      {points.length > 1 ? (
+        <>
+          <div className="mt-3 min-w-0 flex-1">
+            <AreaLine data={points} currency={c.currency} color={color} height={150} decorative />
+          </div>
+          <p className="mt-1 flex justify-between text-xs text-slate-500 tabular-nums">
+            <span>Since {dayLabel(points[0]!.t, true)} · first snapshot</span>
+            <span>{dayLabel(points.at(-1)!.t, true)}</span>
+          </p>
+        </>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">
+          {data.snapshots.some((s) => s.currency === c.currency)
+            ? 'Your line starts with the next snapshot — today’s is the figure above.'
+            : 'Save a snapshot on Family wealth now and then, and the line of your net worth grows here.'}
+        </p>
       )}
-      <IconRow parts={parts} label="Made of" />
       {c.unconverted.length > 0 && (
         <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
           Some amounts have no exchange rate and are left out.

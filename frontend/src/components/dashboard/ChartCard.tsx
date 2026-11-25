@@ -10,9 +10,12 @@ export function ChartCard({
   legend,
   table,
   controls,
+  bare = false,
   children,
 }: {
   title: string;
+  /** without its own frame, as part of another card */
+  bare?: boolean;
   subtitle?: string;
   legend?: LegendItem[];
   table: ReactNode;
@@ -21,25 +24,24 @@ export function ChartCard({
   children: ReactNode;
 }) {
   const [showTable, setShowTable] = useState(false);
-  return (
-    <Card
-      title={
-        <span>
-          {title}
-          {subtitle && <span className="block text-xs font-normal text-slate-500">{subtitle}</span>}
-        </span>
-      }
-      actions={
-        <button
-          type="button"
-          className="rounded-md px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-slate-800"
-          aria-pressed={showTable}
-          onClick={() => setShowTable(!showTable)}
-        >
-          {showTable ? 'Show chart' : 'Show table'}
-        </button>
-      }
+  const toggle = (
+    <button
+      type="button"
+      className="rounded-md px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-slate-800"
+      aria-pressed={showTable}
+      onClick={() => setShowTable(!showTable)}
     >
+      {showTable ? 'Show chart' : 'Show table'}
+    </button>
+  );
+  const head = (
+    <span>
+      {title}
+      {subtitle && <span className="block text-xs font-normal text-slate-500">{subtitle}</span>}
+    </span>
+  );
+  const body = (
+    <>
       {controls}
       {legend && legend.length > 1 && (
         <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
@@ -65,6 +67,21 @@ export function ChartCard({
         </ul>
       )}
       {showTable ? <div className="max-h-80 overflow-auto">{table}</div> : children}
+    </>
+  );
+  if (bare)
+    return (
+      <section>
+        <header className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400">{head}</h2>
+          {toggle}
+        </header>
+        {body}
+      </section>
+    );
+  return (
+    <Card title={head} actions={toggle}>
+      {body}
     </Card>
   );
 }

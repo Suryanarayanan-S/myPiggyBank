@@ -99,7 +99,8 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   // whole card opens Family wealth
   await openSection(page, 'Dashboard');
   const worth = page.getByRole('link', { name: /Net worth.*open Family wealth/ });
-  await expect(worth).toContainText('since 26 Jan 2024');
+  await expect(worth).toContainText('since Jan 2024'); // the change since the first snapshot
+  await expect(worth).toContainText('Since 26 Jan 2024 · first snapshot');
   await expect(worth.getByRole('list', { name: 'Made of' })).toContainText('Property');
   await worth.screenshot({ path: 'e2e/screenshots/dashboard-net-worth.png' });
   await worth.click();

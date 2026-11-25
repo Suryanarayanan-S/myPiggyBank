@@ -13,6 +13,7 @@ export function SummaryCard({
   opens,
   className,
   chart,
+  chartBelow = false,
   children,
 }: {
   to: string;
@@ -21,6 +22,8 @@ export function SummaryCard({
   className?: string;
   /** a small graph beside the figures (below them on narrow cards) */
   chart?: ReactNode;
+  /** the graph under the figures, filling the rest of the card */
+  chartBelow?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -40,7 +43,12 @@ export function SummaryCard({
         />
         <span className="sr-only">— open {opens}</span>
       </h2>
-      {chart ? (
+      {chart && chartBelow ? (
+        <>
+          {children}
+          <div className="mt-auto min-w-0 pt-3">{chart}</div>
+        </>
+      ) : chart ? (
         // the figures keep their width; the graph takes the rest of the row (like a banking app)
         <div className="grid grid-cols-[auto_minmax(5rem,1fr)] items-center gap-x-4">
           <div className="min-w-0">{children}</div>

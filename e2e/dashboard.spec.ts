@@ -59,7 +59,7 @@ test('dashboard shows period totals, insights, charts with table views', async (
       .first();
   await expect(tile('Net income')).toContainText('11.250,00 €');
   await expect(tile('Spent')).toContainText('5.308,00 €'); // 3×912 + 172 + 400 + 2000
-  await expect(tile('Make Me Rich')).toContainText('680,00 €');
+  await expect(tile('Net cashflow')).toContainText('5.942,00 €'); // in − spent
   await expect(page.getByText('Financial insights')).toBeVisible();
   await expect(
     page

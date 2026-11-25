@@ -33,7 +33,11 @@ export function Sparkline({
     // resize loop going — the card and the graph keep resizing each other)
     <div aria-hidden className="w-full min-w-0 overflow-hidden" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 6, left: 2 }}>
+        <LineChart
+          accessibilityLayer={false}
+          data={data}
+          margin={{ top: 8, right: 8, bottom: 6, left: 2 }}
+        >
           <YAxis hide domain={[lo - pad, hi + pad]} />
           <ReferenceLine
             y={first}

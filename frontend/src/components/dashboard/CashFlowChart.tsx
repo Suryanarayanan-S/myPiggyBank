@@ -26,7 +26,15 @@ import { cashFlowRows } from '../../lib/cashflow';
 import { formatCompact, formatMoney } from '../../lib/money';
 import { useBucketNames } from '../../lib/buckets';
 
-export function CashFlowChart({ d }: { d: Dashboard }) {
+/**
+ * Each month's income and where it went: Keep Me Alive, Make Me Happy and Make Me Rich as
+ * rounded pills stacked with small gaps, net income as a dashed line; a table view too.
+ * `bare`: inside another card (the dashboard's period card) — no frame, no axis, lower.
+ */
+/** every piece of a month's stack a pill of its own */
+const PILL: [number, number, number, number] = [6, 6, 6, 6];
+
+export function CashFlowChart({ d, bare = false }: { d: Dashboard; bare?: boolean }) {
   const names = useBucketNames();
   const data = cashFlowRows(d.months);
   const hasUncategorised = data.some((m) => m.uncategorised > 0);
@@ -34,14 +42,19 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
   const ticks = niceTicks(Math.max(0, ...data.map((m) => Math.max(m.netIncome, m.stackTop))));
   return (
     <ChartCard
+      bare={bare}
       title="Income and where it went"
-      subtitle={`Per month: ${names.essentials}, ${names.fun} and ${names.future}, with net income as a line`}
+      subtitle={
+        bare
+          ? undefined
+          : `Per month: ${names.essentials}, ${names.fun} and ${names.future}, with net income as a line`
+      }
       legend={[
         { label: names.essentials, color: BUCKET_COLOR.essentials },
         ...(hasUncategorised ? [{ label: 'Uncategorised', color: MUTED }] : []),
         { label: names.fun, color: BUCKET_COLOR.fun },
         { label: names.future, color: BUCKET_COLOR.future },
-        { label: 'Net income', color: INK, shape: 'line' },
+        { label: 'Net income', color: INK, shape: 'dash' },
       ]}
       table={
         <DataTable
@@ -66,19 +79,20 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
         />
       }
     >
-      <div className="h-72">
+      <div className={bare ? 'h-36' : 'h-72'}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} stroke={GRID} />
+            <CartesianGrid vertical={false} stroke={GRID} strokeOpacity={bare ? 0.6 : 1} />
             <XAxis
               dataKey="label"
               tick={axisTick}
               tickLine={false}
-              axisLine={{ stroke: AXIS }}
+              axisLine={bare ? false : { stroke: AXIS }}
               interval="preserveStartEnd"
               minTickGap={16}
             />
             <YAxis
+              hide={bare}
               ticks={ticks}
               domain={[ticks[0]!, ticks.at(-1)!]}
               tick={axisTick}
@@ -133,8 +147,9 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
               stackId="s"
               fill={BUCKET_COLOR.essentials}
               stroke={SURFACE}
-              strokeWidth={1}
-              maxBarSize={24}
+              strokeWidth={2}
+              radius={PILL}
+              maxBarSize={bare ? 14 : 20}
               isAnimationActive={false}
             />
             <Bar
@@ -143,8 +158,9 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
               stackId="s"
               fill={MUTED}
               stroke={SURFACE}
-              strokeWidth={1}
-              maxBarSize={24}
+              strokeWidth={2}
+              radius={PILL}
+              maxBarSize={bare ? 14 : 20}
               isAnimationActive={false}
             />
             <Bar
@@ -153,8 +169,9 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
               stackId="s"
               fill={BUCKET_COLOR.fun}
               stroke={SURFACE}
-              strokeWidth={1}
-              maxBarSize={24}
+              strokeWidth={2}
+              radius={PILL}
+              maxBarSize={bare ? 14 : 20}
               isAnimationActive={false}
             />
             <Bar
@@ -163,17 +180,19 @@ export function CashFlowChart({ d }: { d: Dashboard }) {
               stackId="s"
               fill={BUCKET_COLOR.future}
               stroke={SURFACE}
-              strokeWidth={1}
-              maxBarSize={24}
-              radius={[4, 4, 0, 0]}
+              strokeWidth={2}
+              radius={PILL}
+              maxBarSize={bare ? 14 : 20}
               isAnimationActive={false}
             />
             <Line
               dataKey="netIncome"
               name="Net income"
-              type="linear"
+              type="monotone"
               stroke={INK}
-              strokeWidth={2}
+              strokeOpacity={0.8}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
               dot={data.length <= 12 ? { r: 3, fill: INK, stroke: SURFACE, strokeWidth: 2 } : false}
               activeDot={{ r: 4, stroke: SURFACE, strokeWidth: 2 }}
               isAnimationActive={false}

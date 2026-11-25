@@ -5,7 +5,7 @@ import { AlertTriangle, Pencil, Plus, TrendingUp } from 'lucide-react';
 import { useMe } from '../auth/auth';
 import { SnapshotHistory } from '../components/wealth/SnapshotHistory';
 import { ValueChart } from '../components/charts/ValueChart';
-import { pointsIn, rangeFrom, useRange } from '../lib/history';
+import { netWorthPoints, useNetWorthHistory, useRange } from '../lib/history';
 import { localDay } from '../lib/months';
 import { AssetForm, HistoryForm, LiabilityForm } from '../components/wealth/WealthForms';
 import {
@@ -57,6 +57,7 @@ export function WealthPage() {
     id ? (members.data?.find((m) => m.id === id)?.name ?? '—') : 'Shared';
   const close = () => setDialog(null);
   const [range, setRange] = useRange();
+  const history = useNetWorthHistory(range);
 
   return (
     <div className="space-y-5">
@@ -94,17 +95,15 @@ export function WealthPage() {
           <NetWorthHeader data={nw.data} />
           <ValueChart
             title="Family net worth"
-            points={pointsIn(
-              nw.data.snapshots
-                .filter((x) => x.currency === nw.data.current.currency)
-                .map((x) => ({ date: x.date, value: x.netWorth })),
-              rangeFrom(range, localDay()),
-              { date: localDay(), value: nw.data.current.netWorth },
-            )}
+            points={
+              history.data?.currency === nw.data.current.currency
+                ? netWorthPoints(history.data)
+                : [{ date: localDay(), value: nw.data.current.netWorth }]
+            }
             currency={nw.data.current.currency}
             range={range}
             onRange={setRange}
-            note="From your snapshots and today’s figure — save a snapshot each month (below) for a fuller line."
+            note="Every day worked out from your accounts, investments, assets and loans — other currencies at today’s rates; before the app’s first day, your past entries."
           />
           <MemberTable data={nw.data} />
           <AllocationBar data={nw.data} />

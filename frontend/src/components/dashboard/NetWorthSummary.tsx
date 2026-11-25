@@ -4,7 +4,7 @@ import { Wealth } from '../wealth/WealthOverview';
 import { SummaryCard, Trend } from './SummaryCard';
 import { AreaLine, BAD, FLAT, GOOD, dayLabel } from '../charts/AreaLine';
 import { Ring } from '../charts/Ring';
-import { localDay } from '../../lib/months';
+import { netWorthPoints, useNetWorthHistory } from '../../lib/history';
 import { api } from '../../lib/api';
 import { formatCompact } from '../../lib/money';
 import { useViewCurrency, withView } from '../../lib/viewCurrency';
@@ -15,8 +15,8 @@ import {
   type NetWorthResponse,
 } from '../../lib/wealthTypes';
 
-const monthLabel = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
+const monthLabel = (t: number) =>
+  new Date(t).toLocaleDateString('en-GB', {
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',
@@ -24,8 +24,9 @@ const monthLabel = (d: string) =>
 
 /**
  * The family's net worth today as the dashboard's big card: the figure, how much it moved since
- * the first snapshot, what it is made of (a ring and a legend, largest first), and every
- * snapshot since as a line ending today. The whole card opens Family wealth.
+ * the line starts, what it is made of (a ring and a legend, largest first), and every day since
+ * the app's first — worked out, nothing to save — led in by any past entries. The whole card
+ * opens Family wealth.
  */
 export function NetWorthSummary({ className }: { className?: string }) {
   const [view] = useViewCurrency();
@@ -34,20 +35,22 @@ export function NetWorthSummary({ className }: { className?: string }) {
     queryKey: ['net-worth', view],
     queryFn: () => api.get<NetWorthResponse>(withView('/net-worth', view)),
   });
+  // everything there is: the card is the long view (Family wealth has the ranges)
+  const history = useNetWorthHistory('all');
   const data = q.data;
   if (!data || (data.current.assets === 0 && data.current.liabilities === 0)) return null;
   const c = data.current;
-  // every snapshot in this currency, oldest first, then today
-  const snaps = data.snapshots
-    .filter((s) => s.currency === c.currency && s.date < localDay())
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const points = [
-    ...snaps.map((s) => ({ t: Date.parse(`${s.date}T00:00:00Z`), v: s.netWorth })),
-    { t: Date.parse(`${localDay()}T00:00:00Z`), v: c.netWorth },
-  ];
-  const first = snaps[0];
-  const diff = first ? c.netWorth - first.netWorth : 0;
-  const pct = first && first.netWorth > 0 ? (diff / first.netWorth) * 100 : null;
+  // every day since the app's first (and the past entries before it), ending today
+  const points =
+    history.data?.currency === c.currency
+      ? netWorthPoints(history.data).map((p) => ({
+          t: Date.parse(`${p.date}T00:00:00Z`),
+          v: p.value,
+        }))
+      : [];
+  const first = points.length > 1 ? points[0]! : null;
+  const diff = first ? c.netWorth - first.v : 0;
+  const pct = first && first.v > 0 ? (diff / first.v) * 100 : null;
   const color = diff === 0 ? FLAT : diff > 0 ? GOOD : BAD;
   // largest first, like the breakdown on Family wealth
   const parts = (Object.keys(CLASSES) as AssetClass[])
@@ -72,7 +75,7 @@ export function NetWorthSummary({ className }: { className?: string }) {
                 {formatCompact(Math.abs(diff), c.currency)}
                 {pct !== null && ` (${Math.abs(pct).toFixed(1)} %)`}
               </span>
-              <span className="text-slate-500">since {monthLabel(first.date)}</span>
+              <span className="text-slate-500">since {monthLabel(first.t)}</span>
             </Trend>
           )}
         </div>
@@ -106,17 +109,11 @@ export function NetWorthSummary({ className }: { className?: string }) {
             <AreaLine data={points} currency={c.currency} color={color} height={150} decorative />
           </div>
           <p className="mt-1 flex justify-between text-xs text-slate-500 tabular-nums">
-            <span>Since {dayLabel(points[0]!.t, true)} · first snapshot</span>
+            <span>Since {dayLabel(points[0]!.t, true)}</span>
             <span>{dayLabel(points.at(-1)!.t, true)}</span>
           </p>
         </>
-      ) : (
-        <p className="mt-4 text-sm text-slate-500">
-          {data.snapshots.some((s) => s.currency === c.currency)
-            ? 'Your line starts with the next snapshot — today’s is the figure above.'
-            : 'Save a snapshot on Family wealth now and then, and the line of your net worth grows here.'}
-        </p>
-      )}
+      ) : null}
       {c.unconverted.length > 0 && (
         <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
           Some amounts have no exchange rate and are left out.

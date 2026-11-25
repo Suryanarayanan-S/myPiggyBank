@@ -264,11 +264,55 @@ export async function accountsTotal(prisma: PrismaClient, familyId: string, view
   return { currency, ...sumConverted(items, currency, rates) };
 }
 
+type SeriesTxn = {
+  accountId: string | null;
+  type: string;
+  amount: bigint;
+  transferAccountId: string | null;
+  transferAmount: bigint | null;
+  date: Date;
+};
+
+/**
+ * Each account's balance at the end of each of `days` (sorted): its opening balance plus every
+ * transaction up to that day; today takes those dated later too, as the balances do (a payment
+ * entered ahead is already off the account). `txns` sorted by date.
+ */
+export function balancesOn(
+  rows: { id: string; openingBalance: bigint }[],
+  txns: SeriesTxn[],
+  days: string[],
+  today: string,
+) {
+  const balance = new Map(rows.map((a) => [a.id, Number(a.openingBalance)]));
+  const values = new Map(rows.map((a) => [a.id, [] as number[]]));
+  const move = (id: string | null, delta: number) => {
+    if (id !== null && balance.has(id)) balance.set(id, balance.get(id)! + delta);
+  };
+  let k = 0;
+  for (const day of days) {
+    for (; k < txns.length && (day === today || formatDay(txns[k]!.date) <= day); k++) {
+      const t = txns[k]!;
+      const amount = Number(t.amount);
+      if (t.type === 'income') move(t.accountId, amount);
+      else if (t.type === 'expense') move(t.accountId, -amount);
+      else {
+        move(t.accountId, -amount);
+        move(t.transferAccountId, t.transferAmount === null ? amount : Number(t.transferAmount));
+      }
+    }
+    for (const a of rows) values.get(a.id)!.push(balance.get(a.id)!);
+  }
+  return values;
+}
+
 /**
  * The bank and cash accounts' balances over a range (open accounts, demat ones left out, as in
  * the total): each account in its own currency, and all of them in one currency at today's
  * rates. A balance on a day is its opening balance plus every transaction up to that day.
  */
+export const accountBalanceSelect = balanceSelect;
+
 export async function accountsHistory(
   prisma: PrismaClient,
   familyId: string,
@@ -292,27 +336,7 @@ export async function accountsHistory(
   const month = today.slice(0, 7);
   const first = txns[0] ? formatDay(txns[0].date) : null;
   const days = dayGrid(rangeStart(range, today, first), today);
-  const balance = new Map(rows.map((a) => [a.id, Number(a.openingBalance)]));
-  const values = new Map(rows.map((a) => [a.id, [] as number[]]));
-  const move = (id: string | null, delta: number) => {
-    if (id !== null && balance.has(id)) balance.set(id, balance.get(id)! + delta);
-  };
-  let k = 0;
-  for (const day of days) {
-    // every transaction up to the end of this day; today takes those dated later too, as the
-    // balances do (a payment entered ahead is already off the account)
-    for (; k < txns.length && (day === today || formatDay(txns[k]!.date) <= day); k++) {
-      const t = txns[k]!;
-      const amount = Number(t.amount);
-      if (t.type === 'income') move(t.accountId, amount);
-      else if (t.type === 'expense') move(t.accountId, -amount);
-      else {
-        move(t.accountId, -amount);
-        move(t.transferAccountId, t.transferAmount === null ? amount : Number(t.transferAmount));
-      }
-    }
-    for (const a of rows) values.get(a.id)!.push(balance.get(a.id)!);
-  }
+  const values = balancesOn(rows, txns, days, today);
   const total = days.map(() => 0);
   const unconverted = new Set<string>();
   for (const a of rows) {

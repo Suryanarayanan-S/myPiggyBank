@@ -358,7 +358,7 @@ export function ReportsPage() {
                     </dl>
                   ) : (
                     <p className="text-sm text-slate-500">
-                      No net-worth snapshots for {year} in {r.currency}.
+                      No net worth known for {year} in {r.currency}.
                     </p>
                   )}
                 </Card>

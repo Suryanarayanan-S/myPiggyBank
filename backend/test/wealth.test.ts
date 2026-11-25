@@ -170,17 +170,8 @@ describe('wealth API', () => {
       expect(d.current.unconverted).toEqual([{ currency: 'EUR', amount: 250_000 }]);
     });
 
-    it('saves today’s snapshot with a note, and past entries from the old sheet', async () => {
+    it('keeps past entries from the old sheet; a month and a year ago come from them before the app knew anything', async () => {
       await call('POST', '/api/assets', house());
-      const today = await call('POST', '/api/net-worth/snapshots', {
-        note: 'First snapshot in the app',
-      });
-      expect(today.statusCode).toBe(201);
-      expect(today.json().data).toMatchObject({
-        netWorth: L(80),
-        note: 'First snapshot in the app',
-        manual: false,
-      });
       await call('POST', '/api/net-worth/snapshots', {
         date: daysAgo(400),
         netWorth: L(135),
@@ -195,10 +186,62 @@ describe('wealth API', () => {
       expect(d.snapshots.map((s: { note: string }) => s.note)).toEqual([
         'Initial',
         'Aarthy marriage withdraw',
-        'First snapshot in the app',
       ]);
-      expect(d.previousMonth).toMatchObject({ note: 'Aarthy marriage withdraw' });
-      expect(d.previousYear).toMatchObject({ note: 'Initial', manual: true });
+      // with the entries' own dates
+      expect(d.previousMonth).toMatchObject({ date: daysAgo(40), netWorth: L(126) });
+      expect(d.previousYear).toMatchObject({ date: daysAgo(400), netWorth: L(135) });
+    });
+
+    it('works out every day from what the app knows — nothing to save', async () => {
+      const bank = (
+        await call('POST', '/api/accounts', {
+          name: 'SBI',
+          type: 'savings',
+          currency: 'INR',
+          openingBalance: L(1),
+        })
+      ).json().data;
+      await call('POST', '/api/transactions', {
+        date: daysAgo(100),
+        type: 'income',
+        amount: L(2),
+        accountId: bank.id,
+      });
+      await call('POST', '/api/transactions', {
+        date: daysAgo(10),
+        type: 'expense',
+        amount: L(0.5),
+        accountId: bank.id,
+      });
+      // a house entered with a value from long ago, revalued since
+      const home = (await call('POST', '/api/assets', house())).json().data;
+      await call('POST', `/api/assets/${home.id}/valuations`, { date: daysAgo(50), value: L(90) });
+      // a loan entered 60 days ago: it was there before too
+      await call('POST', '/api/liabilities', {
+        name: 'Car loan',
+        type: 'car_loan',
+        currency: 'INR',
+        outstanding: L(5),
+        date: daysAgo(60),
+      });
+      // from before the app: leads up to the first day it knows
+      await call('POST', '/api/net-worth/snapshots', { date: daysAgo(300), netWorth: L(70) });
+
+      const h = (await call('GET', '/api/net-worth/history?range=all')).json().data;
+      expect(h.currency).toBe('INR');
+      expect(h.days[0]).toBe(daysAgo(100)); // the first transaction
+      expect(h.earlier).toEqual([{ date: daysAgo(300), value: L(70) }]);
+      const on = (day: string) => h.total[h.days.indexOf(day)];
+      // 1 + 2 lakh in the bank, the house at 80, the loan of 5
+      expect(on(daysAgo(100))).toBe(L(1 + 2 + 80 - 5));
+      const now = (await call('GET', '/api/net-worth')).json().data.current.netWorth;
+      expect(h.total.at(-1)).toBe(now);
+      expect(now).toBe(L(1 + 2 - 0.5 + 90 - 5));
+      // a month and a year ago are worked out (the year from before the app: none)
+      const d = (await call('GET', '/api/net-worth')).json().data;
+      expect(d.previousMonth).toMatchObject({ date: daysAgo(28), netWorth: L(1 + 2 + 90 - 5) });
+      expect(d.previousYear).toBeNull();
+      expect((await call('GET', '/api/net-worth/history?range=5y')).statusCode).toBe(400);
     });
 
     it('edits a snapshot note and deletes snapshots', async () => {
@@ -276,16 +319,62 @@ describe('wealth API', () => {
     ).toBe('CURRENCY_LOCKED');
   });
 
-  it("refuses to save today's snapshot while some amounts cannot be converted", async () => {
-    await call('POST', '/api/accounts', {
-      name: 'Sparkasse',
-      type: 'current',
-      currency: 'EUR',
-      openingBalance: 250_000,
+  it('counts investments at what was put in on every day when the family chose so: no jump today', async () => {
+    const etf = (
+      await call('POST', '/api/holdings', { name: 'Nifty BeES', kind: 'etf', currency: 'INR' })
+    ).json().data;
+    await call('POST', `/api/holdings/${etf.id}/trades`, {
+      date: daysAgo(60),
+      type: 'buy',
+      units: '10',
+      amount: L(1),
     });
+    await call('POST', `/api/holdings/${etf.id}/prices`, { date: daysAgo(60), price: '10000' });
+    await call('POST', `/api/holdings/${etf.id}/prices`, { date: daysAgo(1), price: '15000' });
+    const worth = (await call('GET', '/api/net-worth/history?range=1m')).json().data;
+    expect(worth.total.at(-2)).toBe(L(1.5)); // at the price then
+    await call('PUT', '/api/family', { investmentsAt: 'invested' });
+    const h = (await call('GET', '/api/net-worth/history?range=1m')).json().data;
+    expect(h.total.at(-1)).toBe(L(1));
+    expect(h.total.at(-2)).toBe(L(1)); // the day before: at cost too
+  });
+
+  it('starts a shorter range from the last past entry before it', async () => {
+    const bank = (
+      await call('POST', '/api/accounts', { name: 'SBI', type: 'savings', currency: 'INR' })
+    ).json().data;
+    await call('POST', '/api/transactions', {
+      date: daysAgo(10),
+      type: 'income',
+      amount: L(1),
+      accountId: bank.id,
+    });
+    await call('POST', '/api/net-worth/snapshots', { date: daysAgo(400), netWorth: L(50) });
+    await call('POST', '/api/net-worth/snapshots', { date: daysAgo(100), netWorth: L(60) });
+    const h = (await call('GET', '/api/net-worth/history?range=6m')).json().data;
+    expect(h.days[0]).toBe(daysAgo(10)); // the app's first day
+    const start = h.earlier[0].date;
+    // the entry from before the range starts it on its first day, then the one inside it
+    expect(h.earlier.map((e: { value: number }) => e.value)).toEqual([L(50), L(60)]);
+    expect(start < daysAgo(100)).toBe(true);
+    const all = (await call('GET', '/api/net-worth/history?range=all')).json().data;
+    expect(all.earlier).toEqual([
+      { date: daysAgo(400), value: L(50) },
+      { date: daysAgo(100), value: L(60) },
+    ]);
+  });
+
+  it('refuses a past entry dated in the future', async () => {
+    const res = await call('POST', '/api/net-worth/snapshots', {
+      date: daysAgo(-3),
+      netWorth: L(1),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('no longer saves a snapshot for today: every day is worked out', async () => {
     const res = await call('POST', '/api/net-worth/snapshots', { note: 'x' });
-    expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe('UNCONVERTED_AMOUNTS');
+    expect(res.statusCode).toBe(400);
     expect(await prisma.netWorthSnapshot.count()).toBe(0);
   });
 

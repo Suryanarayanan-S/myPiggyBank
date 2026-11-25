@@ -356,14 +356,23 @@ export async function depositValues(prisma: PrismaClient, familyId: string, onDa
 
 /** For the value over time: each deposit's worth on each of `days` (0 before it starts or once
  * paid out). */
-export async function depositSeries(prisma: PrismaClient, familyId: string, days: string[]) {
+export async function depositSeries(
+  prisma: PrismaClient,
+  familyId: string,
+  days: string[],
+  // at what was paid in (as net worth counts deposits when the family chose so)
+  { atCost = false }: { atCost?: boolean } = {},
+) {
   const rows = await prisma.deposit.findMany({ where: { familyId } });
   const moves = await movementsOf(prisma, familyId, rows);
   return rows.map((d) => ({
     id: d.id,
     kind: d.kind as (typeof KINDS)[number],
     currency: d.currency,
-    values: days.map((day) => worth(d, day, moves.get(d.id))?.value ?? 0),
+    values: days.map((day) => {
+      const w = worth(d, day, moves.get(d.id));
+      return (atCost ? w?.paidIn : w?.value) ?? 0;
+    }),
   }));
 }
 

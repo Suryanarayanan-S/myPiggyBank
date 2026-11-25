@@ -254,7 +254,7 @@ export async function seedDemo(
     );
   }
 
-  // A year of net-worth history (past entries), then today's snapshot.
+  // A year of net-worth history (past entries); today's is worked out.
   for (const [i, month] of months.slice(0, -1).entries()) {
     await createSnapshot(
       prisma,
@@ -266,6 +266,5 @@ export async function seedDemo(
       }),
     );
   }
-  await createSnapshot(prisma, fam, parse(SnapshotInput, { note: 'Demo snapshot' }));
   return { email: DEMO.email, password: DEMO.password, familyId: fam };
 }

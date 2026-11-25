@@ -69,8 +69,9 @@ describe('viewing money in another currency', () => {
     });
   });
 
-  it('net worth: current figures and snapshots in the chosen currency', async () => {
-    await f.call('POST', '/api/net-worth/snapshots', {}); // stored in INR: ₹10,000
+  it('net worth: current figures and past entries in the chosen currency', async () => {
+    // stored in INR: ₹10,000
+    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-09-15', netWorth: 1_000_000 });
     const nw = (await f.call('GET', '/api/net-worth?currency=EUR')).json().data;
     expect(nw.current).toMatchObject({ currency: 'EUR', netWorth: 10_000 });
     expect(nw.snapshots[0]).toMatchObject({ currency: 'EUR', netWorth: 10_000 });
@@ -78,8 +79,8 @@ describe('viewing money in another currency', () => {
     expect(plain.snapshots[0]).toMatchObject({ currency: 'INR', netWorth: 1_000_000 });
   });
 
-  it('keeps a snapshot in its own currency when it cannot be converted', async () => {
-    await f.call('POST', '/api/net-worth/snapshots', {});
+  it('keeps a past entry in its own currency when it cannot be converted', async () => {
+    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-09-15', netWorth: 1_000_000 });
     const nw = (await f.call('GET', '/api/net-worth?currency=USD')).json().data;
     expect(nw.snapshots[0]).toMatchObject({ currency: 'INR', netWorth: 1_000_000 });
   });
@@ -178,7 +179,7 @@ describe('net worth comparisons', () => {
   });
   afterEach(() => app.close());
 
-  it('are empty when the nearest older snapshot cannot be converted (never an older one instead)', async () => {
+  it('are empty when the nearest past entry cannot be converted (never an older one instead)', async () => {
     const f = await family(app);
     const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
     await f.call('PUT', '/api/family', { wealthCurrency: 'EUR' });

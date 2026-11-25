@@ -115,7 +115,7 @@ export async function investmentReturns(
 }
 
 /** The first day anything was invested (for the "all" range); null with nothing. */
-async function firstInvested(prisma: PrismaClient, familyId: string) {
+export async function firstInvested(prisma: PrismaClient, familyId: string) {
   const [t, d, g] = await Promise.all([
     prisma.holdingTrade.aggregate({ where: { holding: { familyId } }, _min: { date: true } }),
     prisma.deposit.aggregate({ where: { familyId }, _min: { startDate: true } }),

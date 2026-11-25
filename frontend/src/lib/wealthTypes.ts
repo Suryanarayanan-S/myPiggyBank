@@ -48,8 +48,9 @@ export type Snapshot = {
 export type NetWorthResponse = {
   current: NetWorth;
   snapshots: Snapshot[];
-  previousMonth: Snapshot | null;
-  previousYear: Snapshot | null;
+  /** what it was 28 days and a year ago (worked out; null when not known) */
+  previousMonth: { date: string; netWorth: number; currency: string } | null;
+  previousYear: { date: string; netWorth: number; currency: string } | null;
 };
 export type Asset = {
   id: string;

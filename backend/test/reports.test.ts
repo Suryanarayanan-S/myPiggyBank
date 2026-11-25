@@ -71,15 +71,14 @@ describe('year report', () => {
     expect(r).toMatchObject({ currency: 'INR', totals: { netIncome: 100_000_000 } });
   });
 
-  it('shows net worth at the start and end of the year from snapshots', async () => {
+  it('shows net worth at the start and end of the year, worked out from what the app knows', async () => {
     await f.call('PUT', '/api/family', { wealthCurrency: 'EUR' });
-    await f.call('POST', '/api/net-worth/snapshots', { date: '2025-12-31', netWorth: 1_000_000 });
-    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-03-31', netWorth: 1_200_000 });
-    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-06-30', netWorth: 1_500_000 });
+    const today = new Date().toISOString().slice(0, 10);
     const r = (await f.call('GET', '/api/reports/year/2026')).json().data;
     expect(r.netWorth).toEqual({
-      start: { date: '2025-12-31', amount: 1_000_000 },
-      end: { date: '2026-06-30', amount: 1_500_000 },
+      // 4,000 − 1,000 + 9,990 by the end of 2025; then 2026's income and spending
+      start: { date: '2025-12-31', amount: 1_299_000 },
+      end: { date: today, amount: 1_299_000 + 500_000 - 110_000 + 500_000 - 20_000 },
     });
   });
 
@@ -152,10 +151,20 @@ describe('year report', () => {
     );
   });
 
-  it('never shows the same snapshot as start and end', async () => {
+  it('takes a past entry for a year before the app knew anything', async () => {
     await f.call('PUT', '/api/family', { wealthCurrency: 'EUR' });
-    await f.call('POST', '/api/net-worth/snapshots', { date: '2026-01-01', netWorth: 1_000_000 });
-    const r = (await f.call('GET', '/api/reports/year/2026')).json().data;
-    expect(r.netWorth).toEqual({ start: null, end: { date: '2026-01-01', amount: 1_000_000 } });
+    await f.call('POST', '/api/net-worth/snapshots', { date: '2024-06-30', netWorth: 1_000_000 });
+    const r = (await f.call('GET', '/api/reports/year/2024')).json().data;
+    // with the entry's own date
+    expect(r.netWorth).toEqual({ start: null, end: { date: '2024-06-30', amount: 1_000_000 } });
+  });
+
+  it('starts the first year of data on its first day', async () => {
+    await f.call('PUT', '/api/family', { wealthCurrency: 'EUR' });
+    const r = (await f.call('GET', '/api/reports/year/2025')).json().data;
+    expect(r.netWorth).toEqual({
+      start: { date: '2025-01-01', amount: 400_000 },
+      end: { date: '2025-12-31', amount: 1_299_000 },
+    });
   });
 });

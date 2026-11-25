@@ -39,7 +39,8 @@ describe('demo data', { timeout: 60_000 }, () => {
     const nw = (await call('GET', '/api/net-worth')).json().data;
     expect(nw.current.unconverted).toEqual([]);
     expect(nw.current.liabilities).toBeGreaterThan(0);
-    expect(nw.snapshots.length).toBeGreaterThanOrEqual(12);
+    // a year of past entries; today's is worked out, not saved
+    expect(nw.snapshots.length).toBeGreaterThanOrEqual(11);
 
     // Nothing in the future.
     const late = await prisma.transaction.count({

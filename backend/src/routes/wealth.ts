@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { ViewQuery } from '../domain/currency.js';
+import { RangeQuery } from '../domain/history.js';
 import { IdParams, parse } from '../lib/validate.js';
 import { currentUser, requireAuth } from '../auth/requireAuth.js';
 import * as w from '../services/wealthService.js';
@@ -61,6 +62,15 @@ export const wealthRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/net-worth', async (req) => ({
     data: await w.getNetWorth(app.prisma, fam(req), parse(ViewQuery, req.query).currency),
+  }));
+  // every day worked out from what the app knows; ?range=1m|6m|1y|all
+  app.get('/net-worth/history', async (req) => ({
+    data: await w.getNetWorthHistory(
+      app.prisma,
+      fam(req),
+      parse(ViewQuery, req.query).currency,
+      parse(RangeQuery, req.query).range,
+    ),
   }));
   app.post('/net-worth/snapshots', async (req, reply) =>
     reply.status(201).send({

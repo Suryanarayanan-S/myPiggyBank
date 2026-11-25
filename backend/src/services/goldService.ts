@@ -143,7 +143,13 @@ export async function goldValues(prisma: PrismaClient, familyId: string, onDay =
 }
 
 /** For the value over time: the gold held on each of `days` at that day's IBJA rate (rupees). */
-export async function goldSeries(prisma: PrismaClient, familyId: string, days: string[]) {
+export async function goldSeries(
+  prisma: PrismaClient,
+  familyId: string,
+  days: string[],
+  // a piece with its price paid at that price (as net worth counts gold when the family chose so)
+  { atCost = false }: { atCost?: boolean } = {},
+) {
   const [rows, points] = await Promise.all([
     prisma.goldItem.findMany({ where: { familyId } }),
     prisma.benchmarkPoint.findMany({
@@ -159,7 +165,7 @@ export async function goldSeries(prisma: PrismaClient, familyId: string, days: s
   const used = points.filter(
     (p) => p.series === 'gold24k' || (p.series === 'gold24kEst' && p.date.getTime() < firstIbja),
   );
-  if (rows.length === 0 || used.length === 0) return [];
+  if (rows.length === 0 || (used.length === 0 && !atCost)) return [];
   const rates = used.map((p) => ({ date: formatDay(p.date), micros: Number(p.value) }));
   let k = 0;
   const values = days.map((day) => {
@@ -167,7 +173,16 @@ export async function goldSeries(prisma: PrismaClient, familyId: string, days: s
     // before any rate: the earliest one, as today's value falls back to it
     return rows
       .filter((g) => heldOn(g, day) && (!g.boughtOn || formatDay(g.boughtOn) <= day))
-      .reduce((t, g) => t + goldValue(g.milligrams, g.purity as Purity, rates[k]!.micros), 0);
+      .reduce(
+        (t, g) =>
+          t +
+          (atCost && g.boughtFor !== null
+            ? Number(g.boughtFor)
+            : rates[k]
+              ? goldValue(g.milligrams, g.purity as Purity, rates[k]!.micros)
+              : 0),
+        0,
+      );
   });
   return [{ currency: CURRENCY, values }];
 }

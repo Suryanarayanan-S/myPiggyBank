@@ -10,7 +10,7 @@ const shot = async (page: Page, name: string) => {
   await page.emulateMedia({ colorScheme: 'light' });
 };
 
-test('family wealth: members, assets in lakh, EUR account converted, loan, snapshots', async ({
+test('family wealth: members, assets in lakh, EUR account converted, loan, past entries', async ({
   page,
 }) => {
   await page.goto('/register');
@@ -87,9 +87,8 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   await past.getByLabel('Note').fill('Initial');
   await past.getByRole('button', { name: 'Save' }).click();
   await expect(past).toBeHidden();
-  await page.getByRole('button', { name: 'Save today’s snapshot' }).click();
-  await page.getByRole('dialog').getByLabel('Note').fill('First snapshot in the app');
-  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  // today's net worth is worked out: nothing to save
+  await expect(page.getByRole('button', { name: /snapshot/ })).toHaveCount(0);
   await expect(page.getByLabel('Note for 2024-01-26')).toHaveValue('Initial');
   await expect(page.getByText('since 26 Jan 2024')).toBeVisible();
   await expect(page.getByText('₹1.35 Cr')).toBeVisible(); // the past entry keeps its two decimals
@@ -99,8 +98,8 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, snaps
   // whole card opens Family wealth
   await openSection(page, 'Dashboard');
   const worth = page.getByRole('link', { name: /Net worth.*open Family wealth/ });
-  await expect(worth).toContainText('since Jan 2024'); // the change since the first snapshot
-  await expect(worth).toContainText('Since 26 Jan 2024 · first snapshot');
+  await expect(worth).toContainText('since Jan 2024'); // the change since the past entry
+  await expect(worth).toContainText('Since 26 Jan 2024');
   await expect(worth.getByRole('list', { name: 'Made of' })).toContainText('Property');
   await worth.screenshot({ path: 'e2e/screenshots/dashboard-net-worth.png' });
   await worth.click();

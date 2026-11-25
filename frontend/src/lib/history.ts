@@ -75,45 +75,34 @@ export function useAccountsHistory(range: Range, currency?: string) {
   });
 }
 
+export type NetWorthHistory = {
+  currency: string;
+  days: string[];
+  total: number[];
+  /** past entries typed in from before the app's first day, oldest first */
+  earlier: { date: string; value: number }[];
+};
+
+/** Net worth day by day, worked out from what the app knows (nothing to save). */
+export function useNetWorthHistory(range: Range) {
+  const [view] = useViewCurrency();
+  return useQuery({
+    // under 'net-worth', so whatever refreshes the net worth refreshes this too
+    queryKey: ['net-worth', 'history', view, range],
+    queryFn: () => api.get<NetWorthHistory>(withRange('/net-worth/history', range, view)),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The points of a net-worth history: the past entries, then every worked-out day. */
+export const netWorthPoints = (h: NetWorthHistory) => [
+  ...h.earlier,
+  ...h.days.map((date, i) => ({ date, value: h.total[i]! })),
+];
+
 /** Several series added day by day (missing ones count as nothing). */
 export const addSeries = (length: number, series: (number[] | undefined)[]) =>
   Array.from({ length }, (_, i) => series.reduce((t, s) => t + (s?.[i] ?? 0), 0));
-
-/**
- * The points of a range from dated values (e.g. snapshots): those inside it, then today's. The
- * last value before the range starts it off (on its first day), so a year with no snapshot in it
- * still draws from where it stood.
- */
-export function pointsIn(
-  points: { date: string; value: number }[],
-  from: string | null,
-  today: { date: string; value: number },
-) {
-  const sorted = points
-    .filter((p) => p.date < today.date)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  if (from === null) return [...sorted, today];
-  const before = sorted.filter((p) => p.date < from).at(-1);
-  const inside = sorted.filter((p) => p.date >= from);
-  return [
-    ...(before && inside[0]?.date !== from ? [{ date: from, value: before.value }] : []),
-    ...inside,
-    today,
-  ];
-}
-
-/** The first day of a range ending today (null: since the start). */
-export function rangeFrom(range: Range, today: string): string | null {
-  if (range === 'all') return null;
-  const back = range === '1m' ? 1 : range === '6m' ? 6 : 12;
-  // the same day that many months back, or that month's last day (as the server counts)
-  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
-  const months = y * 12 + (m - 1) - back;
-  const year = Math.floor(months / 12);
-  const month = (months % 12) + 1;
-  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
-}
 
 /**
  * From where there was something: leading zeros are cut, keeping the last zero day so the line

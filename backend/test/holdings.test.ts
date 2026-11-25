@@ -228,7 +228,7 @@ describe('investments', () => {
     expect(goal).toMatchObject({ saved: 50_000, links: [{ kind: 'holding', id: f.etf.id }] });
   });
 
-  it('a sold-out holding without a rate neither blocks snapshots nor hides its result', async () => {
+  it('a sold-out holding without a rate neither hides its result nor the net worth', async () => {
     const usd = (
       await f.call('POST', '/api/holdings', { name: 'Apple', kind: 'stock', currency: 'USD' })
     ).json().data;
@@ -236,7 +236,6 @@ describe('investments', () => {
     await trade({ date: addDays(today, -10), type: 'sell', units: '2', amount: 30_200 }, usd.id);
     const nw = (await f.call('GET', '/api/net-worth')).json().data.current;
     expect(nw.unconverted).toEqual([]);
-    expect((await f.call('POST', '/api/net-worth/snapshots', {})).statusCode).toBe(201);
     const { summary } = await list();
     expect(summary.unconverted).toEqual([{ currency: 'USD', amount: 200 }]); // the realised gain
   });

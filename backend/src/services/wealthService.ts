@@ -11,6 +11,8 @@ import { assertMember } from './ownership.js';
 import { holdingValues } from './holdingService.js';
 import { depositValues } from './depositService.js';
 import { goldValues } from './goldService.js';
+import { dataStart, netWorthAt, netWorthHistory } from './netWorthHistory.js';
+import type { Range } from '../domain/history.js';
 
 const LIABILITY_TYPES = ['mortgage', 'car_loan', 'personal_loan', 'credit_card', 'other'] as const;
 const day = z.string().refine((s) => parseDay(s) !== null, 'Use a real date as YYYY-MM-DD');
@@ -373,19 +375,15 @@ const snapshotDto = (s: SnapshotRow) => ({
   manual: s.breakdown === null,
 });
 
-/** Net worth in `view` (default: the wealth currency). Snapshots are converted with the rate of
- *  their month; one that cannot be converted keeps its own currency. */
-export async function getNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
-  const rates = await loadRates(prisma, familyId);
-  const [current, rows] = await Promise.all([
-    currentNetWorth(prisma, familyId, view, rates),
-    prisma.netWorthSnapshot.findMany({
-      where: { familyId },
-      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
-    }),
-  ]);
-  const to = current.currency;
-  const snapshots = rows.map(snapshotDto).map((s) => {
+/** The past entries typed in (from before the app), in `to` where a rate allows (the rate of
+ *  their month); one that cannot be converted keeps its own currency. Snapshots saved by the
+ *  app in the past are left out: every day is worked out now. */
+async function pastEntries(prisma: PrismaClient, familyId: string, to: string, rates: Rate[]) {
+  const rows = await prisma.netWorthSnapshot.findMany({
+    where: { familyId, breakdown: null },
+    orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+  });
+  return rows.map(snapshotDto).map((s) => {
     if (s.currency === to) return s;
     const month = s.date.slice(0, 7);
     const conv = (v: number | null) =>
@@ -400,21 +398,84 @@ export async function getNetWorth(prisma: PrismaClient, familyId: string, view?:
       liabilities: conv(s.liabilities),
     };
   });
-  const latestBefore = (days: number) => {
-    const cutoff = addDays(today(), -days);
-    // The nearest one counts; if it cannot be shown in this currency there is no comparison
-    // (rather than quietly comparing with an older one).
-    const nearest = [...snapshots].reverse().find((s) => s.date <= cutoff);
-    return nearest?.currency === to ? nearest : null;
-  };
-  return { current, snapshots, previousMonth: latestBefore(28), previousYear: latestBefore(365) };
 }
 
-// Strict objects: a malformed past entry must be rejected, never treated as "snapshot today".
-export const SnapshotInput = z.union([
-  z.strictObject({ date: day, netWorth: z.number().int().refine(Number.isSafeInteger), note }),
-  z.strictObject({ note }),
-]);
+/** Net worth in `view` (default: the wealth currency): today's, the past entries, and what it
+ *  was a month and a year ago (worked out; before the app's first day, from a past entry). */
+export async function getNetWorth(prisma: PrismaClient, familyId: string, view?: string) {
+  const rates = await loadRates(prisma, familyId);
+  const current = await currentNetWorth(prisma, familyId, view, rates);
+  const to = current.currency;
+  const snapshots = await pastEntries(prisma, familyId, to, rates);
+  const day = today();
+  const dates = [addDays(day, -28), addDays(day, -365)];
+  const atCost = (await getFamily(prisma, familyId)).investmentsAt === 'invested';
+  const [month, year] = await netWorthAt(
+    prisma,
+    familyId,
+    to,
+    dates,
+    day,
+    rates,
+    snapshots,
+    atCost,
+  );
+  // the day it is from: the day asked for, or a past entry's own day
+  const then = (v: { date: string; netWorth: number } | null | undefined) =>
+    v ? { ...v, currency: to } : null;
+  return { current, snapshots, previousMonth: then(month), previousYear: then(year) };
+}
+
+/** Net worth day by day over a range ending today, in `view` (see netWorthHistory). */
+export async function getNetWorthHistory(
+  prisma: PrismaClient,
+  familyId: string,
+  view: string | undefined,
+  range: Range,
+) {
+  const rates = await loadRates(prisma, familyId);
+  const current = await currentNetWorth(prisma, familyId, view, rates);
+  const past = await pastEntries(prisma, familyId, current.currency, rates);
+  return netWorthHistory(
+    prisma,
+    familyId,
+    current.currency,
+    range,
+    today(),
+    rates,
+    current.netWorth,
+    past,
+    (await getFamily(prisma, familyId)).investmentsAt === 'invested',
+  );
+}
+
+/** Net worth on given days in `view` (see netWorthAt): for the year report. */
+export async function getNetWorthAt(
+  prisma: PrismaClient,
+  familyId: string,
+  view: string | undefined,
+  dates: string[],
+) {
+  const rates = await loadRates(prisma, familyId);
+  const family = await getFamily(prisma, familyId);
+  const to = view ?? family.wealthCurrency;
+  const past = await pastEntries(prisma, familyId, to, rates);
+  const atCost = family.investmentsAt === 'invested';
+  return {
+    currency: to,
+    first: await dataStart(prisma, familyId, today()),
+    /** each day's figure and the day it is from (a past entry's own day) */
+    values: await netWorthAt(prisma, familyId, to, dates, today(), rates, past, atCost),
+  };
+}
+
+// A past entry from before the app (strict: a malformed one is rejected). Today's net worth is
+// never saved: every day is worked out from what the app knows.
+export const SnapshotInput = z.strictObject({
+  date: day.refine((d) => d <= today(), 'A past entry cannot be in the future'),
+  netWorth: z.number().int().refine(Number.isSafeInteger),
+  note,
+});
 export const SnapshotUpdate = z.object({ note });
 
 export async function createSnapshot(
@@ -423,35 +484,12 @@ export async function createSnapshot(
   input: z.output<typeof SnapshotInput>,
 ) {
   const family = await getFamily(prisma, familyId);
-  if ('netWorth' in input) {
-    const s = await prisma.netWorthSnapshot.create({
-      data: {
-        familyId,
-        date: parseDay(input.date)!,
-        currency: family.wealthCurrency,
-        netWorth: input.netWorth,
-        note: input.note ?? null,
-      },
-    });
-    return snapshotDto(s);
-  }
-  const nw = await currentNetWorth(prisma, familyId);
-  if (nw.unconverted.length > 0) {
-    throw new AppError(
-      409,
-      'UNCONVERTED_AMOUNTS',
-      `Add an exchange rate first: ${nw.unconverted.map((u) => u.currency).join(', ')} amounts cannot be converted to ${nw.currency} and the snapshot would be too low`,
-    );
-  }
   const s = await prisma.netWorthSnapshot.create({
     data: {
       familyId,
-      date: parseDay(today())!,
-      currency: nw.currency,
-      assets: nw.assets,
-      liabilities: nw.liabilities,
-      netWorth: nw.netWorth,
-      breakdown: JSON.stringify({ byClass: nw.byClass, columns: nw.columns }),
+      date: parseDay(input.date)!,
+      currency: family.wealthCurrency,
+      netWorth: input.netWorth,
       note: input.note ?? null,
     },
   });

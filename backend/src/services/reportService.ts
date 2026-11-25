@@ -2,10 +2,10 @@ import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { CurrencySchema } from '../domain/currency.js';
 import { yearReport } from '../domain/report.js';
-import { todayLocal } from '../lib/dates.js';
+import { addDays, todayLocal } from '../lib/dates.js';
 import { getDashboard } from './dashboardService.js';
 import { BOM, cell, csvAmount } from './exportService.js';
-import { getNetWorth } from './wealthService.js';
+import { getNetWorthAt } from './wealthService.js';
 
 export const YearParams = z.object({
   year: z
@@ -51,19 +51,20 @@ export async function getYearReport(
     previousRecorded: new Set([...months].filter((m) => m.startsWith(`${year - 1}-`))),
   });
   const currency = current.currency;
-  const { snapshots } = await getNetWorth(prisma, familyId, currency);
   const first = `${year}-01-01`;
   const last = `${year}-12-31` < todayLocal() ? `${year}-12-31` : todayLocal();
-  // Start: the last snapshot before the year (else the first in it); end: the last in it. One
-  // that cannot be shown in this currency counts as missing, never as another currency.
-  const startSnap =
-    [...snapshots].reverse().find((s) => s.date < first) ??
-    snapshots.find((s) => s.date >= first && s.date <= last);
-  const endSnap = [...snapshots].reverse().find((s) => s.date >= first && s.date <= last);
-  // One snapshot is a point, not a change: show it as the end only.
-  const start = startSnap === endSnap ? undefined : startSnap;
-  const point = (s: (typeof snapshots)[number] | undefined) =>
-    s && s.currency === currency ? { date: s.date, amount: s.netWorth } : null;
+  // the end of the year before and the end of this one (or today), worked out
+  const before = addDays(first, -1);
+  const at = await getNetWorthAt(prisma, familyId, currency, [before, last]);
+  const end = at.values[1];
+  let start = at.values[0];
+  // the year the app's data starts, without an entry from before: from its first day
+  if (!start && at.first && at.first >= first && at.first < last)
+    [start] = (await getNetWorthAt(prisma, familyId, currency, [at.first])).values;
+  // one entry is a point, not a change: show it as the end only
+  if (start && end && start.date === end.date) start = null;
+  const point = (v: { date: string; netWorth: number } | null | undefined) =>
+    v ? { date: v.date, amount: v.netWorth } : null;
   return {
     year,
     currency,
@@ -74,7 +75,7 @@ export async function getYearReport(
       label: periodLabel(through),
       unconverted: previous.unconverted,
     },
-    netWorth: { start: point(start), end: point(endSnap) },
+    netWorth: { start: point(start), end: point(end) },
     unconverted: current.unconverted,
   };
 }

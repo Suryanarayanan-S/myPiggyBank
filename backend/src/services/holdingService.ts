@@ -353,9 +353,15 @@ export async function holdingFlows(prisma: PrismaClient, familyId: string, today
  * currency; 0 before it was bought or once sold). Archived holdings still held are left out, as
  * in the totals.
  */
-export async function holdingSeries(prisma: PrismaClient, familyId: string, days: string[]) {
+export async function holdingSeries(
+  prisma: PrismaClient,
+  familyId: string,
+  days: string[],
+  // `atCost`: at what the units held that day cost (as net worth counts them when the family
+  // chose so); `today`: whose "archived and still held" leaves one out (the last day by default)
+  { atCost = false, today = days.at(-1)! }: { atCost?: boolean; today?: string } = {},
+) {
   const rows = await prisma.holding.findMany({ where: { familyId }, include });
-  const today = days.at(-1)!;
   return rows
     .filter((h) => h.trades.length > 0)
     .map((h) => {
@@ -365,7 +371,16 @@ export async function holdingSeries(prisma: PrismaClient, familyId: string, days
       if (h.archived && computeHolding(trades, prices, today).units > 0) return null;
       return {
         currency: h.currency,
-        values: valuesOn(trades, prices, days),
+        values: atCost
+          ? days.map((day) => {
+              const c = computeHolding(
+                trades.filter((t) => t.date <= day),
+                prices,
+                day,
+              );
+              return c.units === 0 ? 0 : c.cost;
+            })
+          : valuesOn(trades, prices, days),
       };
     })
     .filter((h) => h !== null);

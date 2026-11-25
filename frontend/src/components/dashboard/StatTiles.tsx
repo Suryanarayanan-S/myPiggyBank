@@ -6,6 +6,7 @@ import { formatCompact, formatMoney } from '../../lib/money';
 import { localDay } from '../../lib/months';
 import { Wealth } from '../wealth/WealthOverview';
 import { Sparkline } from './Sparkline';
+import { Spikes } from './Spikes';
 import { formatPercent } from '../../lib/percent';
 import { useBucketNames, type BucketNames } from '../../lib/buckets';
 
@@ -39,7 +40,7 @@ const tiles = (
 
 /** The look of a card that is a link (as SummaryCard), at a tile's size. */
 const TILE =
-  'group block rounded-xl border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/60';
+  'group block rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-slate-800 dark:bg-slate-900 dark:bg-linear-to-b dark:from-white/[0.035] dark:to-transparent dark:hover:border-slate-700 dark:hover:bg-slate-800/60';
 
 /** The period's figures; each opens Spending → Overview for the same period (`to`). */
 export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
@@ -113,7 +114,12 @@ export function StatTiles({ d, to }: { d: Dashboard; to: string }) {
                 />
               )}
               <div className="mt-auto pt-2">
-                <Sparkline values={series(tile.key)} upIsGood={tile.upIsGood} height={40} />
+                {/* income comes in lumps: a spike a month; the rest as a line */}
+                {tile.key === 'netIncome' ? (
+                  <Spikes values={series(tile.key)} height={40} />
+                ) : (
+                  <Sparkline values={series(tile.key)} upIsGood={tile.upIsGood} height={40} />
+                )}
               </div>
             </Link>
           );

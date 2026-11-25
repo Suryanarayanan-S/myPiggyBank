@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import {
   Area,
   AreaChart,
+  CartesianGrid,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -10,16 +11,17 @@ import {
   YAxis,
 } from 'recharts';
 import { Card } from '../ui/Card';
+import { GlowEnd } from './Glow';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
 import { Trend } from '../dashboard/SummaryCard';
 import { Wealth } from '../wealth/WealthOverview';
-import { axisTick } from '../../lib/chart';
 import { formatCompact, formatMoney } from '../../lib/money';
 import { RANGES, fromFirstValue, type Range } from '../../lib/history';
 
 const GOOD = '#10b981';
 const BAD = '#f43f5e';
 const FLAT = 'var(--c-muted)';
+const MARGIN = { top: 12, right: 12, bottom: 0, left: 12 };
 
 const dayLabel = (t: number, withYear: boolean) =>
   new Date(t).toLocaleDateString('en-GB', {
@@ -66,7 +68,6 @@ export function ValueChart({
   const diff = last - first;
   const color = diff === 0 ? FLAT : diff > 0 === upIsGood ? GOOD : BAD;
   const long = RANGES.find((r) => r.key === range)!.long;
-  const spanYears = data.length > 1 && data.at(-1)!.t - data[0]!.t > 300 * 86_400_000;
   const values = data.map((d) => d.v);
   const lo = Math.min(...values, first);
   const hi = Math.max(...values, first);
@@ -91,23 +92,22 @@ export function ValueChart({
       <div className="mt-3 min-w-0 overflow-hidden" style={{ height }}>
         {data.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+            <AreaChart data={data} margin={MARGIN}>
               <defs>
                 <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity={0.25} />
                   <stop offset="100%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
               </defs>
+              {/* a faint grid both ways, no axis: the dates are under the chart and on hover */}
+              <CartesianGrid stroke="var(--c-grid)" strokeOpacity={0.7} />
               <XAxis
+                hide
                 dataKey="t"
                 type="number"
                 scale="time"
                 domain={['dataMin', 'dataMax']}
-                tickFormatter={(t: number) => dayLabel(t, spanYears)}
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={40}
+                tickCount={6}
               />
               <YAxis hide domain={[lo - pad, hi + pad]} />
               <ReferenceLine
@@ -136,7 +136,20 @@ export function ValueChart({
                 strokeWidth={2}
                 fill={`url(#${gradient})`}
                 isAnimationActive={false}
-                activeDot={{ r: 4, fill: color, stroke: 'none' }}
+                dot={(p: { cx?: number; cy?: number; index?: number }) =>
+                  p.index === data.length - 1 && p.cx != null && p.cy != null ? (
+                    <GlowEnd
+                      key="end"
+                      cx={p.cx}
+                      cy={p.cy}
+                      color={color}
+                      floor={height - MARGIN.bottom}
+                    />
+                  ) : (
+                    <g key={`d${p.index}`} />
+                  )
+                }
+                activeDot={{ r: 5, fill: '#fff', stroke: color, strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -146,6 +159,12 @@ export function ValueChart({
           </p>
         )}
       </div>
+      {data.length > 1 && (
+        <p className="mt-1 flex justify-between text-xs text-slate-500 tabular-nums">
+          <span>{dayLabel(data[0]!.t, true)}</span>
+          <span>{dayLabel(data.at(-1)!.t, true)}</span>
+        </p>
+      )}
       <div
         role="radiogroup"
         aria-label={`${title}: time range`}

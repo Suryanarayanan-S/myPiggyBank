@@ -2,7 +2,6 @@ import clsx from 'clsx';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { ChartCard, DataTable } from '../dashboard/ChartCard';
 import { ChartTooltip } from '../dashboard/ChartTooltip';
-import { SURFACE } from '../../lib/chart';
 import type { Holding } from '../../lib/investments';
 import { formatMoney } from '../../lib/money';
 import { formatPercent } from '../../lib/percent';
@@ -77,12 +76,14 @@ export function AllocationDonut({
                 data={slices}
                 dataKey="value"
                 nameKey="label"
-                innerRadius="62%"
+                // a thick ring of rounded pieces with small gaps between them
+                innerRadius="74%"
                 outerRadius="100%"
                 startAngle={90}
                 endAngle={-270}
-                stroke={SURFACE}
-                strokeWidth={2}
+                paddingAngle={slices.length > 1 ? 4 : 0}
+                cornerRadius={8}
+                stroke="none"
                 isAnimationActive={false}
               >
                 {slices.map((s) => (

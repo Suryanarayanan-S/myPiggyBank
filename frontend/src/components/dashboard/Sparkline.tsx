@@ -1,4 +1,5 @@
 import { fromFirstValue } from '../../lib/history';
+import { GlowEnd } from '../charts/Glow';
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, YAxis } from 'recharts';
 
 /**
@@ -32,7 +33,7 @@ export function Sparkline({
     // resize loop going — the card and the graph keep resizing each other)
     <div aria-hidden className="w-full min-w-0 overflow-hidden" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 6, right: 6, bottom: 6, left: 2 }}>
+        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 6, left: 2 }}>
           <YAxis hide domain={[lo - pad, hi + pad]} />
           <ReferenceLine
             y={first}
@@ -48,7 +49,7 @@ export function Sparkline({
             isAnimationActive={false}
             dot={(p: { cx?: number; cy?: number; index?: number }) =>
               p.index === data.length - 1 && p.cx != null && p.cy != null ? (
-                <circle key="end" cx={p.cx} cy={p.cy} r={3.5} fill={color} />
+                <GlowEnd key="end" cx={p.cx} cy={p.cy} color={color} floor={height - 6} small />
               ) : (
                 <g key={`d${p.index}`} />
               )

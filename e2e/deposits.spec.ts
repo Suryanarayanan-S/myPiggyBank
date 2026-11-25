@@ -67,6 +67,13 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   // On the overview, and on its account.
   await tabs.getByRole('link', { name: 'Overview' }).click();
   await expect(page.getByText('Fixed deposits', { exact: true })).toBeVisible();
+  // each type in one list beside the chart, opening its page
+  const byType = page.locator('section', { has: page.getByRole('heading', { name: 'By type' }) });
+  await expect(byType.getByRole('link', { name: /Fixed deposits/ })).toHaveAttribute(
+    'href',
+    '/investments/deposits',
+  );
+  await shot(page, '43-investments-overview');
   // the account is in euros, the totals in rupees (no rate here): named, not dropped
   await expect(page.getByText(/Not in the totals .*10\.\d{3},\d{2}\s€/)).toBeVisible();
   await expect(page.getByText('Nothing invested yet')).toHaveCount(0);
@@ -274,7 +281,11 @@ test('physical gold by weight: added, waits for a rate, and stops counting once 
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Overview' })
     .click();
-  await expect(page.getByText('Gold (jewellery, coins)')).toBeVisible();
+  await expect(
+    page
+      .locator('section', { has: page.getByRole('heading', { name: 'By type' }) })
+      .getByRole('link', { name: /^Gold/ }),
+  ).toHaveAttribute('href', '/investments/gold');
 
   // Sold or given away: kept for the record, no longer counted.
   await page

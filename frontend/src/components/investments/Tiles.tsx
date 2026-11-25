@@ -1,8 +1,6 @@
 import clsx from 'clsx';
 import { Card } from '../ui/Card';
 import { gainClass } from '../../lib/investments';
-import { formatMoney } from '../../lib/money';
-import { formatPercent } from '../../lib/percent';
 import { Sparkline } from '../dashboard/Sparkline';
 
 /** A headline number with a label (and a hint under it). */
@@ -37,47 +35,6 @@ export function Tile({
           <Sparkline values={line} height={36} />
         </div>
       )}
-    </Card>
-  );
-}
-
-export /** One quantity split into parts: ranked bars in a single colour, values written out. */
-function Shares({
-  title,
-  currency,
-  rows,
-}: {
-  title: string;
-  currency: string;
-  rows: { label: string; value: number }[];
-}) {
-  const total = rows.reduce((sum, r) => sum + r.value, 0);
-  return (
-    <Card title={title}>
-      <ul className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.label}>
-            <div className="mb-1 flex justify-between gap-3 text-sm">
-              <span>{r.label}</span>
-              <span className="tabular-nums">
-                {formatMoney(r.value, currency)}{' '}
-                <span className="text-slate-500">
-                  {total > 0 ? formatPercent(Math.round((r.value * 10_000) / total)) : ''}
-                </span>
-              </span>
-            </div>
-            <div aria-hidden className="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${total > 0 ? (r.value / total) * 100 : 0}%`,
-                  background: 'var(--c-single)',
-                }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
     </Card>
   );
 }

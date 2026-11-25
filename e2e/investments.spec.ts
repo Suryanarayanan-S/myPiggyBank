@@ -118,6 +118,8 @@ test('a holding with buys, a sell, a dividend and a price shows value, gain and 
   await expect(invest).toContainText('+31,25 € (2.1 %)'); // small moves exact, large ones rounded
   await shot(page, '42-dashboard-cards');
   await openSection(page, 'Investments');
+  await expect(page.getByRole('heading', { name: 'By type' })).toBeVisible();
+  await shot(page, '44-investments-by-type');
   await page
     .getByRole('navigation', { name: 'Investments pages' })
     .getByRole('link', { name: 'Market' })

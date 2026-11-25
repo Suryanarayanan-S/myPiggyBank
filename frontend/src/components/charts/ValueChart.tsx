@@ -43,6 +43,7 @@ export function ValueChart({
   upIsGood = true,
   note,
   height = 220,
+  className,
 }: {
   title: string;
   points: { date: string; value: number }[];
@@ -53,6 +54,7 @@ export function ValueChart({
   /** a line under the chart (e.g. what is left out) */
   note?: ReactNode;
   height?: number;
+  className?: string;
 }) {
   const gradient = useId().replace(/:/g, '');
   const data = fromFirstValue(points, (p) => p.value).map((p) => ({
@@ -71,7 +73,7 @@ export function ValueChart({
   const pad = hi === lo ? Math.abs(hi) * 0.1 || 1 : (hi - lo) * 0.1;
   const pct = first > 0 ? (diff / first) * 100 : null;
   return (
-    <Card>
+    <Card className={className}>
       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
       <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
         <Wealth cents={last} currency={currency} />

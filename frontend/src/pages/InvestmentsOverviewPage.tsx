@@ -3,7 +3,7 @@ import { Link, Navigate, useSearchParams } from 'react-router';
 import { ValueChart } from '../components/charts/ValueChart';
 import { Returns } from '../components/investments/Returns';
 import { useInvestmentHistory, useRange, type InvestmentPart } from '../lib/history';
-import { Shares, Tile } from '../components/investments/Tiles';
+import { InvestmentMix } from '../components/investments/InvestmentMix';
 import { Card } from '../components/ui/Card';
 import { FormError } from '../components/ui/Field';
 import { api } from '../lib/api';
@@ -46,26 +46,43 @@ export function InvestmentsOverviewPage() {
   const parts = [
     {
       key: 'market' as InvestmentPart,
+      color: 'var(--c-cat-1)',
+      to: '/investments/market',
       label: 'Market (shares, funds, ETFs)',
+      short: 'Market',
       value: market?.value ?? 0,
       has: (holdings.data?.holdings ?? []).some((h) => !h.archived),
     },
-    { key: 'fd' as InvestmentPart, label: 'Fixed deposits', value: inView('fd'), has: open('fd') },
+    {
+      key: 'fd' as InvestmentPart,
+      color: 'var(--c-cat-3)',
+      to: '/investments/deposits',
+      label: 'Fixed deposits',
+      value: inView('fd'),
+      has: open('fd'),
+    },
     {
       key: 'rd' as InvestmentPart,
+      color: 'var(--c-cat-7)',
+      to: '/investments/deposits',
       label: 'Recurring deposits',
       value: inView('rd'),
       has: open('rd'),
     },
     {
       key: 'savings' as InvestmentPart,
+      color: 'var(--c-cat-5)',
+      to: '/investments/deposits',
       label: 'Instant-access savings',
       value: inView('savings'),
       has: open('savings'),
     },
     {
       key: 'gold' as InvestmentPart,
+      color: 'var(--c-cat-4)',
+      to: '/investments/gold',
       label: 'Gold (jewellery, coins)',
+      short: 'Gold',
       value: gold.data?.summary.value ?? 0,
       has: (gold.data?.items ?? []).some((g) => g.status === 'held'),
       hint: !gold.data?.rate
@@ -96,8 +113,8 @@ export function InvestmentsOverviewPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Investments</h1>
         <p className="text-sm text-slate-500">
-          Everything invested, together: market holdings and deposits. They count in net worth as
-          investments.
+          Everything invested, together: market holdings, deposits and gold. They count in net worth
+          as investments.
         </p>
       </div>
       <FormError error={holdings.error ?? deposits.error ?? gold.error} />
@@ -122,42 +139,46 @@ export function InvestmentsOverviewPage() {
       )}
       {loaded && anything && (
         <>
-          {h && h.currency === currency && (
-            <ValueChart
-              title="Everything invested"
-              points={h.days.map((date, i) => ({ date, value: h.total[i]! }))}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <InvestmentMix
               currency={currency}
-              range={range}
-              onRange={setRange}
-              note="Market holdings at their prices then, deposits from their terms, gold at that day’s rate — other currencies at today’s rates."
+              rows={parts
+                .filter((p) => p.has || p.value > 0)
+                .map((p) => ({
+                  key: p.key,
+                  label: ('short' in p && p.short) || p.label,
+                  title: p.label,
+                  value: p.value,
+                  color: p.color,
+                  to: p.to,
+                  hint: 'hint' in p ? p.hint : undefined,
+                  line: h?.currency === currency ? h.parts[p.key] : undefined,
+                }))}
             />
-          )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Tile
-              label="Total, worth today"
-              value={formatMoney(total, currency)}
-              hint={atCost ? 'net worth counts what was put in' : undefined}
-            />
-            {parts
-              .filter((p) => p.has || p.value > 0)
-              .map((p) => (
-                <Tile
-                  key={p.label}
-                  label={p.label}
-                  value={formatMoney(p.value, currency)}
-                  hint={'hint' in p ? p.hint : undefined}
-                  line={h?.currency === currency ? h.parts[p.key] : undefined}
-                />
-              ))}
+            {h && h.currency === currency && (
+              <ValueChart
+                title="Everything invested"
+                className="flex min-w-0 flex-col"
+                height={260}
+                points={h.days.map((date, i) => ({ date, value: h.total[i]! }))}
+                currency={currency}
+                range={range}
+                onRange={setRange}
+                note="Market holdings at their prices then, deposits from their terms, gold at that day’s rate — other currencies at today’s rates."
+              />
+            )}
           </div>
+          {atCost && (
+            <p className="text-xs text-slate-500">
+              These are worth today; net worth counts investments at what was put in (chosen on
+              Market).
+            </p>
+          )}
           {unconverted.length > 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
               Not in the totals (no exchange rate to {currency}):{' '}
               {unconverted.map((u) => formatMoney(u.amount, u.currency)).join(', ')}
             </p>
-          )}
-          {parts.filter((p) => p.value > 0).length > 1 && (
-            <Shares title="By type" currency={currency} rows={parts.filter((p) => p.value > 0)} />
           )}
         </>
       )}

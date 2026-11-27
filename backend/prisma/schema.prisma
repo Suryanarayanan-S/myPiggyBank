@@ -316,8 +316,6 @@ model NetWorthSnapshot {
   assets      BigInt?
   liabilities BigInt?
   netWorth    BigInt
-  /// JSON of the computed breakdown at the time; null for manual history entries
-  breakdown   String?
   note        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

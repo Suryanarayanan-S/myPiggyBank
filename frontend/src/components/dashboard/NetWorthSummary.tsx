@@ -24,8 +24,8 @@ const monthLabel = (t: number) =>
 
 /**
  * The family's net worth today as the dashboard's big card: the figure, how much it moved since
- * the line starts, what it is made of (a ring and a legend, largest first), and every day since
- * the app's first — worked out, nothing to save — led in by any past entries. The whole card
+ * the line starts, what it is made of (a ring and a legend, largest first), and every day of the
+ * last year — worked out, nothing to save — led in by a past entry where the app has no data. The whole card
  * opens Family wealth.
  */
 export function NetWorthSummary({ className }: { className?: string }) {
@@ -35,12 +35,12 @@ export function NetWorthSummary({ className }: { className?: string }) {
     queryKey: ['net-worth', view],
     queryFn: () => api.get<NetWorthResponse>(withView('/net-worth', view)),
   });
-  // everything there is: the card is the long view (Family wealth has the ranges)
-  const history = useNetWorthHistory('all');
+  // the last year (Family wealth has the other ranges)
+  const history = useNetWorthHistory('1y');
   const data = q.data;
   if (!data || (data.current.assets === 0 && data.current.liabilities === 0)) return null;
   const c = data.current;
-  // every day since the app's first (and the past entries before it), ending today
+  // every day of the last year (a past entry where the app has none yet), ending today
   const points =
     history.data?.currency === c.currency
       ? netWorthPoints(history.data).map((p) => ({

@@ -372,15 +372,13 @@ const snapshotDto = (s: SnapshotRow) => ({
   liabilities: num(s.liabilities),
   netWorth: Number(s.netWorth),
   note: s.note,
-  manual: s.breakdown === null,
 });
 
 /** The past entries typed in (from before the app), in `to` where a rate allows (the rate of
- *  their month); one that cannot be converted keeps its own currency. Snapshots saved by the
- *  app in the past are left out: every day is worked out now. */
+ *  their month); one that cannot be converted keeps its own currency. */
 async function pastEntries(prisma: PrismaClient, familyId: string, to: string, rates: Rate[]) {
   const rows = await prisma.netWorthSnapshot.findMany({
-    where: { familyId, breakdown: null },
+    where: { familyId },
     orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
   });
   return rows.map(snapshotDto).map((s) => {

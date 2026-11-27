@@ -43,7 +43,6 @@ export type Snapshot = {
   liabilities: number | null;
   netWorth: number;
   note: string | null;
-  manual: boolean;
 };
 export type NetWorthResponse = {
   current: NetWorth;

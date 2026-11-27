@@ -98,8 +98,15 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, past 
   // whole card opens Family wealth
   await openSection(page, 'Dashboard');
   const worth = page.getByRole('link', { name: /Net worth.*open Family wealth/ });
-  await expect(worth).toContainText('since Jan 2024'); // the change since the past entry
-  await expect(worth).toContainText('Since 26 Jan 2024');
+  // the last year, the past entry from before it starting the line
+  const yearAgo = new Date();
+  yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+  if (yearAgo.getDate() !== new Date().getDate()) yearAgo.setDate(0); // 29 Feb → 28 Feb
+  const label = (o: Intl.DateTimeFormatOptions) => yearAgo.toLocaleDateString('en-GB', o);
+  await expect(worth).toContainText(`since ${label({ month: 'short', year: 'numeric' })}`);
+  await expect(worth).toContainText(
+    `Since ${label({ day: 'numeric', month: 'short', year: 'numeric' })}`,
+  );
   await expect(worth.getByRole('list', { name: 'Made of' })).toContainText('Property');
   await worth.screenshot({ path: 'e2e/screenshots/dashboard-net-worth.png' });
   await worth.click();

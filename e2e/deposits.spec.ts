@@ -81,6 +81,24 @@ test('a fixed deposit linked to an account: valued, shown on the account, paid o
   await page.getByRole('link', { name: 'Accounts' }).first().click();
   await expect(page.getByText('1 fixed deposit')).toBeVisible();
 
+  // Maturing in a month and a half: the dashboard reminds of it as the overview does.
+  await openSection(page, 'Investments');
+  await tabs.getByRole('link', { name: 'Deposits' }).click();
+  await page.getByRole('button', { name: 'Edit Bank FD' }).click();
+  const soon = page.getByRole('dialog', { name: 'Edit fixed deposit' });
+  await soon.getByLabel('Start date').fill(day(-400));
+  await soon.getByLabel('Maturity date').fill(day(45));
+  await soon.getByRole('button', { name: 'Save' }).click();
+  await expect(soon).toBeHidden();
+  await tabs.getByRole('link', { name: 'Overview' }).click();
+  await expect(page.getByRole('heading', { name: 'Maturing soon' })).toBeVisible();
+  await openSection(page, 'Dashboard');
+  await expect(
+    page
+      .locator('section', { has: page.getByRole('heading', { name: 'Needs your attention' }) })
+      .getByRole('link', { name: 'Bank FD matures in 45 days' }),
+  ).toBeVisible();
+
   // Matured: it is due on the overview, and once paid out it no longer counts.
   await openSection(page, 'Investments');
   await tabs.getByRole('link', { name: 'Deposits' }).click();

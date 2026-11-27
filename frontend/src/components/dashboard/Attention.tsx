@@ -30,8 +30,9 @@ export function Attention({
     uncategorised,
     holdings: holdings.data?.holdings ?? [],
     pricesOn,
-    // a reminder a month ahead, and for matured deposits not yet marked paid out
-    maturing: maturingSoon(deposits.data?.deposits ?? [], 30),
+    // the same as "Maturing soon" on Investments (two months ahead), and matured deposits not
+    // yet marked paid out
+    maturing: maturingSoon(deposits.data?.deposits ?? []),
   });
   if (items.length === 0) return null;
   return (

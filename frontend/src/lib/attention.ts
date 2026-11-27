@@ -38,7 +38,7 @@ export function attentionItems(i: {
   holdings: Holding[];
   /** the family has daily prices switched on */
   pricesOn: boolean;
-  /** deposits maturing within a month, or matured and not yet marked paid out */
+  /** deposits maturing within two months, or matured and not yet marked paid out */
   maturing?: { id: string; name: string; daysLeft: number }[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];

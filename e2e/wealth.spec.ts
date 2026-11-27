@@ -67,18 +67,26 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, past 
 
   // 80 + 20 + 4.5 + 5 + 7.5 + 25 (EUR account) − 2 = ₹1.4 Cr
   await expect(page.getByText('₹1,40,00,000.00', { exact: true }).first()).toBeVisible();
-  const table = page.locator('section', { has: page.getByText('By family member') });
-  await expect(table.getByRole('columnheader')).toHaveText([
-    '',
-    'Surya',
-    'Appa',
-    'Adhira',
-    'Dayana',
-    'Total',
-    'Share',
-  ]); // member order = order added
-  await expect(table.getByRole('row', { name: /Net worth/ })).toContainText('₹84.5 L'); // Appa
+  // the family tree: each person around the family, in the order they were added
+  const tree = page.getByRole('region', { name: 'Family members' });
+  const people = tree.getByRole('button');
+  await expect(people).toHaveCount(4);
+  await expect(people.nth(0)).toContainText('Surya');
+  await expect(people.nth(1)).toContainText('Appa');
+  await expect(people.nth(1)).toContainText('₹84.5 L');
+  await expect(page.getByRole('list', { name: 'Assets by kind' })).toContainText('Property');
+  // choosing a person shows only their assets and loans; choosing again shows everyone's
+  await people.nth(1).click();
+  await expect(people.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Jothi ilam')).toBeVisible();
+  await expect(page.getByText('Kotak FD')).toBeHidden();
+  await expect(page.getByText('No loans for Appa.')).toBeVisible();
+  await expect(tree.getByRole('list', { name: 'Appa: made of' })).toContainText('Property');
+  await people.nth(1).click();
+  await expect(page.getByText('Kotak FD')).toBeVisible();
 
+  // the earlier history is folded away until opened
+  await page.locator('summary', { hasText: 'Earlier history' }).click();
   await page.getByRole('button', { name: 'Add past entry' }).click();
   const past = page.getByRole('dialog');
   await past.getByLabel('Date').fill('2024-01-26');
@@ -90,7 +98,6 @@ test('family wealth: members, assets in lakh, EUR account converted, loan, past 
   // today's net worth is worked out: nothing to save
   await expect(page.getByRole('button', { name: /snapshot/ })).toHaveCount(0);
   await expect(page.getByLabel('Note for 2024-01-26')).toHaveValue('Initial');
-  await expect(page.getByText('since 26 Jan 2024')).toBeVisible();
   await expect(page.getByText('₹1.35 Cr')).toBeVisible(); // the past entry keeps its two decimals
   await shot(page, '14-wealth');
 

@@ -37,7 +37,7 @@ export function SnapshotHistory({
   return (
     <>
       <ChartCard
-        title="Earlier history"
+        title="Past entries"
         subtitle="Net worth from before the app knew your accounts — e.g. from your old sheet. The line above leads in from these; every day since is worked out."
         table={
           <DataTable
